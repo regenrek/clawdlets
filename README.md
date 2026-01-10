@@ -2,7 +2,7 @@
 
 Clawdlets is the hetzner infrastructure companion for [clawdbot](https://github.com/clawdbot/clawdbot) and [nix-clawdbot](https://github.com/clawdbot/nix-clawdbot). It provides the tooling to deploy and manage secure, reproducible bot fleets on Hetzner Cloud using NixOS. We simply handle the deployment plumbing for these core products.
 
-Looking for official AWS Deploy? ()[https://github.com/clawdbot/clawdinators)
+Looking for official AWS Deploy? [clawdbot/clawdinators](https://github.com/clawdbot/clawdinators)
 
 ![Clawdlets Banner](public/clawdlets-banner.webp)
 
