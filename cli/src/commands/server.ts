@@ -1,30 +1,11 @@
 import process from "node:process";
+import path from "node:path";
 import { defineCommand } from "citty";
 import { resolveGitRev } from "@clawdbot/clawdlets-core/lib/git";
 import { shellQuote, sshCapture, sshRun } from "@clawdbot/clawdlets-core/lib/ssh-remote";
 import { type Stack, type StackHost, loadStack, loadStackEnv, resolveStackBaseFlake } from "@clawdbot/clawdlets-core/stack";
-
-function needsSudo(targetHost: string): boolean {
-  return !/^root@/i.test(targetHost.trim());
-}
-
-function requireTargetHost(targetHost: string, hostName: string): string {
-  const v = targetHost.trim();
-  if (v) return v;
-  throw new Error(
-    [
-      `missing target host for ${hostName}`,
-      "set it in .clawdlets/stack.json (hosts.<host>.targetHost) or pass --target-host",
-      "recommended: use an SSH config alias (e.g. botsmj)",
-    ].join("; "),
-  );
-}
-
-function requireHost(stack: Stack, host: string): StackHost {
-  const h = stack.hosts[host];
-  if (!h) throw new Error(`unknown host: ${host}`);
-  return h;
-}
+import { requireHost, requireTargetHost, needsSudo } from "./server/common.js";
+import { serverGithubSync } from "./server/github-sync.js";
 
 function normalizeSince(value: string): string {
   const v = value.trim();
@@ -47,6 +28,154 @@ function resolveHostFromFlake(flakeBase: string): string | null {
   return host.length > 0 ? host : null;
 }
 
+type AuditCheck = { status: "ok" | "warn" | "missing"; label: string; detail?: string };
+
+async function trySshCapture(targetHost: string, remoteCmd: string, opts: { tty?: boolean } = {}): Promise<{ ok: boolean; out: string }> {
+  try {
+    const out = await sshCapture(targetHost, remoteCmd, opts);
+    return { ok: true, out };
+  } catch (e) {
+    return { ok: false, out: String((e as Error)?.message || e) };
+  }
+}
+
+const serverAudit = defineCommand({
+  meta: {
+    name: "audit",
+    description: "Audit host invariants over SSH (bootstrap firewall, wireguard, services, rendered env).",
+  },
+  args: {
+    stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
+    host: { type: "string", description: "Host name (default: clawdbot-fleet-host).", default: "clawdbot-fleet-host" },
+    targetHost: { type: "string", description: "SSH target override (default: from stack)." },
+    sshTty: { type: "boolean", description: "Allocate TTY for sudo prompts.", default: true },
+    json: { type: "boolean", description: "Output JSON.", default: false },
+  },
+  async run({ args }) {
+    const { layout, stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
+    const hostName = String(args.host || "clawdbot-fleet-host").trim() || "clawdbot-fleet-host";
+    const host = requireHost(stack, hostName);
+    const targetHost = requireTargetHost(String(args.targetHost || host.targetHost || ""), hostName);
+
+    const sudo = needsSudo(targetHost);
+
+    const checks: AuditCheck[] = [];
+    const add = (c: AuditCheck) => checks.push(c);
+
+    const opt = async (label: string, cmd: string) => {
+      const out = await trySshCapture(targetHost, cmd, { tty: sudo && args.sshTty });
+      if (!out.ok) add({ status: "warn", label, detail: out.out });
+      return out.out;
+    };
+
+    const must = async (label: string, cmd: string) => {
+      const out = await trySshCapture(targetHost, cmd, { tty: sudo && args.sshTty });
+      if (!out.ok) add({ status: "missing", label, detail: out.out });
+      else add({ status: "ok", label, detail: out.out });
+      return out;
+    };
+
+    const nixosOption = async (name: string) => {
+      const cmd = [
+        ...(sudo ? ["sudo"] : []),
+        "sh",
+        "-lc",
+        `nixos-option ${shellQuote(name)} 2>/dev/null || true`,
+      ].join(" ");
+      return await opt(`nixos-option ${name}`, cmd);
+    };
+
+    const bootstrap = await nixosOption("services.clawdbotFleet.bootstrapSsh");
+    if (bootstrap.includes("Value: false")) add({ status: "ok", label: "bootstrapSsh", detail: "(false)" });
+    else if (bootstrap.includes("Value: true")) add({ status: "missing", label: "bootstrapSsh", detail: "(true; public SSH firewall open)" });
+    else add({ status: "warn", label: "bootstrapSsh", detail: "(unknown; nixos-option not available?)" });
+
+    const wgIfRaw = await nixosOption("services.clawdbotFleet.wireguard.interface");
+    const wgIfMatch = wgIfRaw.match(/Value:\s*\"([^\"]+)\"/);
+    const wgIf = wgIfMatch?.[1] ? wgIfMatch[1] : "wg0";
+
+    await must("wireguard service", [ ...(sudo ? ["sudo"] : []), "systemctl", "is-active", `wireguard-${wgIf}.service` ].join(" "));
+
+    const botsRaw = await nixosOption("services.clawdbotFleet.bots");
+    const bots = Array.from(botsRaw.matchAll(/"([^"]+)"/g)).map((m) => String(m[1] ?? "")).filter(Boolean);
+    if (bots.length === 0) add({ status: "warn", label: "fleet bots list", detail: "(could not read services.clawdbotFleet.bots)" });
+    else add({ status: "ok", label: "fleet bots list", detail: bots.join(", ") });
+
+    for (const b of bots) {
+      await must(`service clawdbot-${b}`, [ ...(sudo ? ["sudo"] : []), "systemctl", "is-active", `clawdbot-${b}.service` ].join(" "));
+      await must(
+        `rendered env clawdbot-${b}`,
+        [
+          ...(sudo ? ["sudo"] : []),
+          "sh",
+          "-lc",
+          shellQuote(`test -s /run/secrets/rendered/clawdbot-${b}.env && echo ok`),
+        ].join(" "),
+      );
+    }
+
+    const allowUsers = await opt(
+      "sshd AllowUsers",
+      [ ...(sudo ? ["sudo"] : []), "sh", "-lc", shellQuote("sshd -T 2>/dev/null | awk '$1==\"allowusers\"{print}' || true") ].join(" "),
+    );
+    if (/\ballowusers\s+admin\b/i.test(allowUsers) && !/\bbreakglass\b/i.test(allowUsers)) {
+      add({ status: "ok", label: "sshd AllowUsers", detail: "(admin only)" });
+    } else if (allowUsers.trim().length === 0) {
+      add({ status: "warn", label: "sshd AllowUsers", detail: "(not set; relying on other controls)" });
+    } else {
+      add({ status: "missing", label: "sshd AllowUsers", detail: allowUsers.trim() });
+    }
+
+    const sshd = await trySshCapture(targetHost, [ ...(sudo ? ["sudo"] : []), "sshd", "-T" ].join(" "), { tty: false });
+    if (!sshd.ok) {
+      add({ status: "warn", label: "sshd config", detail: sshd.out });
+    } else if (/passwordauthentication\s+no/i.test(sshd.out) && /kbdinteractiveauthentication\s+no/i.test(sshd.out)) {
+      add({ status: "ok", label: "sshd password auth", detail: "(disabled)" });
+    } else {
+      add({ status: "missing", label: "sshd password auth", detail: "(password auth may be enabled)" });
+    }
+
+    const remoteSecretsDir = host.secrets.remoteDir;
+    await must(
+      "remote secrets dir",
+      [ ...(sudo ? ["sudo"] : []), "sh", "-lc", shellQuote(`test -d ${shellQuote(remoteSecretsDir)} && echo ok`) ].join(" "),
+    );
+    await must(
+      "remote secrets perms",
+      [
+        ...(sudo ? ["sudo"] : []),
+        "sh",
+        "-lc",
+        shellQuote(
+          `bad="$(find ${shellQuote(remoteSecretsDir)} -maxdepth 1 -type f -name '*.yaml' -printf '%m %u %g %p\\n' | awk '$1!=\"400\" || $2!=\"root\" || $3!=\"root\" {print; exit 0}' || true)"; if [ -n "$bad" ]; then echo "bad: $bad" >&2; exit 1; fi; echo ok`,
+        ),
+      ].join(" "),
+    );
+
+    const firewall = await opt(
+      "firewall port 22 (public)",
+      [
+        ...(sudo ? ["sudo"] : []),
+        "sh",
+        "-lc",
+        shellQuote(
+          "nft list ruleset 2>/dev/null | grep -n \"dport 22\" || true",
+        ),
+      ].join(" "),
+    );
+    if (bootstrap.includes("Value: false") && firewall.trim().length === 0) {
+      add({ status: "ok", label: "firewall port 22 (public)", detail: "(no public dport 22 rule found)" });
+    } else if (bootstrap.includes("Value: false") && firewall.trim().length > 0) {
+      add({ status: "missing", label: "firewall port 22 (public)", detail: firewall.trim() });
+    }
+
+    if (args.json) console.log(JSON.stringify({ host: hostName, targetHost, checks }, null, 2));
+    else for (const c of checks) console.log(`${c.status}: ${c.label}${c.detail ? ` (${c.detail})` : ""}`);
+
+    if (checks.some((c) => c.status === "missing")) process.exitCode = 1;
+  },
+});
+
 const serverStatus = defineCommand({
   meta: {
     name: "status",
@@ -54,13 +183,13 @@ const serverStatus = defineCommand({
   },
   args: {
     stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
-    host: { type: "string", description: "Host name (default: bots01).", default: "bots01" },
+    host: { type: "string", description: "Host name (default: clawdbot-fleet-host).", default: "clawdbot-fleet-host" },
     targetHost: { type: "string", description: "SSH target override (default: from stack)." },
     sshTty: { type: "boolean", description: "Allocate TTY for sudo prompts.", default: true },
   },
   async run({ args }) {
     const { stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = String(args.host || "bots01").trim() || "bots01";
+    const hostName = String(args.host || "clawdbot-fleet-host").trim() || "clawdbot-fleet-host";
     const host = requireHost(stack, hostName);
     const targetHost = requireTargetHost(String(args.targetHost || host.targetHost || ""), hostName);
 
@@ -87,7 +216,7 @@ const serverLogs = defineCommand({
   },
   args: {
     stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
-    host: { type: "string", description: "Host name (default: bots01).", default: "bots01" },
+    host: { type: "string", description: "Host name (default: clawdbot-fleet-host).", default: "clawdbot-fleet-host" },
     targetHost: { type: "string", description: "SSH target override (default: from stack)." },
     unit: {
       type: "string",
@@ -100,7 +229,7 @@ const serverLogs = defineCommand({
   },
   async run({ args }) {
     const { stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = String(args.host || "bots01").trim() || "bots01";
+    const hostName = String(args.host || "clawdbot-fleet-host").trim() || "clawdbot-fleet-host";
     const host = requireHost(stack, hostName);
     const targetHost = requireTargetHost(String(args.targetHost || host.targetHost || ""), hostName);
 
@@ -129,7 +258,7 @@ const serverRebuild = defineCommand({
   },
   args: {
     stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
-    host: { type: "string", description: "Host name (default: bots01).", default: "bots01" },
+    host: { type: "string", description: "Host name (default: clawdbot-fleet-host).", default: "clawdbot-fleet-host" },
     targetHost: { type: "string", description: "SSH target override (default: from stack)." },
     flake: { type: "string", description: "Flake base override (default: stack.base.flake)." },
     rev: { type: "string", description: "Git rev to pin (HEAD/sha/tag).", default: "HEAD" },
@@ -138,7 +267,7 @@ const serverRebuild = defineCommand({
   },
   async run({ args }) {
     const { layout, stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = String(args.host || "bots01").trim() || "bots01";
+    const hostName = String(args.host || "clawdbot-fleet-host").trim() || "clawdbot-fleet-host";
     const host = requireHost(stack, hostName);
     const targetHost = requireTargetHost(String(args.targetHost || host.targetHost || ""), hostName);
 
@@ -197,14 +326,14 @@ const serverRestart = defineCommand({
   },
   args: {
     stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
-    host: { type: "string", description: "Host name (default: bots01).", default: "bots01" },
+    host: { type: "string", description: "Host name (default: clawdbot-fleet-host).", default: "clawdbot-fleet-host" },
     targetHost: { type: "string", description: "SSH target override (default: from stack)." },
     unit: { type: "string", description: "systemd unit (default: clawdbot-*.service).", default: "clawdbot-*.service" },
     sshTty: { type: "boolean", description: "Allocate TTY for sudo prompts.", default: true },
   },
   async run({ args }) {
     const { stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = String(args.host || "bots01").trim() || "bots01";
+    const hostName = String(args.host || "clawdbot-fleet-host").trim() || "clawdbot-fleet-host";
     const host = requireHost(stack, hostName);
     const targetHost = requireTargetHost(String(args.targetHost || host.targetHost || ""), hostName);
 
@@ -226,8 +355,10 @@ export const server = defineCommand({
     description: "Server operations via SSH (rebuild/logs/status).",
   },
   subCommands: {
+    audit: serverAudit,
     status: serverStatus,
     logs: serverLogs,
+    "github-sync": serverGithubSync,
     restart: serverRestart,
     rebuild: serverRebuild,
   },

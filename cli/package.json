@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "tsc -w --preserveWatchOutput",
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc -b --pretty false",
     "help": "node dist/main.js --help",
     "bootstrap": "node dist/main.js bootstrap",
     "doctor": "node dist/main.js doctor",
@@ -24,6 +24,7 @@
     "@clawdbot/clawdlets-core": "workspace:*",
     "@clawdlets/template": "workspace:*",
     "citty": "^0.1.6",
+    "yaml": "^2.8.0",
     "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {

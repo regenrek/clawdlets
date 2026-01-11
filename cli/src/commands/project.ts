@@ -8,8 +8,15 @@ import { ensureDir, writeFileAtomic } from "@clawdbot/clawdlets-core/lib/fs-safe
 import { capture, run } from "@clawdbot/clawdlets-core/lib/run";
 import { cancelFlow, navOnCancel, NAV_EXIT } from "../lib/wizard.js";
 
-function requireTty(): void {
-  if (!process.stdout.isTTY) throw new Error("requires a TTY (interactive)");
+function wantsInteractive(flag: boolean | undefined): boolean {
+  if (flag) return true;
+  const env = String(process.env["CLAWDLETS_INTERACTIVE"] || "").trim();
+  return env === "1" || env.toLowerCase() === "true";
+}
+
+function requireTtyIfInteractive(interactive: boolean): void {
+  if (!interactive) return;
+  if (!process.stdout.isTTY) throw new Error("--interactive requires a TTY");
 }
 
 function applySubs(s: string, subs: Record<string, string>): string {
@@ -85,33 +92,36 @@ const projectInit = defineCommand({
   meta: { name: "init", description: "Scaffold a new clawdlets infra repo (from @clawdlets/template)." },
   args: {
     dir: { type: "string", description: "Target directory (created if missing)." },
-    host: { type: "string", description: "Host name placeholder (default: bots01).", default: "bots01" },
+    host: { type: "string", description: "Host name placeholder (default: clawdbot-fleet-host).", default: "clawdbot-fleet-host" },
     gitInit: { type: "boolean", description: "Run `git init` in the new directory.", default: true },
+    interactive: { type: "boolean", description: "Prompt for confirmation (requires TTY).", default: false },
     dryRun: { type: "boolean", description: "Print planned files without writing.", default: false },
   },
   async run({ args }) {
-    requireTty();
+    const interactive = wantsInteractive(Boolean(args.interactive));
+    requireTtyIfInteractive(interactive);
 
     const dirRaw = String(args.dir || "").trim();
     if (!dirRaw) throw new Error("missing --dir");
     const destDir = path.resolve(process.cwd(), dirRaw);
-    const host = String(args.host || "bots01").trim() || "bots01";
+    const host = String(args.host || "clawdbot-fleet-host").trim() || "clawdbot-fleet-host";
     const projectName = path.basename(destDir);
 
-    p.intro("clawdlets project init");
-
-    const ok = await p.confirm({
-      message: `Create project at ${destDir}?`,
-      initialValue: true,
-    });
-    if (p.isCancel(ok)) {
-      const nav = await navOnCancel({ flow: "project init", canBack: false });
-      if (nav === NAV_EXIT) cancelFlow();
-      return;
-    }
-    if (!ok) {
-      cancelFlow();
-      return;
+    if (interactive) {
+      p.intro("clawdlets project init");
+      const ok = await p.confirm({
+        message: `Create project at ${destDir}?`,
+        initialValue: true,
+      });
+      if (p.isCancel(ok)) {
+        const nav = await navOnCancel({ flow: "project init", canBack: false });
+        if (nav === NAV_EXIT) cancelFlow();
+        return;
+      }
+      if (!ok) {
+        cancelFlow();
+        return;
+      }
     }
 
     const templateDir = getTemplateDir();
@@ -157,20 +167,20 @@ const projectInit = defineCommand({
         await capture("git", ["--version"], { cwd: destDir });
         await run("git", ["init"], { cwd: destDir });
       } catch {
-        p.note("git not available; skipped `git init`", "gitInit");
+        if (interactive) p.note("git not available; skipped `git init`", "gitInit");
       }
     }
 
-    p.outro(
-      [
-        "next:",
-        `- cd ${destDir}`,
-        "- create a git repo + set origin (recommended; enables blank base flake)",
-        "- clawdlets stack init",
-        "- clawdlets secrets init",
-        "- clawdlets doctor",
-      ].join("\n"),
-    );
+    const next = [
+      "next:",
+      `- cd ${destDir}`,
+      "- create a git repo + set origin (recommended; enables blank base flake)",
+      "- clawdlets stack init",
+      "- clawdlets secrets init",
+      "- clawdlets doctor",
+    ].join("\n");
+    if (interactive) p.outro(next);
+    else console.log(next);
   },
 });
 

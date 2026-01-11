@@ -13,6 +13,12 @@ function requireTty(): void {
   if (!process.stdout.isTTY) throw new Error("requires a TTY (interactive)");
 }
 
+function wantsInteractive(flag: boolean | undefined): boolean {
+  if (flag) return true;
+  const env = String(process.env["CLAWDLETS_INTERACTIVE"] || "").trim();
+  return env === "1" || env.toLowerCase() === "true";
+}
+
 function getDefaultSshPubkeyFile(): string {
   const home = process.env.HOME || "";
   const candidates = [
@@ -64,9 +70,18 @@ const stackInit = defineCommand({
     },
     host: {
       type: "string",
-      description: "Host name (default: bots01).",
-      default: "bots01",
+      description: "Host name (default: clawdbot-fleet-host).",
+      default: "clawdbot-fleet-host",
     },
+    flake: { type: "string", description: "Base flake URI (optional)." },
+    targetHost: { type: "string", description: "SSH target for post-install ops (optional)." },
+    serverType: { type: "string", description: "Hetzner server type (default: cx43).", default: "cx43" },
+    adminCidr: { type: "string", description: "ADMIN_CIDR (required in non-interactive mode)." },
+    sshPubkeyFile: { type: "string", description: "SSH_PUBKEY_FILE (default: ~/.ssh/id_ed25519.pub if present)." },
+    hcloudToken: { type: "string", description: "HCLOUD_TOKEN (or set env HCLOUD_TOKEN)." },
+    githubToken: { type: "string", description: "GITHUB_TOKEN (optional; or set env GITHUB_TOKEN)." },
+    force: { type: "boolean", description: "Overwrite existing stack files.", default: false },
+    interactive: { type: "boolean", description: "Prompt for inputs (requires TTY).", default: false },
     dryRun: {
       type: "boolean",
       description: "Print planned files without writing.",
@@ -74,11 +89,88 @@ const stackInit = defineCommand({
     },
   },
   async run({ args }) {
-    requireTty();
     const layout = getStackLayout({ cwd: process.cwd(), stackDir: args.stackDir });
-    const host = String(args.host || "bots01").trim() || "bots01";
+    const host = String(args.host || "clawdbot-fleet-host").trim() || "clawdbot-fleet-host";
+    const interactive = wantsInteractive(Boolean(args.interactive));
+    if (interactive) requireTty();
+
     const originFlakeFromGit = await tryGetOriginFlake(layout.repoRoot);
     const originFlake = originFlakeFromGit ?? "github:<owner>/<repo>";
+
+    if (!interactive) {
+      const baseFlake = String(args.flake || "").trim();
+      const targetHostInput = String(args.targetHost || "").trim();
+      const serverType = String(args.serverType || "cx43").trim() || "cx43";
+      if (/^cax/i.test(serverType)) throw new Error("ARM (CAX) not supported (this repo builds x86_64-linux; use CX/CPX/CCX)");
+
+      const adminCidr = String(args.adminCidr || "").trim();
+      if (!adminCidr) throw new Error("missing --admin-cidr");
+
+      const sshPubkeyFile = String(args.sshPubkeyFile || getDefaultSshPubkeyFile()).trim();
+      if (!sshPubkeyFile) throw new Error("missing --ssh-pubkey-file");
+
+      const hcloudToken = String(args.hcloudToken || process.env.HCLOUD_TOKEN || "").trim();
+      if (!hcloudToken) throw new Error("missing --hcloud-token (or env HCLOUD_TOKEN)");
+
+      const githubToken = String(args.githubToken || process.env.GITHUB_TOKEN || "").trim();
+
+      const stack = {
+        schemaVersion: 2,
+        ...(baseFlake ? { base: { flake: baseFlake } } : {}),
+        envFile: ".env",
+        hosts: {
+          [host]: {
+            flakeHost: host,
+            ...(targetHostInput ? { targetHost: targetHostInput } : {}),
+            hetzner: { serverType },
+            terraform: {
+              adminCidr,
+              sshPubkeyFile,
+            },
+            secrets: {
+              localDir: `secrets/hosts/${host}`,
+              remoteDir: `/var/lib/clawdlets/secrets/hosts/${host}`,
+            },
+          },
+        },
+      };
+
+      const envLines = [
+        `HCLOUD_TOKEN=${JSON.stringify(hcloudToken)}`,
+        ...(githubToken ? [`GITHUB_TOKEN=${JSON.stringify(githubToken)}`] : []),
+        "",
+      ].join("\n");
+
+      const planned = [
+        layout.stackFile,
+        layout.envFile,
+        path.join(layout.distDir, "stack.schema.json"),
+      ];
+
+      if (args.dryRun) {
+        console.log(planned.map((f) => `- ${path.relative(layout.repoRoot, f)}`).join("\n"));
+        return;
+      }
+
+      if (!args.force) {
+        if (fs.existsSync(layout.stackFile)) throw new Error(`stack file exists (pass --force): ${layout.stackFile}`);
+        if (fs.existsSync(layout.envFile)) throw new Error(`env file exists (pass --force): ${layout.envFile}`);
+      }
+
+      await ensureDir(layout.stackDir);
+      await ensureDir(layout.distDir);
+      await writeFileAtomic(layout.stackFile, `${JSON.stringify(stack, null, 2)}\n`);
+      await writeFileAtomic(layout.envFile, envLines, { mode: 0o600 });
+      await writeStackSchemaJson(path.join(layout.distDir, "stack.schema.json"));
+
+      const nextLines: string[] = [];
+      nextLines.push(`next: clawdlets secrets init --host ${host}`);
+      nextLines.push("next: clawdlets doctor --scope deploy");
+      nextLines.push(`next: clawdlets bootstrap --host ${host}`);
+      if (!targetHostInput) nextLines.push(`next: clawdlets stack set-target-host --host ${host} --target-host <ssh-alias>`);
+      console.log(nextLines.join("\n"));
+      return;
+    }
 
     p.intro("clawdlets stack init");
     p.note(
@@ -253,7 +345,7 @@ const stackInit = defineCommand({
     const baseFlake = String(answers.baseFlake || "").trim();
     const targetHostInput = String(answers.targetHost || "").trim();
     const stack = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       ...(baseFlake ? { base: { flake: baseFlake } } : {}),
       envFile: ".env",
       hosts: {
@@ -266,8 +358,8 @@ const stackInit = defineCommand({
             sshPubkeyFile: answers.sshPubkeyFile,
           },
           secrets: {
-            localFile: `secrets/hosts/${host}.yaml`,
-            remoteFile: `/var/lib/clawdlets/secrets/hosts/${host}.yaml`,
+            localDir: `secrets/hosts/${host}`,
+            remoteDir: `/var/lib/clawdlets/secrets/hosts/${host}`,
           },
         },
       },
@@ -327,12 +419,12 @@ const stackSetTargetHost = defineCommand({
   },
   args: {
     stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
-    host: { type: "string", description: "Host name (default: bots01).", default: "bots01" },
+    host: { type: "string", description: "Host name (default: clawdbot-fleet-host).", default: "clawdbot-fleet-host" },
     targetHost: { type: "string", description: "SSH target (alias or user@host)." },
   },
   async run({ args }) {
     const { layout, stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = String(args.host || "bots01").trim() || "bots01";
+    const hostName = String(args.host || "clawdbot-fleet-host").trim() || "clawdbot-fleet-host";
     const h = stack.hosts[hostName];
     if (!h) throw new Error(`unknown host: ${hostName}`);
     const targetHost = String(args.targetHost || "").trim();

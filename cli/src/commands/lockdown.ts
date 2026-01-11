@@ -5,6 +5,7 @@ import { resolveGitRev } from "@clawdbot/clawdlets-core/lib/git";
 import { expandPath } from "@clawdbot/clawdlets-core/lib/path-expand";
 import { loadStack, loadStackEnv, resolveStackBaseFlake } from "@clawdbot/clawdlets-core/stack";
 import { shellQuote, sshRun } from "@clawdbot/clawdlets-core/lib/ssh-remote";
+import { requireDeployGate } from "../lib/deploy-gate.js";
 
 function needsSudo(targetHost: string): boolean {
   return !/^root@/i.test(targetHost.trim());
@@ -32,11 +33,11 @@ function resolveHostFromFlake(flakeBase: string): string | null {
 export const lockdown = defineCommand({
   meta: {
     name: "lockdown",
-    description: "Rebuild over tailnet and remove public SSH from Hetzner firewall (stack-based).",
+    description: "Rebuild over tailnet and remove public SSH from Hetzner firewall.",
   },
   args: {
     stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
-    host: { type: "string", description: "Host name (default: bots01).", default: "bots01" },
+    host: { type: "string", description: "Host name (default: clawdbot-fleet-host).", default: "clawdbot-fleet-host" },
     targetHost: { type: "string", description: "SSH target override (default: from stack)." },
     flake: { type: "string", description: "Override base flake (default: stack.base.flake)." },
     rev: { type: "string", description: "Git rev to pin (HEAD/sha/tag).", default: "HEAD" },
@@ -48,9 +49,11 @@ export const lockdown = defineCommand({
   },
   async run({ args }) {
     const { layout, stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = String(args.host || "bots01").trim() || "bots01";
+    const hostName = String(args.host || "clawdbot-fleet-host").trim() || "clawdbot-fleet-host";
     const host = stack.hosts[hostName];
     if (!host) throw new Error(`unknown host: ${hostName}`);
+
+    await requireDeployGate({ stackDir: args.stackDir, host: hostName, scope: "deploy", strict: true });
 
     const targetHost = requireTargetHost(String(args.targetHost || host.targetHost || ""), hostName);
 

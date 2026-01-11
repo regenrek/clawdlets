@@ -19,7 +19,7 @@ const infraApply = defineCommand({
   },
   args: {
     stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
-    host: { type: "string", description: "Host name (default: bots01).", default: "bots01" },
+    host: { type: "string", description: "Host name (default: clawdbot-fleet-host).", default: "clawdbot-fleet-host" },
     bootstrapSsh: {
       type: "boolean",
       description: "Whether public SSH (22) is open in Hetzner firewall.",
@@ -29,7 +29,7 @@ const infraApply = defineCommand({
   },
   async run({ args }) {
     const { layout, stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = String(args.host || "bots01").trim() || "bots01";
+    const hostName = String(args.host || "clawdbot-fleet-host").trim() || "clawdbot-fleet-host";
     const host = getHost(stack.hosts, hostName) as typeof stack.hosts[string];
 
     const envLoaded = loadStackEnv({ cwd: process.cwd(), stackDir: args.stackDir, envFile: stack.envFile });

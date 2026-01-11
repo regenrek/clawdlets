@@ -8,6 +8,9 @@ import { capture, run } from "@clawdbot/clawdlets-core/lib/run";
 import { loadStack, loadStackEnv, resolveStackBaseFlake } from "@clawdbot/clawdlets-core/stack";
 import { checkGithubRepoVisibility, tryParseGithubFlakeUri } from "@clawdbot/clawdlets-core/lib/github";
 import { expandPath } from "@clawdbot/clawdlets-core/lib/path-expand";
+import { evalFleetConfig } from "@clawdbot/clawdlets-core/lib/fleet-nix-eval";
+import { withFlakesEnv } from "@clawdbot/clawdlets-core/lib/nix-flakes";
+import { requireDeployGate } from "../lib/deploy-gate.js";
 
 async function purgeKnownHosts(ipv4: string, opts: { dryRun: boolean }) {
   const rm = async (host: string) => {
@@ -31,11 +34,11 @@ function resolveHostFromFlake(flakeBase: string): string | null {
 export const bootstrap = defineCommand({
   meta: {
     name: "bootstrap",
-    description: "Provision Hetzner VM + install NixOS via nixos-anywhere (stack-based).",
+    description: "Provision Hetzner VM + install NixOS via nixos-anywhere.",
   },
   args: {
     stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
-    host: { type: "string", description: "Host name (default: bots01).", default: "bots01" },
+    host: { type: "string", description: "Host name (default: clawdbot-fleet-host).", default: "clawdbot-fleet-host" },
     flake: { type: "string", description: "Override base flake (default: stack.base.flake)." },
     rev: { type: "string", description: "Git rev to pin (HEAD/sha/tag).", default: "HEAD" },
     ref: { type: "string", description: "Git ref to pin (branch or tag)." },
@@ -43,9 +46,11 @@ export const bootstrap = defineCommand({
   },
   async run({ args }) {
     const { layout, stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = String(args.host || "bots01").trim() || "bots01";
+    const hostName = String(args.host || "clawdbot-fleet-host").trim() || "clawdbot-fleet-host";
     const host = stack.hosts[hostName];
     if (!host) throw new Error(`unknown host: ${hostName}`);
+
+    await requireDeployGate({ stackDir: args.stackDir, host: hostName, scope: "deploy", strict: false });
 
     const envLoaded = loadStackEnv({ cwd: process.cwd(), stackDir: args.stackDir, envFile: stack.envFile });
     const hcloudToken = String(envLoaded.env.HCLOUD_TOKEN || "").trim();
@@ -79,13 +84,14 @@ export const bootstrap = defineCommand({
       SERVER_TYPE: host.hetzner.serverType,
       NIXPKGS_ALLOW_UNFREE: "1",
     };
+    const terraformEnvWithFlakes = withFlakesEnv(terraformEnv);
 
     const ipv4 = args.dryRun
       ? "<terraform-output:ipv4>"
       : await capture(
           nixBin,
           ["run", "--impure", "nixpkgs#terraform", "--", "output", "-raw", "ipv4"],
-          { cwd: terraformDir, env: terraformEnv, dryRun: args.dryRun },
+          { cwd: terraformDir, env: terraformEnvWithFlakes, dryRun: args.dryRun },
         );
 
     console.log(`Target IPv4: ${ipv4}`);
@@ -139,12 +145,26 @@ export const bootstrap = defineCommand({
 
     const extraFiles = path.join(layout.stackDir, "extra-files", hostName);
     const requiredKey = path.join(extraFiles, "var", "lib", "sops-nix", "key.txt");
-    const requiredSecrets = path.join(extraFiles, "var", "lib", "clawdlets", "secrets", "hosts", `${hostName}.yaml`);
     if (!fs.existsSync(requiredKey)) {
       throw new Error(`missing extra-files key: ${requiredKey} (run: clawdlets secrets init --host ${hostName})`);
     }
-    if (!fs.existsSync(requiredSecrets)) {
-      throw new Error(`missing extra-files secrets: ${requiredSecrets} (run: clawdlets secrets init --host ${hostName})`);
+
+    const fleetPath = path.join(repoRoot, "infra", "configs", "fleet.nix");
+    const bots = (await evalFleetConfig({ repoRoot, fleetFilePath: fleetPath, nixBin })).bots;
+    const requiredSecrets = ["wg_private_key", "admin_password_hash", ...bots.map((b) => `discord_token_${b}`)];
+
+    const remoteSecretsDir = String(host.secrets.remoteDir || "").trim();
+    if (!remoteSecretsDir) throw new Error(`missing stack host secrets.remoteDir for ${hostName}`);
+    const extraFilesSecretsDir = path.join(extraFiles, remoteSecretsDir.replace(/^\/+/, ""));
+    if (!fs.existsSync(extraFilesSecretsDir)) {
+      throw new Error(`missing extra-files secrets dir: ${extraFilesSecretsDir} (run: clawdlets secrets init --host ${hostName})`);
+    }
+
+    for (const secretName of requiredSecrets) {
+      const f = path.join(extraFilesSecretsDir, `${secretName}.yaml`);
+      if (!fs.existsSync(f)) {
+        throw new Error(`missing extra-files secret: ${f} (run: clawdlets secrets init --host ${hostName})`);
+      }
     }
 
     const nixosAnywhereArgs = [
@@ -190,10 +210,11 @@ export const bootstrap = defineCommand({
       `root@${ipv4}`,
     ];
 
+    const nixosAnywhereBaseEnv = withFlakesEnv(process.env);
     const nixosAnywhereEnv: NodeJS.ProcessEnv = {
-      ...process.env,
+      ...nixosAnywhereBaseEnv,
       NIX_CONFIG: [
-        process.env.NIX_CONFIG,
+        nixosAnywhereBaseEnv.NIX_CONFIG,
         "require-sigs = false",
         "accept-flake-config = true",
         "extra-substituters = https://cache.garnix.io",
