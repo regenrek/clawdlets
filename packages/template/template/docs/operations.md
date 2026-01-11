@@ -2,7 +2,11 @@
 
 ## Update routing / profiles
 
-1) Edit `infra/configs/fleet.nix`
+1) Update `infra/configs/clawdlets.json` via CLI (example: routing override):
+
+```bash
+clawdlets config set --path fleet.routingOverrides.maren --value-json '{"channels":["dev"],"requireMention":true}'
+```
 2) Rebuild:
 
 ```bash
@@ -15,15 +19,49 @@ clawdlets server rebuild --target-host admin@<ipv4> --rev HEAD
 
 ## Rotate tokens/secrets
 
-1) Edit `.clawdlets/secrets/hosts/bots01.yaml`
+1) Edit files under `.clawdlets/secrets/hosts/clawdbot-fleet-host/` (example: `discord_token_maren.yaml`)
 2) Re-encrypt (or use `clawdlets secrets init` to regenerate)
-3) Sync + rebuild
+3) `clawdlets secrets sync --host clawdbot-fleet-host`
+4) `clawdlets secrets verify --host clawdbot-fleet-host`
+5) Rebuild (pinned):
+
+```bash
+clawdlets server rebuild --target-host admin@<ipv4> --rev HEAD
+```
+
+## Add a bot
+
+1) Add bot id:
+```bash
+clawdlets bot add --bot <id>
+```
+
+2) Add secret `.clawdlets/secrets/hosts/<host>/discord_token_<id>.yaml` (use `clawdlets secrets init`), then:
+```bash
+clawdlets secrets sync --host <host>
+clawdlets server rebuild --target-host admin@<target> --rev HEAD
+```
+
+## Add/enable a skill
+
+1) If bundled: add id to `infra/configs/bundled-skills.json`
+2) Allow per-bot (example):
+```bash
+clawdlets config set --path fleet.botOverrides.maren.skills.allowBundled --value-json '["github","brave-search"]'
+```
+3) If it needs secrets: add `.clawdlets/secrets/hosts/<host>/<secret>.yaml` and reference in `fleet.botOverrides.<bot>.skills.entries."<skill>".*Secret/envSecrets`
+4) Sync + rebuild:
+```bash
+clawdlets secrets sync --host <host>
+clawdlets server rebuild --target-host admin@<target> --rev HEAD
+```
 
 ## Verify
 
 ```bash
 clawdlets server status --target-host admin@<ipv4>
 clawdlets server logs --target-host admin@<ipv4> --unit clawdbot-maren.service --follow
+clawdlets server audit --target-host admin@<ipv4>
 ```
 
 Justfile:
@@ -66,20 +104,52 @@ systemctl status clawdbot-gh-token-maren
 systemctl status clawdbot-gh-token-maren.timer
 ```
 
-## Backups (restic)
+## GitHub inventory sync (optional)
 
-Enable in `infra/configs/fleet.nix` (or override in host config):
+If enabled (`services.clawdbotFleet.githubSync.enable = true`), each bot writes:
 
-```nix
-backups.restic = {
-  enable = true;
-  repository = "s3:s3.amazonaws.com/<bucket>/clawdbot";
-  passwordSecret = "restic_password";
-  # environmentSecret = "restic_env"; # optional, e.g. AWS_ACCESS_KEY_ID=...
-};
+- `/srv/clawdbot/<bot>/workspace/memory/github/prs.md`
+- `/srv/clawdbot/<bot>/workspace/memory/github/issues.md`
+
+Ops helpers:
+
+```bash
+clawdlets server github-sync status --target-host admin@<ipv4>
+clawdlets server github-sync run --target-host admin@<ipv4> --bot maren
+clawdlets server github-sync show --target-host admin@<ipv4> --bot maren --kind prs --lines 80
 ```
 
-Add secrets to `.clawdlets/secrets/hosts/bots01.yaml`, sync, then rebuild.
+## Ops snapshots (optional)
+
+If enabled (`services.clawdbotFleet.opsSnapshot.enable = true`), the host writes JSON snapshots to:
+
+- `/var/lib/clawdlets/ops/snapshots/latest.json`
+- `/var/lib/clawdlets/ops/snapshots/<timestamp>-<host>.json`
+
+Retention:
+
+- `services.clawdbotFleet.opsSnapshot.keepDays` (default: 30)
+- `services.clawdbotFleet.opsSnapshot.keepLast` (default: 200)
+
+Backup:
+
+- When restic is enabled and `backups.restic.paths` is empty, ops snapshots are included automatically.
+
+Run now:
+
+```bash
+sudo systemctl start clawdlets-ops-snapshot.service
+```
+
+## Backups (restic)
+
+Enable via CLI:
+
+```bash
+clawdlets fleet set --restic-enable true --restic-repository "s3:s3.amazonaws.com/<bucket>/clawdbot"
+```
+
+Add secrets under `.clawdlets/secrets/hosts/clawdbot-fleet-host/` (example: `restic_password.yaml`), sync, then rebuild.
 
 Restore (example, run as root on the host):
 

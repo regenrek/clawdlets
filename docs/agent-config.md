@@ -2,7 +2,8 @@
 
 Single source of truth:
 
-- `infra/configs/fleet.nix`
+- `infra/configs/clawdlets.json` (canonical fleet + host config)
+- `infra/configs/bundled-skills.json` (canonical allowlist used by Nix assertions + doctor)
 
 Rendered per-bot Clawdbot config:
 
@@ -10,13 +11,13 @@ Rendered per-bot Clawdbot config:
 
 ## Routing (Discord)
 
-Edit `infra/configs/fleet.nix`:
+Set values via CLI (no manual Nix edits):
 
-- `guildId`
-- `routing.<bot>.channels` (slugged, lowercase, no `#`)
-- `routing.<bot>.requireMention`
+- guild id: `clawdlets fleet set --guild-id <id>`
+- routing overrides (example):
+  - `clawdlets config set --path fleet.routingOverrides.maren --value-json '{"channels":["dev"],"requireMention":true}'`
 
-If you change `bots`, update `.clawdlets/secrets/hosts/<host>.yaml` with matching `discord_token_<name>` keys, sync, then rebuild.
+If you change `bots`, update `.clawdlets/secrets/hosts/<host>/discord_token_<name>.yaml`, sync, then rebuild.
 
 ## Documents (AGENTS / SOUL / TOOLS / IDENTITY)
 
@@ -42,45 +43,38 @@ identity = {
 
 ## Gateway ports
 
-Default port is `services.clawdbotFleet.gatewayPortBase` plus a stride:
-
-```nix
-services.clawdbotFleet.gatewayPortBase = 18789;
-services.clawdbotFleet.gatewayPortStride = 10;
-```
+Gateway ports are auto-assigned from the `bots` list.
 
 Per-bot override (example):
 
-```nix
-botProfiles.melinda.extraConfig.gateway.port = 18819;
+```bash
+clawdlets config set --path fleet.botOverrides.melinda.extraConfig.gateway.port --value 18819
 ```
 
 ## Model defaults (provider/model)
 
-Set a default model for all agents:
+Set a default model for the host:
 
-```nix
-services.clawdbotFleet.agentModelPrimary = "zai/glm-4.7";
+```bash
+clawdlets host set --agent-model-primary zai/glm-4.7
 ```
 
-Optional extra model entries:
+Optional extra model entries (per-bot):
 
-```nix
-services.clawdbotFleet.agentModels = {
-  "fast" = "zai/glm-4.2";
-};
+```bash
+clawdlets config set --path fleet.botOverrides.melinda.extraConfig.agents.models.fast --value zai/glm-4.2
 ```
 
 Per-bot override:
 
-```nix
-botProfiles.melinda.extraConfig.agents.defaults.modelPrimary = "zai/glm-4.7";
+```bash
+clawdlets config set --path fleet.botOverrides.melinda.extraConfig.agents.defaults.modelPrimary --value zai/glm-4.7
 ```
 
-Provider API keys:
+Provider API keys (via sops secret name):
 
-```nix
-botProfiles.melinda.envSecrets.ZAI_API_KEY = "z_ai_api_key";
+```bash
+clawdlets config set --path fleet.botOverrides.melinda.envSecrets.ZAI_API_KEY --value z_ai_api_key
 ```
 
 This renders into a per-bot env file and is loaded by systemd.
@@ -89,18 +83,16 @@ This renders into a per-bot env file and is loaded by systemd.
 
 Enable Codex CLI for selected bots:
 
-```nix
-codex = {
-  enable = true;
-  bots = [ "gunnar" "maren" ];
-};
+```bash
+clawdlets fleet set --codex-enable true
+clawdlets config set --path fleet.codex.bots --value-json '["gunnar","maren"]'
 ```
 
 Then allow bundled `coding-agent` for those bots:
 
-```nix
-botProfiles.gunnar.skills.allowBundled = [ "github" "coding-agent" ];
-botProfiles.maren.skills.allowBundled = [ "github" "brave-search" "coding-agent" ];
+```bash
+clawdlets config set --path fleet.botOverrides.gunnar.skills.allowBundled --value-json '["github","coding-agent"]'
+clawdlets config set --path fleet.botOverrides.maren.skills.allowBundled --value-json '["github","brave-search","coding-agent"]'
 ```
 
 One-time login (headless):
@@ -112,13 +104,23 @@ sudo -u bot-gunnar env HOME=/srv/clawdbot/gunnar codex login --device-auth
 
 ## Bonjour / mDNS (optional)
 
-If mDNS errors appear on `wg0`, disable Bonjour:
+If mDNS errors appear on `wg0`, Bonjour is disabled by default in the template host config.
 
-```nix
-services.clawdbotFleet.disableBonjour = true;
+## GitHub inventory sync (optional)
+
+Run GitHub inventory sync (on-demand):
+
+```bash
+clawdlets server github-sync --target-host admin@<host>
 ```
 
-## Per-bot profiles (`botProfiles`)
+Requires at least one bot with GitHub App config (`fleet.botOverrides.<bot>.github.*`).
+
+## Ops snapshots (recommended)
+
+Host ops snapshots (no secrets) are enabled by default in the template host config.
+
+## Per-bot profiles (canonical config)
 
 Each bot can have different:
 
@@ -137,29 +139,31 @@ Each bot gets an isolated workspace at:
 
 Override:
 
-- `botProfiles.<bot>.agent.workspace = "/some/path"`
+- `fleet.botOverrides.<bot>.agent.workspace = "/some/path"`
 
 Optional seed-once:
 
-- `botProfiles.<bot>.workspace.seedDir = ./workspaces/<bot>`
+- `fleet.botOverrides.<bot>.workspace.seedDir = ./workspaces/<bot>`
 - copied only when the workspace is empty.
 
 ### Skills
 
 Allowlist bundled skills:
 
-- `botProfiles.<bot>.skills.allowBundled = [ "github" "brave-search" ... ]`
+- `fleet.botOverrides.<bot>.skills.allowBundled = [ "github" "brave-search" ... ]`
+
+Treat `allowBundled` as required on servers. Avoid `null` (typically means “allow all bundled skills”).
 
 Per-skill secrets (recommended):
 
-- `botProfiles.<bot>.skills.entries."<skill>".envSecrets.<ENV_VAR> = "<sops_secret_name>"`
-- `botProfiles.<bot>.skills.entries."<skill>".apiKeySecret = "<sops_secret_name>"`
+- `fleet.botOverrides.<bot>.skills.entries."<skill>".envSecrets.<ENV_VAR> = "<sops_secret_name>"`
+- `fleet.botOverrides.<bot>.skills.entries."<skill>".apiKeySecret = "<sops_secret_name>"`
 
 ### Per-bot service env (provider API keys)
 
 Use this for model provider API keys (e.g. ZAI, OpenAI, etc.).
 
-- `botProfiles.<bot>.envSecrets.<ENV_VAR> = "<sops_secret_name>"`
+- `fleet.botOverrides.<bot>.envSecrets.<ENV_VAR> = "<sops_secret_name>"`
 
 Note: enabling `"coding-agent"` pulls large packages (Codex CLI + deps) into the NixOS closure and can
 OOM small remote build machines during bootstrap. Prefer enabling it only after the host is up (swap
@@ -169,24 +173,19 @@ enabled) or use a bigger build machine.
 
 Secrets:
 
-- `botProfiles.<bot>.hooks.tokenSecret = "<sops_secret_name>"`
-- `botProfiles.<bot>.hooks.gmailPushTokenSecret = "<sops_secret_name>"`
+- `fleet.botOverrides.<bot>.hooks.tokenSecret = "<sops_secret_name>"`
+- `fleet.botOverrides.<bot>.hooks.gmailPushTokenSecret = "<sops_secret_name>"`
 
 Non-secret config:
 
-- `botProfiles.<bot>.hooks.config = { ... }`
+- `fleet.botOverrides.<bot>.hooks.config = { ... }`
 
 ### GitHub App auth (maren)
 
 Configure:
 
-```nix
-botProfiles.maren.github = {
-  appId = 123456;
-  installationId = 12345678;
-  privateKeySecret = "gh_app_private_key_maren";
-  refreshMinutes = 45;
-};
+```bash
+clawdlets config set --path fleet.botOverrides.maren.github --value-json '{"appId":123456,"installationId":12345678,"privateKeySecret":"gh_app_private_key_maren","refreshMinutes":45}'
 ```
 
 Effect on host:
@@ -212,5 +211,5 @@ sudo -u bot-maren env HOME=/srv/clawdbot/maren codex login --device-auth
 WireGuard is used for admin SSH by default. Tailscale is also supported and
 recommended for ease of access:
 
-- enable in `infra/nix/hosts/bots01.nix` via `services.clawdbotFleet.tailscale.enable = true;`
+- set tailnet mode: `clawdlets host set --tailnet tailscale`
 - on the host, run `sudo tailscale up` once (unless using an auth key)

@@ -2,7 +2,8 @@
 
 `clawdlets` reads one local stack directory (default: `.clawdlets/`).
 
-This is the only place that should contain instance-specific details like target hosts, CIDRs, and secret paths.
+This is the local-only place for deploy inputs (CIDRs, SSH target, secret paths) and tokens.
+Fleet/host config in git lives in `infra/configs/clawdlets.json`.
 
 ## Files
 
@@ -14,7 +15,7 @@ This is the only place that should contain instance-specific details like target
 
 Top-level:
 
-- `schemaVersion`: currently `1`
+- `schemaVersion`: currently `2`
 - `base.flake` (optional): base flake URI (usually `github:<owner>/<repo>`). If unset, `clawdlets` tries to infer it from `git remote origin`.
 - `envFile`: relative to `.clawdlets/` (default `.env`)
 - `hosts.<name>`: host entries keyed by stack host name
@@ -22,22 +23,22 @@ Top-level:
 Host entry (`hosts.<name>`):
 
 - `flakeHost`: nixosConfiguration name (often same as host key)
-- `targetHost`: SSH target (e.g. `botsmj` or `admin@100.x`)
+- `targetHost` (optional): SSH target (e.g. `botsmj` or `admin@100.x`). You can skip this until after bootstrap.
 - `hetzner.serverType`: e.g. `cx43`
 - `terraform.adminCidr`: CIDR allowed for bootstrap SSH rule (e.g. `203.0.113.10/32`)
 - `terraform.sshPubkeyFile`: local path to `.pub`
-- `secrets.localFile`: relative to `.clawdlets/` (encrypted sops YAML)
-- `secrets.remoteFile`: absolute path on server (used by Nix module default)
+- `secrets.localDir`: relative to `.clawdlets/` (directory of encrypted sops YAML files)
+- `secrets.remoteDir`: absolute path on server (directory; used by sops-nix)
 
 ## Example
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "envFile": ".env",
   "hosts": {
-    "bots01": {
-      "flakeHost": "bots01",
+    "clawdbot-fleet-host": {
+      "flakeHost": "clawdbot-fleet-host",
       "targetHost": "botsmj",
       "hetzner": { "serverType": "cx43" },
       "terraform": {
@@ -45,8 +46,8 @@ Host entry (`hosts.<name>`):
         "sshPubkeyFile": "~/.ssh/id_ed25519.pub"
       },
       "secrets": {
-        "localFile": "secrets/hosts/bots01.yaml",
-        "remoteFile": "/var/lib/clawdlets/secrets/hosts/bots01.yaml"
+        "localDir": "secrets/hosts/clawdbot-fleet-host",
+        "remoteDir": "/var/lib/clawdlets/secrets/hosts/clawdbot-fleet-host"
       }
     }
   }

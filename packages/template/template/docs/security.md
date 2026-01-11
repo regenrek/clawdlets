@@ -20,7 +20,7 @@
 
 **On-server**
 - `/var/lib/sops-nix/key.txt`: host age key
-- `/var/lib/clawdlets/secrets/hosts/<host>.yaml`: encrypted secrets file (sops)
+- `/var/lib/clawdlets/secrets/hosts/<host>/`: encrypted secrets files (sops)
 - `/run/secrets/**`: decrypted materialized secrets at runtime (owned by service users)
 
 ## “Secrets out of store”
@@ -28,8 +28,8 @@
 The Nix store is not a secrets vault. Design assumes store paths are widely readable on the host.
 
 Therefore:
-- `services.clawdbotFleet.sopsFile` defaults to `/var/lib/clawdlets/secrets/hosts/<host>.yaml`
-- `clawdlets secrets init` prepares that file for first install via `nixos-anywhere --extra-files`
+- secrets are read from `/var/lib/clawdlets/secrets/hosts/<host>/<secret>.yaml`
+- `clawdlets secrets init` prepares those files for first install via `nixos-anywhere --extra-files`
 
 ## Recommended hardening checks
 
@@ -37,3 +37,8 @@ Therefore:
 - Confirm NixOS firewall only allows SSH via `tailscale0`/`wg0` when `bootstrapSsh=false`.
 - Keep `.clawdlets/` gitignored (required).
 
+## Supply chain (CI)
+
+- GitHub Actions are pinned to commit SHAs (avoid tag drift).
+- Dependabot opens weekly PRs for npm + GitHub Actions updates (`.github/dependabot.yml`).
+- Updates are review-first (no auto-merge by default).

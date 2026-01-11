@@ -1,0 +1,38 @@
+# Ops invariants
+
+Goal: zero drift. Repo + `.clawdlets/` are the only sources of truth.
+
+## Rebuild-only
+
+- Any persistent change must be done by editing this repo (or `.clawdlets/`) and rebuilding.
+- Prefer pinned rebuilds: `clawdlets server rebuild --rev <sha|HEAD>`.
+- Assume the box is disposable. Reinstall beats debugging a snowflake.
+
+## No manual host edits
+
+Do **not**:
+
+- edit `/etc/nixos/*`
+- run `passwd` / mutate users on-host (`users.mutableUsers = false`)
+- copy secrets by hand into `/run/secrets/*` or `/nix/store`
+- “quick fix” systemd units locally
+
+Do:
+
+- change config in `infra/` + rebuild
+- rotate secrets by editing `.clawdlets/secrets/hosts/<host>/<secret>.yaml` (sops) then `clawdlets secrets sync` + rebuild
+- use `clawdlets server status|logs|restart|rebuild` for day-2 ops
+- run `clawdlets server audit --target-host <host>` after bootstrap/lockdown and after major changes
+
+## Breakglass (explicit)
+
+If you *must* do a live fix:
+
+1) do the minimum to restore service
+2) immediately codify it in Nix/docs
+3) rebuild pinned and treat the live fix as temporary
+
+Default breakglass path:
+
+- console login as `breakglass` (wheel user) then `sudo -i`
+- `admin` is intentionally not wheel

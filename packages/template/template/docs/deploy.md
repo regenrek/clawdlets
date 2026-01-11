@@ -17,13 +17,14 @@ fix `trusted-users` once. See `docs/install.md`.
 Run:
 
 ```bash
+export CLAWDLETS_INTERACTIVE=1
 clawdlets stack init
-clawdlets doctor
 clawdlets secrets init
+clawdlets doctor --scope deploy
 clawdlets bootstrap
 ```
 
-If bootstrap OOMs (exit 137), temporarily disable `"coding-agent"` in `infra/configs/fleet.nix` or use a bigger
+If bootstrap OOMs (exit 137), temporarily disable `"coding-agent"` / Codex (via `clawdlets config set ...`) or use a bigger
 builder. Details: `docs/install.md`.
 
 ### 2) Updates (rebuild)

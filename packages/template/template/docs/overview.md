@@ -26,32 +26,43 @@ clawdlets project init --dir ./clawdlets-myproject
 cd ./clawdlets-myproject
 ```
 
-1) **Create stack**
+1) **Configure canonical config (bots/host)**
+
 ```bash
+clawdlets fleet set --guild-id <id>
+clawdlets bot add --bot <id>
+clawdlets host set --add-ssh-key-file ~/.ssh/id_ed25519.pub
+clawdlets host set --disk-device /dev/disk/by-id/...
+clawdlets host set --enable true
+```
+
+2) **Create stack**
+```bash
+export CLAWDLETS_INTERACTIVE=1
 clawdlets stack init
 ```
 
-2) **Create secrets (sops/age)**
+3) **Create secrets (sops/age)**
 ```bash
 clawdlets secrets init
 ```
 
-3) **Sanity checks**
+4) **Sanity checks**
 ```bash
-clawdlets doctor
+clawdlets doctor --scope deploy
 ```
 
-4) **Provision + install (Terraform + nixos-anywhere)**
+5) **Provision + install (Terraform + nixos-anywhere)**
 ```bash
 clawdlets bootstrap
 ```
 
-5) **Lock down (after tailnet works)**
+6) **Lock down (after tailnet works)**
 ```bash
 clawdlets lockdown --target-host admin@<tailscale-ip>
 ```
 
-6) **Operate**
+7) **Operate**
 - status: `clawdlets server status --target-host <host>`
 - logs: `clawdlets server logs --target-host <host> --unit clawdbot-melinda.service --follow`
 - rebuild pinned: `just server-rebuild-rev <host> HEAD`
@@ -59,7 +70,7 @@ clawdlets lockdown --target-host admin@<tailscale-ip>
 ## Secrets model (important)
 
 - Host secrets file lives on the **host filesystem**:
-  - `/var/lib/clawdlets/secrets/hosts/<host>.yaml`
+  - `/var/lib/clawdlets/secrets/hosts/<host>/<secret>.yaml`
 - `sops-nix` reads it from that path (so secrets don’t end up in `/nix/store`).
 - `nixos-anywhere` injects on first install via `.clawdlets/extra-files/<host>/...`.
 

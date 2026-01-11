@@ -8,8 +8,8 @@ Goal: publish repo without leaking:
 ## Rules
 
 - `.clawdlets/` must never be tracked.
-- Don’t commit `infra/secrets/**` in the public repo. Use `.clawdlets/` only.
-- Keep host-specific values out of `infra/nix/hosts/*.nix` before publishing.
+- Don’t commit secrets/keys anywhere in git. Use `.clawdlets/` only.
+- Keep host-specific values out of `infra/nix/hosts/*.nix` and `infra/configs/clawdlets.json` before publishing (ship placeholders).
 
 ## Recommended process (no history)
 
@@ -25,15 +25,13 @@ git commit -m "chore: initial public import"
 ```
 
 2) Run secret scanners (before pushing):
-- gitleaks
 - trivy (misconfig/secret checks)
 
 3) Add CI guardrails:
 - fail if `.clawdlets/**` is tracked
-- fail if any file under `infra/secrets/**` exists
+- fail if `infra/secrets/**` exists (legacy path; this repo should not use it)
 
 ## What users do in public repo
 
-- run `clawdlets stack init` → creates `.clawdlets/`
-- run `clawdlets secrets init` → generates local keys + encrypted secrets
-
+- run `CLAWDLETS_INTERACTIVE=1 clawdlets stack init` → creates `.clawdlets/`
+- run `CLAWDLETS_INTERACTIVE=1 clawdlets secrets init` → generates local keys + encrypted secrets

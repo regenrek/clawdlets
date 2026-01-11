@@ -3,7 +3,7 @@
 Files:
 
 - `.clawdlets/secrets/.sops.yaml` (recipients + rules)
-- `.clawdlets/secrets/hosts/<host>.yaml` (encrypted secrets payload)
+- `.clawdlets/secrets/hosts/<host>/` (encrypted secrets payload; one secret per file)
 - `.clawdlets/secrets/hosts/*.age.pub` (public)
 - `.clawdlets/secrets/hosts/*.agekey` (private; never commit)
 - `.clawdlets/secrets/operators/*.agekey` (private; never commit)
@@ -18,10 +18,35 @@ This generates:
 - host + operator age keys
 - `.clawdlets/secrets/.sops.yaml`
 - `.clawdlets/extra-files/<host>/var/lib/sops-nix/key.txt`
-- `.clawdlets/extra-files/<host>/var/lib/clawdlets/secrets/hosts/<host>.yaml`
-- encrypts `.clawdlets/secrets/hosts/<host>.yaml`
+- `.clawdlets/extra-files/<host>/var/lib/clawdlets/secrets/hosts/<host>/`
+- encrypts `.clawdlets/secrets/hosts/<host>/*.yaml`
 
-Then sync to the host (used by `services.clawdbotFleet.sopsFile` default):
+Then sync to the host (used by sops-nix on the server):
+
+```bash
+clawdlets secrets sync --host <host>
+```
+
+Verify (recommended before rebuild):
+
+```bash
+clawdlets secrets verify --host <host>
+```
+
+## Migration (legacy stacks)
+
+If you previously used a single file per host (like `.clawdlets/secrets/hosts/clawdbot-fleet-host.yaml`) and/or your `.clawdlets/stack.json` is `schemaVersion: 1`:
+
+```bash
+clawdlets secrets migrate --host <host>
+```
+
+Notes:
+- Refuses to overwrite non-empty target dirs unless you pass `--yes`.
+- Renames legacy secrets files to `*.bak*` (no delete).
+- Upgrades `.clawdlets/stack.json` to `schemaVersion: 2` (and upgrades all hosts’ `secrets.*` fields).
+
+After migrating:
 
 ```bash
 clawdlets secrets sync --host <host>
@@ -33,18 +58,18 @@ clawdlets secrets sync --host <host>
 
 ```bash
 mkdir -p .clawdlets/secrets/hosts
-age-keygen -o .clawdlets/secrets/hosts/bots01.agekey
-age-keygen -y .clawdlets/secrets/hosts/bots01.agekey > .clawdlets/secrets/hosts/bots01.age.pub
+age-keygen -o .clawdlets/secrets/hosts/clawdbot-fleet-host.agekey
+age-keygen -y .clawdlets/secrets/hosts/clawdbot-fleet-host.agekey > .clawdlets/secrets/hosts/clawdbot-fleet-host.age.pub
 ```
 
-Update `.clawdlets/secrets/.sops.yaml` with the `bots01.age.pub` recipient.
+Update `.clawdlets/secrets/.sops.yaml` with the `clawdbot-fleet-host.age.pub` recipient.
 
 ### 2) Edit secrets and encrypt
 
-Edit `.clawdlets/secrets/hosts/bots01.yaml`, then:
+Edit files under `.clawdlets/secrets/hosts/clawdbot-fleet-host/`, then:
 
 ```bash
-sops -e -i .clawdlets/secrets/hosts/bots01.yaml
+sops -e -i .clawdlets/secrets/hosts/clawdbot-fleet-host/discord_token_maren.yaml
 ```
 
 ### 3) nixos-anywhere extra files
@@ -52,8 +77,8 @@ sops -e -i .clawdlets/secrets/hosts/bots01.yaml
 Key for first boot:
 
 ```bash
-mkdir -p .clawdlets/extra-files/bots01/var/lib/sops-nix
-cp .clawdlets/secrets/hosts/bots01.agekey .clawdlets/extra-files/bots01/var/lib/sops-nix/key.txt
+mkdir -p .clawdlets/extra-files/clawdbot-fleet-host/var/lib/sops-nix
+cp .clawdlets/secrets/hosts/clawdbot-fleet-host.agekey .clawdlets/extra-files/clawdbot-fleet-host/var/lib/sops-nix/key.txt
 ```
 
 ## Common keys
@@ -67,7 +92,7 @@ via systemd `EnvironmentFile`.
 
 Optional:
 
-- skill secrets referenced by `botProfiles.<bot>.skills.entries.*.envSecrets/*Secret`
-- hook secrets referenced by `botProfiles.<bot>.hooks.*Secret`
-- GitHub App private key PEM referenced by `botProfiles.<bot>.github.privateKeySecret`
+- skill secrets referenced by `fleet.botOverrides.<bot>.skills.entries.*.envSecrets/*Secret`
+- hook secrets referenced by `fleet.botOverrides.<bot>.hooks.*Secret`
+- GitHub App private key PEM referenced by `fleet.botOverrides.<bot>.github.privateKeySecret`
 - restic secrets (`restic_password`, optional `restic_env`)

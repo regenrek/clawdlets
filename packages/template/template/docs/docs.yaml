@@ -5,12 +5,21 @@ docs:
   - path: docs/quickstart.md
     when: first run
     summary: minimal command sequence to deploy one host
+  - path: docs/poc.md
+    when: definition of done
+    summary: acceptance criteria for first host
   - path: docs/cli.md
     when: you need the right command
     summary: clawdlets and just cookbook
   - path: docs/stack.md
     when: editing .clawdlets/stack.json
     summary: schema/fields/example
+  - path: docs/agent-config.md
+    when: routing, skills, workspaces
+    summary: fleet.nix knobs; per-bot routing/skills/codex/github app
+  - path: docs/runtime-layout.md
+    when: paths, state dirs, credentials
+    summary: canonical runtime paths on the host
   - path: docs/install.md
     when: prerequisites on workstation/server
     summary: required tools and setup notes
@@ -23,9 +32,15 @@ docs:
   - path: docs/security.md
     when: threat model, hardening
     summary: secrets out of store; lockdown verification checks
+  - path: docs/ops-invariants.md
+    when: rules of engagement
+    summary: rebuild-only policy; no manual host edits
   - path: docs/operations.md
     when: day-2 ops
     summary: status/logs/restart/rebuild patterns
+  - path: docs/runbook.md
+    when: day 0/day 2 checklist
+    summary: bootstrap + routine ops + optional sync/snapshots
   - path: docs/troubleshooting.md
     when: broken deploy
     summary: known errors and fixes
