@@ -1,15 +1,17 @@
 # Changelog
 All notable changes to this repository will be documented in this file.
 
-The format is based on Keep a Changelog and this project follows no public versioning scheme yet.
+The format is based on Keep a Changelog and this project follows SemVer for npm releases.
 
 ## Unreleased
 
+## [0.1.0] - 2026-01-11
 ### Added
 - Canonical config: `infra/configs/clawdlets.json` (single source of truth) + CLI subcommands (`config`, `host`, `fleet`).
 - CLI-first project scaffolding (`clawdlets project init`) using the embedded template package.
 - Supply-chain hardening: Dependabot (npm + GitHub Actions), pinned GitHub Actions by SHA, TruffleHog secret scanning workflow.
 - Local security gate: `scripts/secleak-check.sh` (gitleaks + trivy).
+- npm publishing via GitHub Actions Trusted Publishing (OIDC) + release automation docs/scripts.
 
 ### Changed
 - Nix flake now derives `nixosConfigurations` from `infra/configs/clawdlets.json` hosts list (multi-host ready).
@@ -20,7 +22,7 @@ The format is based on Keep a Changelog and this project follows no public versi
 - Legacy Nix template generation from the codebase (no more “render/ensure templates” path).
 - Legacy `@clawdbot/clawdlets-core` setup export + tests (unused).
 
-## 2026-01-10
+## [0.0.0] - 2026-01-10
 ### Added
 - ai-stack alignment: seeded `infra/documents/` (AGENTS/SOUL/TOOLS/IDENTITY) and documented usage.
 - Codex CLI support on server with per-bot headless login docs (gunnar + maren).

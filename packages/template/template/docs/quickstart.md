@@ -12,8 +12,12 @@ Goal: provision a Hetzner VM + install NixOS + bring up Discord bots, with insta
 
 Run `clawdlets --help` for full flags.
 
-If you’re developing inside this monorepo, use the pnpm wrappers (example):
-`pnpm run clawdlets:stack -- init` == `clawdlets stack init`
+Install (recommended):
+
+```bash
+npm install -g clawdlets
+clawdlets --help
+```
 
 - `clawdlets stack init`: create `.clawdlets/stack.json` + `.clawdlets/.env` (use `--interactive` or set `CLAWDLETS_INTERACTIVE=1` for prompts).
 - `clawdlets doctor --scope deploy`: deploy preflight (fails on missing).

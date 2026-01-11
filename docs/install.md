@@ -1,5 +1,14 @@
 # Install (Hetzner + nixos-anywhere + Terraform)
 
+## Install clawdlets (CLI)
+
+If you’re using clawdlets as intended (CLI-first; no need to clone this repo):
+
+```bash
+npm install -g clawdlets
+clawdlets --help
+```
+
 ## Inputs
 
 - `infra/configs/clawdlets.json` (canonical config: bots, guildId, host settings)
@@ -131,7 +140,6 @@ To rotate later: update the sops value + redeploy (don’t run `passwd` on-host;
 ## 1) Provision + install
 
 ```bash
-pnpm install
 export CLAWDLETS_INTERACTIVE=1
 clawdlets stack init
 clawdlets secrets init
@@ -140,7 +148,7 @@ clawdlets bootstrap
 
 `clawdlets` reads `.clawdlets/stack.json` and `.clawdlets/.env` (no `source` needed).
 
-Local dev note (while `clawdlets` is not published): install a local wrapper into `~/bin`:
+Local dev note (working inside this monorepo): install a local wrapper into `~/bin`:
 
 ```bash
 just clawdlets-dev-install
