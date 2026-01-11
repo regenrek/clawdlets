@@ -80,9 +80,12 @@ function main() {
   const allowBranch = args.includes("--allow-branch");
   const dryRun = args.includes("--dry-run") || args.includes("-n");
   const noPush = args.includes("--no-push");
+  const tagOnly = args.includes("--tag-only");
 
   if (args.includes("-h") || args.includes("--help")) {
-    console.log("Usage: pnpm dlx tsx scripts/release.ts <patch|minor|major|X.Y.Z> [--dry-run] [--allow-branch] [--no-push]");
+    console.log(
+      "Usage: pnpm dlx tsx scripts/release.ts <patch|minor|major|X.Y.Z> [--dry-run] [--allow-branch] [--no-push] [--tag-only]",
+    );
     process.exit(0);
   }
 
@@ -112,34 +115,42 @@ function main() {
 
   const next = bumpSemver(current, bumpArg as any);
   const tag = `v${next}`;
+  const willBump = !tagOnly && next !== current;
 
   ensureChangelogHasVersion(next);
   ensureTagMissing(tag);
 
   console.log(`Releasing ${tag}...`);
 
-  if (!dryRun) {
+  // Gates always run (even on --dry-run) so "dry-run" still proves releasability.
+  run("pnpm -r test");
+  run("pnpm -r build");
+  run("pnpm -C packages/core run coverage");
+  run("scripts/secleak-check.sh");
+
+  if (dryRun) {
+    console.log(willBump ? "[dry-run] would bump versions + commit" : "[dry-run] no version bump/commit (tag-only)");
+    console.log("[dry-run] would tag + push");
+    return;
+  }
+
+  if (willBump) {
     bumpPackageVersion(cliPkgPath, next);
     bumpPackageVersion(corePkgPath, next);
     bumpPackageVersion(templatePkgPath, next);
-
-    run("pnpm -r test");
-    run("pnpm -r build");
-    run("pnpm -C packages/core run coverage");
-    run("scripts/secleak-check.sh");
-
     run("git add -A");
     run(`git commit -m "chore(release): ${tag}"`);
-    run(`git tag -a ${tag} -m "Release ${tag}"`);
-
-    if (!noPush) {
-      run("git push origin HEAD");
-      run("git push origin --tags");
-    } else {
-      console.log("Skipping push (--no-push).");
-    }
   } else {
-    console.log("[dry-run] would bump versions, run gates, commit, tag, push");
+    console.log(`No version bump/commit (current already ${current}; pass patch/minor/major or a new version to bump).`);
+  }
+
+  run(`git tag -a ${tag} -m "Release ${tag}"`);
+
+  if (!noPush) {
+    run("git push origin HEAD");
+    run("git push origin --tags");
+  } else {
+    console.log("Skipping push (--no-push).");
   }
 
   console.log(`Release ready: ${tag}`);
@@ -147,4 +158,3 @@ function main() {
 }
 
 main();
-
