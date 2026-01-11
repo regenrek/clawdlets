@@ -13,6 +13,7 @@ import { sopsDecryptYamlFile, sopsEncryptYamlToFile } from "@clawdbot/clawdlets-
 import { wgGenKey } from "@clawdbot/clawdlets-core/lib/wireguard";
 import { loadStack, loadStackEnv } from "@clawdbot/clawdlets-core/stack";
 import { assertSafeHostName, loadClawdletsConfig } from "@clawdbot/clawdlets-core/lib/clawdlets-config";
+import { readYamlScalarFromMapping } from "@clawdbot/clawdlets-core/lib/yaml-scalar";
 import { cancelFlow, navOnCancel, NAV_EXIT } from "../../lib/wizard.js";
 import { sanitizeOperatorId, upsertYamlScalarLine } from "./common.js";
 
@@ -161,23 +162,20 @@ export const secretsInit = defineCommand({
       await writeFileAtomic(extraFilesKeyPath, `${hostKeys.secretKey}\n`, { mode: 0o600 });
     }
 
-    const readExistingScalar = async (secretName: string): Promise<string | null> => {
-      const p0 = path.join(localSecretsDir, `${secretName}.yaml`);
-      if (!fs.existsSync(p0)) return null;
-      try {
-        const decrypted = await sopsDecryptYamlFile({
-          filePath: p0,
-          ageKeyFile: operatorKeyPath,
-          nix,
-        });
-        const rx = new RegExp(`^\\s*${secretName.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\s*:\\s*\"(.*)\"\\s*$`, "m");
-        const m = decrypted.match(rx);
-        if (m) return m[1] ?? "";
-        return null;
-      } catch {
-        return null;
-      }
-    };
+	    const readExistingScalar = async (secretName: string): Promise<string | null> => {
+	      const p0 = path.join(localSecretsDir, `${secretName}.yaml`);
+	      if (!fs.existsSync(p0)) return null;
+	      try {
+	        const decrypted = await sopsDecryptYamlFile({
+	          filePath: p0,
+	          ageKeyFile: operatorKeyPath,
+	          nix,
+	        });
+	        return readYamlScalarFromMapping({ yamlText: decrypted, key: secretName });
+	      } catch {
+	        return null;
+	      }
+	    };
 
     const { config: clawdletsConfig } = loadClawdletsConfig({ repoRoot: layout.repoRoot, stackDir: args.stackDir });
     const bots = clawdletsConfig.fleet.bots;
