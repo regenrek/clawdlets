@@ -37,6 +37,11 @@ Default breakglass path:
 - console login as `breakglass` (wheel user) then `sudo -i`
 - `admin` is intentionally not wheel
 
+## Rebuild privilege model
+
+- Default: `admin` cannot run `nixos-rebuild` (breakglass required).
+- Optional: enable `clawdlets.operator.rebuild` to allow `admin` to run a constrained pinned rebuild command.
+
 ## Egress posture (honesty)
 
 The built-in nftables ruleset only blocks outbound SMTP ports. Treat it as anti-spam, not egress control.

@@ -89,6 +89,27 @@ in
         };
       };
     };
+
+    operator = {
+      rebuild = {
+        enable = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Allow admin to trigger a constrained pinned rebuild via sudo (see clawdlets-host.nix).";
+        };
+
+        flakeBase = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = ''
+            Flake base used by /etc/clawdlets/bin/rebuild-host (must be github:owner/repo).
+
+            NOTE: this is intended for public repos; private repo rebuilds should be done from a trusted workstation
+            that can inject GitHub access tokens.
+          '';
+        };
+      };
+    };
   };
 
   config = {
@@ -176,6 +197,25 @@ in
           || (tailscaleCfg.authKeySecret != null && tailscaleCfg.authKeySecret != "");
         message = "clawdlets.tailnet.tailscale.authKeySecret must be set when tailnet mode is tailscale (or enable clawdlets.provisioning.enable / clawdlets.publicSsh.enable for first boot).";
       }
+      {
+        assertion =
+          (!cfg.operator.rebuild.enable)
+          || ((cfg.operator.rebuild.flakeBase or null) != null && (cfg.operator.rebuild.flakeBase or "") != "");
+        message = "clawdlets.operator.rebuild.flakeBase must be set when clawdlets.operator.rebuild.enable is true.";
+      }
     ];
+
+    environment.etc."clawdlets/bin/rebuild-host" = {
+      source = ../../../scripts/rebuild-host.sh;
+      mode = "0755";
+    };
+
+    environment.etc."clawdlets/rebuild.env" = lib.mkIf cfg.operator.rebuild.enable {
+      mode = "0444";
+      text = ''
+        CLAWDLETS_REBUILD_FLAKE_BASE=${cfg.operator.rebuild.flakeBase}
+        CLAWDLETS_REBUILD_HOST=${config.clawdlets.hostName}
+      '';
+    };
   };
 }

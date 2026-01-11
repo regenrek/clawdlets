@@ -78,7 +78,17 @@ in {
   users.users.root.hashedPasswordFile =
     lib.mkIf enableRootPassword config.sops.secrets.root_password_hash.path;
 
-  security.sudo.extraConfig = ''
+  security.sudo.extraConfig =
+    let
+      rebuildSudo =
+        lib.optionalString config.clawdlets.operator.rebuild.enable ''
+          Cmnd_Alias CLAWDLETS_REBUILD = /etc/clawdlets/bin/rebuild-host --rev *
+        '';
+      rebuildAlias =
+        if config.clawdlets.operator.rebuild.enable
+        then ", CLAWDLETS_REBUILD"
+        else "";
+    in ''
     Cmnd_Alias CLAWDBOT_SYSTEMCTL = \
       /run/current-system/sw/bin/systemctl status clawdbot-*, \
       /run/current-system/sw/bin/systemctl status clawdbot-* --no-pager, \
@@ -106,13 +116,8 @@ in {
       /run/current-system/sw/bin/journalctl -u clawdbot-* -n * --no-pager
     Cmnd_Alias CLAWDBOT_SS = /run/current-system/sw/bin/ss -ltnp
     Cmnd_Alias CLAWDBOT_GH_SYNC_READ = /etc/clawdlets/bin/gh-sync-read *
-    Cmnd_Alias CLAWDBOT_REBUILD = \
-      /run/current-system/sw/bin/nixos-rebuild, \
-      /run/current-system/sw/bin/env /run/current-system/sw/bin/nixos-rebuild switch --flake *, \
-      /run/current-system/sw/bin/env NIX_CONFIG=access-tokens\ =\ github.com=* /run/current-system/sw/bin/nixos-rebuild switch --flake *, \
-      /run/current-system/sw/bin/env nixos-rebuild switch --flake *, \
-      /run/current-system/sw/bin/env NIX_CONFIG=access-tokens\ =\ github.com=* nixos-rebuild switch --flake *
-    admin ALL=(root) NOPASSWD: CLAWDBOT_SYSTEMCTL, CLAWDBOT_JOURNAL, CLAWDBOT_SS, CLAWDBOT_GH_SYNC_READ, CLAWDBOT_REBUILD
+    ${rebuildSudo}
+    admin ALL=(root) NOPASSWD: CLAWDBOT_SYSTEMCTL, CLAWDBOT_JOURNAL, CLAWDBOT_SS, CLAWDBOT_GH_SYNC_READ${rebuildAlias}
   '';
 
   services.clawdbotFleet = {
