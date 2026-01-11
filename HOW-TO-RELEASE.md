@@ -7,6 +7,8 @@ This repo publishes `clawdlets` to npm via GitHub Actions using npm Trusted Publ
 - Clean working tree on `main`
 - `CHANGELOG.md` has a section for the exact version you will release: `## [X.Y.Z] - YYYY-MM-DD`
 - GitHub Actions is configured as a **Trusted Publisher** for the npm package
+  - Workflow: `npm-release.yml`
+  - Environment: `npm`
 
 ## Update changelog
 
@@ -48,4 +50,3 @@ The script:
   - verify npm package → **Trusted Publishers** includes this repo and `.github/workflows/npm-release.yml`
   - confirm workflow has `permissions: id-token: write`
   - rerun `npm Release` via `workflow_dispatch` with `tag=vX.Y.Z`
-
