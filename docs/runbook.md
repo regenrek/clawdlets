@@ -9,7 +9,7 @@ Goal: deterministic, rebuild-only ops. Repo + `.clawdlets/` are the only sources
 3) `clawdlets stack init`
 4) `clawdlets secrets init`
 5) `clawdlets doctor --scope deploy`
-6) `clawdlets infra apply --bootstrap-ssh=true`
+6) `clawdlets infra apply --public-ssh=true`
 7) `clawdlets bootstrap`
 8) Verify tailnet, then: `clawdlets doctor --scope deploy --strict`
 9) Switch admin access to VPN + close public SSH: `clawdlets lockdown --target-host admin@<vpn-ip>`

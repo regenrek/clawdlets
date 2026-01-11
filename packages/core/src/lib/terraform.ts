@@ -8,7 +8,7 @@ import { withFlakesEnv } from "./nix-flakes.js";
 export type TerraformApplyParams = {
   loaded: LoadEnvResult;
   serverType?: string;
-  bootstrapSsh: boolean;
+  publicSsh: boolean;
   dryRun?: boolean;
 };
 
@@ -17,7 +17,7 @@ export type TerraformApplyVars = {
   adminCidr: string;
   sshPubkeyFile: string;
   serverType?: string;
-  bootstrapSsh: boolean;
+  publicSsh: boolean;
 };
 
 export async function applyTerraformVars(params: {
@@ -81,7 +81,7 @@ export async function applyTerraformVars(params: {
     "-var",
     `ssh_key_id=${sshKeyId}`,
     "-var",
-    `bootstrap_ssh=${params.vars.bootstrapSsh ? "true" : "false"}`,
+    `public_ssh=${params.vars.publicSsh ? "true" : "false"}`,
   ];
   if (env.SERVER_TYPE) tfApplyArgs.push("-var", `server_type=${env.SERVER_TYPE}`);
 
@@ -100,7 +100,7 @@ export async function applyTerraform(params: TerraformApplyParams): Promise<void
     adminCidr: params.loaded.env.ADMIN_CIDR,
     sshPubkeyFile: params.loaded.env.SSH_PUBKEY_FILE,
     serverType: resolvedServerType || undefined,
-    bootstrapSsh: params.bootstrapSsh,
+    publicSsh: params.publicSsh,
   };
   const redact = [params.loaded.env.HCLOUD_TOKEN, params.loaded.env.GITHUB_TOKEN].filter(
     (value): value is string => Boolean(value && value.trim()),

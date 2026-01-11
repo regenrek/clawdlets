@@ -70,7 +70,7 @@ clawdlets bootstrap
 - Console: `admin` login should work (sudo password exists; SSH stays key-only)
 
 5) Lock down after VPN/tailnet works:
-- ensure `bootstrapSsh=false`: `clawdlets host set --bootstrap-ssh false`
+- ensure `publicSsh.enable=false`: `clawdlets host set --public-ssh false`
 - then:
 ```bash
 clawdlets lockdown --target-host admin@<tailscale-ip>

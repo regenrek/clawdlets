@@ -16,8 +16,8 @@ in {
 
   clawdlets.diskDevice = hostCfg.diskDevice or "/dev/disk/by-id/CHANGE_ME";
 
-  clawdlets.provisioning.enable = hostCfg.bootstrapSsh or true;
-  clawdlets.provisioning.publicSsh = hostCfg.bootstrapSsh or true;
+  clawdlets.publicSsh.enable = ((hostCfg.publicSsh or { }).enable or false);
+  clawdlets.provisioning.enable = ((hostCfg.provisioning or { }).enable or false);
 
   clawdlets.tailnet.mode = tailnetMode;
   clawdlets.tailnet.tailscale.authKeySecret =

@@ -113,7 +113,7 @@ export const lockdown = defineCommand({
           adminCidr: host.terraform.adminCidr,
           sshPubkeyFile,
           serverType: host.hetzner.serverType,
-          bootstrapSsh: false,
+          publicSsh: false,
         },
         nixBin: envLoaded.env.NIX_BIN || "nix",
         dryRun: args.dryRun,

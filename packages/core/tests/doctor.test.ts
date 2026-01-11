@@ -131,7 +131,7 @@ describe("doctor", () => {
     );
 
     const clawdletsConfig = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       fleet: {
         guildId: "",
         bots: ["alpha", "beta"],
@@ -143,9 +143,10 @@ describe("doctor", () => {
       hosts: {
         "clawdbot-fleet-host": {
           enable: false,
-          bootstrapSsh: true,
           diskDevice: "/dev/disk/by-id/TEST",
           sshAuthorizedKeys: ["ssh-ed25519 AAAATEST test"],
+          publicSsh: { enable: false },
+          provisioning: { enable: false },
           tailnet: { mode: "none" },
           agentModelPrimary: "zai/glm-4.7",
         },
@@ -241,7 +242,8 @@ describe("doctor", () => {
         '  openssh.authorizedKeys.keys = [ "ssh-ed25519 AAAATEST test" ];',
         "};",
         "users.users.breakglass = { extraGroups = [ \"wheel\" ]; };",
-        "services.clawdbotFleet = { bootstrapSsh = true; };",
+        "clawdlets.publicSsh.enable = false;",
+        "clawdlets.provisioning.enable = false;",
         "",
       ].join("\n"),
       "utf8",
@@ -325,7 +327,8 @@ describe("doctor", () => {
         "users.users.admin = {",
         "  extraGroups = [ \"wheel\" ];",
         "};",
-        "services.clawdbotFleet = { bootstrapSsh = true; };",
+        "clawdlets.publicSsh.enable = false;",
+        "clawdlets.provisioning.enable = false;",
         "",
       ].join("\n"),
       "utf8",

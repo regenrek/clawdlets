@@ -112,12 +112,25 @@ export async function addDeployChecks(params: {
       detail: clawdletsHostCfg.enable ? "(true)" : "(false; host will install but fleet services/VPN won't run until enabled)",
     });
 
-    params.push({
-      scope: "deploy",
-      status: clawdletsHostCfg.bootstrapSsh ? "ok" : "warn",
-      label: "bootstrapSsh",
-      detail: clawdletsHostCfg.bootstrapSsh ? "(true)" : "(false; public SSH on port 22 will be closed after install)",
-    });
+    {
+      const publicSsh = Boolean(clawdletsHostCfg.publicSsh?.enable);
+      params.push({
+        scope: "deploy",
+        status: publicSsh ? "missing" : "ok",
+        label: "publicSsh",
+        detail: publicSsh ? "(enabled; public SSH open)" : "(disabled)",
+      });
+    }
+
+    {
+      const provisioning = Boolean(clawdletsHostCfg.provisioning?.enable);
+      params.push({
+        scope: "deploy",
+        status: provisioning ? "warn" : "ok",
+        label: "provisioning",
+        detail: provisioning ? "(enabled)" : "(disabled)",
+      });
+    }
 
     const mode = String(clawdletsHostCfg.tailnet?.mode || "none");
     if (mode === "none") {

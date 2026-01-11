@@ -39,9 +39,10 @@ const add = defineCommand({
 
     const nextHost: ClawdletsHostConfig = {
       enable: false,
-      bootstrapSsh: true,
       diskDevice: "/dev/disk/by-id/CHANGE_ME",
       sshAuthorizedKeys: [],
+      publicSsh: { enable: false },
+      provisioning: { enable: false },
       tailnet: { mode: "tailscale" },
       agentModelPrimary: "zai/glm-4.7",
     };
@@ -57,7 +58,8 @@ const set = defineCommand({
   args: {
     host: { type: "string", description: "Host name.", default: "clawdbot-fleet-host" },
     enable: { type: "string", description: "Enable fleet services (true/false)." },
-    "bootstrap-ssh": { type: "string", description: "Bootstrap SSH (true/false)." },
+    "public-ssh": { type: "string", description: "Public SSH (true/false; not recommended)." },
+    provisioning: { type: "string", description: "Provisioning mode (true/false; relaxes validation)." },
     "disk-device": { type: "string", description: "Disk device (e.g. /dev/disk/by-id/...).", },
     "agent-model-primary": { type: "string", description: "Primary agent model (e.g. zai/glm-4.7)." },
     tailnet: { type: "string", description: "Tailnet mode: none|tailscale." },
@@ -79,8 +81,11 @@ const set = defineCommand({
     const enable = parseBoolOrUndefined(args.enable);
     if (enable !== undefined) next.enable = enable;
 
-    const bootstrapSsh = parseBoolOrUndefined((args as any)["bootstrap-ssh"]);
-    if (bootstrapSsh !== undefined) next.bootstrapSsh = bootstrapSsh;
+    const publicSsh = parseBoolOrUndefined((args as any)["public-ssh"]);
+    if (publicSsh !== undefined) next.publicSsh.enable = publicSsh;
+
+    const provisioning = parseBoolOrUndefined((args as any).provisioning);
+    if (provisioning !== undefined) next.provisioning.enable = provisioning;
 
     if ((args as any)["disk-device"] !== undefined) next.diskDevice = String((args as any)["disk-device"]).trim();
     if ((args as any)["agent-model-primary"] !== undefined) next.agentModelPrimary = String((args as any)["agent-model-primary"]).trim();

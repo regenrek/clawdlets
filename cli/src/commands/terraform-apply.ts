@@ -16,10 +16,10 @@ export const terraformApply = defineCommand({
       type: "string",
       description: "Override SERVER_TYPE (Hetzner server type).",
     },
-    bootstrapSsh: {
+    "public-ssh": {
       type: "boolean",
       description: "Whether to allow public SSH from ADMIN_CIDR.",
-      default: true,
+      default: false,
     },
     dryRun: {
       type: "boolean",
@@ -32,7 +32,7 @@ export const terraformApply = defineCommand({
     await applyTerraform({
       loaded,
       serverType: args.serverType,
-      bootstrapSsh: args.bootstrapSsh,
+      publicSsh: Boolean((args as any)["public-ssh"]),
       dryRun: args.dryRun,
     });
   },

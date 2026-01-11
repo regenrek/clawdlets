@@ -5,7 +5,7 @@ import type { RepoLayout } from "../repo-layout.js";
 import { getRepoLayout } from "../repo-layout.js";
 import { BotIdSchema, HostNameSchema, assertSafeHostName } from "./identifiers.js";
 
-export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 1 as const;
+export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 2 as const;
 
 const JsonObjectSchema: z.ZodType<Record<string, unknown>> = z.record(z.any());
 
@@ -43,9 +43,18 @@ const FleetSchema = z.object({
 
 const HostSchema = z.object({
   enable: z.boolean().default(false),
-  bootstrapSsh: z.boolean().default(true),
   diskDevice: z.string().trim().default("/dev/disk/by-id/CHANGE_ME"),
   sshAuthorizedKeys: z.array(z.string().trim().min(1)).default([]),
+  publicSsh: z
+    .object({
+      enable: z.boolean().default(false),
+    })
+    .default({ enable: false }),
+  provisioning: z
+    .object({
+      enable: z.boolean().default(false),
+    })
+    .default({ enable: false }),
   tailnet: z
     .object({
       mode: z.enum(["none", "tailscale"]).default("tailscale"),
@@ -84,9 +93,10 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
     hosts: {
       [host]: {
         enable: false,
-        bootstrapSsh: true,
         diskDevice: "/dev/disk/by-id/CHANGE_ME",
         sshAuthorizedKeys: [],
+        publicSsh: { enable: false },
+        provisioning: { enable: false },
         tailnet: { mode: "tailscale" },
         agentModelPrimary: "zai/glm-4.7",
       },

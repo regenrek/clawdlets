@@ -18,14 +18,15 @@ describe("clawdlets config schema", () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 1,
+        schemaVersion: 2,
         fleet: { bots: ["maren"] },
         hosts: {
           "../pwn": {
             enable: false,
-            bootstrapSsh: true,
             diskDevice: "/dev/disk/by-id/CHANGE_ME",
             sshAuthorizedKeys: [],
+            publicSsh: { enable: false },
+            provisioning: { enable: false },
             tailnet: { mode: "none" },
             agentModelPrimary: "zai/glm-4.7",
           },
@@ -38,14 +39,15 @@ describe("clawdlets config schema", () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 1,
+        schemaVersion: 2,
         fleet: { bots: ["maren", "maren"] },
         hosts: {
           "clawdbot-fleet-host": {
             enable: false,
-            bootstrapSsh: true,
             diskDevice: "/dev/disk/by-id/CHANGE_ME",
             sshAuthorizedKeys: [],
+            publicSsh: { enable: false },
+            provisioning: { enable: false },
             tailnet: { mode: "none" },
             agentModelPrimary: "zai/glm-4.7",
           },

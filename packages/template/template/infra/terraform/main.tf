@@ -31,9 +31,15 @@ variable "admin_cidr" {
   type = string
 }
 
-variable "bootstrap_ssh" {
+variable "admin_cidr_is_world_open" {
   type = bool
-  default = true
+  default = false
+  description = "Explicitly allow 0.0.0.0/0 or ::/0 when public_ssh is enabled (not recommended)."
+}
+
+variable "public_ssh" {
+  type = bool
+  default = false
 }
 
 variable "server_type" {
@@ -54,8 +60,9 @@ module "clawdbot_fleet_host" {
   source        = "./modules/bot_host"
   name          = "clawdbot-fleet-host"
   admin_cidr    = var.admin_cidr
+  admin_cidr_is_world_open = var.admin_cidr_is_world_open
   ssh_key_id    = var.ssh_key_id
-  bootstrap_ssh = var.bootstrap_ssh
+  public_ssh = var.public_ssh
   server_type   = var.server_type
   location      = var.location
 }

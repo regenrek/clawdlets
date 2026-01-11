@@ -86,16 +86,18 @@ const serverAudit = defineCommand({
     };
 
     const provisioning = await nixosOption("clawdlets.provisioning.enable");
-    const provisioningPublic = await nixosOption("clawdlets.provisioning.publicSsh");
+    const publicSsh = await nixosOption("clawdlets.publicSsh.enable");
 
     const provisioningEnabled = provisioning.includes("Value: true");
-    const provisioningDisabled = provisioning.includes("Value: false");
-    const provisioningPublicSsh = provisioningPublic.includes("Value: true");
+    const publicSshEnabled = publicSsh.includes("Value: true");
 
-    if (provisioningDisabled) add({ status: "ok", label: "bootstrapSsh", detail: "(false)" });
-    else if (provisioningEnabled && provisioningPublicSsh) add({ status: "missing", label: "bootstrapSsh", detail: "(true; public SSH firewall open)" });
-    else if (provisioningEnabled && !provisioningPublicSsh) add({ status: "warn", label: "bootstrapSsh", detail: "(true; public SSH closed)" });
-    else add({ status: "warn", label: "bootstrapSsh", detail: "(unknown; nixos-option not available?)" });
+    if (publicSshEnabled) add({ status: "missing", label: "publicSsh", detail: "(enabled; public SSH open)" });
+    else if (publicSsh.includes("Value: false")) add({ status: "ok", label: "publicSsh", detail: "(disabled)" });
+    else add({ status: "warn", label: "publicSsh", detail: "(unknown; nixos-option not available?)" });
+
+    if (provisioningEnabled) add({ status: "warn", label: "provisioning", detail: "(enabled)" });
+    else if (provisioning.includes("Value: false")) add({ status: "ok", label: "provisioning", detail: "(disabled)" });
+    else add({ status: "warn", label: "provisioning", detail: "(unknown; nixos-option not available?)" });
 
     const tailscaleEnabled = (await nixosOption("services.tailscale.enable")).includes("Value: true");
     if (tailscaleEnabled) {
@@ -172,9 +174,9 @@ const serverAudit = defineCommand({
         ),
       ].join(" "),
     );
-    if (provisioningDisabled && firewall.trim().length === 0) {
+    if (!publicSshEnabled && firewall.trim().length === 0) {
       add({ status: "ok", label: "firewall port 22 (public)", detail: "(no public dport 22 rule found)" });
-    } else if (provisioningDisabled && firewall.trim().length > 0) {
+    } else if (!publicSshEnabled && firewall.trim().length > 0) {
       add({ status: "missing", label: "firewall port 22 (public)", detail: firewall.trim() });
     }
 

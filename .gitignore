@@ -6,6 +6,7 @@
 
 # terraform
 infra/terraform/.terraform/
+packages/template/template/infra/terraform/.terraform/
 infra/terraform/*.tfstate
 infra/terraform/*.tfstate.*
 infra/terraform/*.tfplan

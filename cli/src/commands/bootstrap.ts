@@ -43,6 +43,7 @@ export const bootstrap = defineCommand({
     flake: { type: "string", description: "Override base flake (default: stack.base.flake)." },
     rev: { type: "string", description: "Git rev to pin (HEAD/sha/tag).", default: "HEAD" },
     ref: { type: "string", description: "Git ref to pin (branch or tag)." },
+    "keep-public-ssh": { type: "boolean", description: "Keep public SSH open after install (not recommended).", default: false },
     dryRun: { type: "boolean", description: "Print commands without executing.", default: false },
   },
   async run({ args }) {
@@ -70,7 +71,7 @@ export const bootstrap = defineCommand({
         adminCidr: host.terraform.adminCidr,
         sshPubkeyFile,
         serverType: host.hetzner.serverType,
-        bootstrapSsh: true,
+        publicSsh: true,
       },
       nixBin,
       dryRun: args.dryRun,
@@ -233,6 +234,22 @@ export const bootstrap = defineCommand({
       dryRun: args.dryRun,
       redact: [hcloudToken, githubToken].filter(Boolean) as string[],
     });
+
+    if (!Boolean((args as any)["keep-public-ssh"])) {
+      await applyTerraformVars({
+        repoRoot,
+        vars: {
+          hcloudToken,
+          adminCidr: host.terraform.adminCidr,
+          sshPubkeyFile,
+          serverType: host.hetzner.serverType,
+          publicSsh: false,
+        },
+        nixBin,
+        dryRun: args.dryRun,
+        redact: [hcloudToken, githubToken].filter(Boolean) as string[],
+      });
+    }
 
     await purgeKnownHosts(ipv4, { dryRun: args.dryRun });
     console.log(`ok: installed; ssh admin@${ipv4}`);

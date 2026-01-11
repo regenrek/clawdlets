@@ -35,7 +35,7 @@ trash_or_rm() {
 
 list_files() {
   local dir="$1"
-  (cd "$dir" && find . -type f -print | sed 's|^\./||' | LC_ALL=C sort)
+  (cd "$dir" && find . -name .terraform -type d -prune -o -type f -print | sed 's|^\./||' | LC_ALL=C sort)
 }
 
 sync_tree_apply() {
@@ -54,7 +54,7 @@ sync_tree_apply() {
     done <<<"$extras"
   fi
 
-  rsync -a --checksum "$src/" "$dest/"
+  rsync -a --checksum --exclude '.terraform/' "$src/" "$dest/"
 
   find "$dest" -depth -type d -empty -print0 | xargs -0 -I {} rmdir -- {} 2>/dev/null || true
 }
@@ -86,7 +86,7 @@ sync_tree_check() {
   fi
 
   local changed
-  changed="$(rsync -a --checksum --dry-run --out-format='%i %n%L' "$src/" "$dest/" | LC_ALL=C sort || true)"
+  changed="$(rsync -a --checksum --exclude '.terraform/' --dry-run --out-format='%i %n%L' "$src/" "$dest/" | LC_ALL=C sort || true)"
   if [ -n "$changed" ]; then
     echo "content mismatch:" >&2
     echo "$changed" >&2
@@ -142,7 +142,9 @@ sync_file() {
 }
 
 sync_tree infra/nix
+sync_tree infra/terraform
 sync_file infra/configs/fleet.nix
+sync_file infra/configs/clawdlets.json
 sync_file infra/configs/bundled-skills.json
 
 sync_file scripts/gh-sync.sh

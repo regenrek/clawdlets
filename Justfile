@@ -31,7 +31,7 @@ clawdlets-lockdown +args="":
   cd {{justfile_directory()}} && pnpm run clawdlets:lockdown -- {{args}}
 
 terraform-lockdown:
-  cd {{justfile_directory()}} && pnpm run clawdlets:infra -- apply --bootstrap-ssh=false
+  cd {{justfile_directory()}} && pnpm run clawdlets:infra -- apply --public-ssh=false
 
 stack-validate:
   cd {{justfile_directory()}} && pnpm run clawdlets:stack -- validate
@@ -45,8 +45,8 @@ secrets-init host="clawdbot-fleet-host":
 secrets-sync host="clawdbot-fleet-host":
   cd {{justfile_directory()}} && pnpm run clawdlets:secrets -- sync --host {{host}}
 
-infra-apply host="clawdbot-fleet-host" bootstrap_ssh="true":
-  cd {{justfile_directory()}} && pnpm run clawdlets:infra -- apply --host {{host}} --bootstrap-ssh={{bootstrap_ssh}}
+infra-apply host="clawdbot-fleet-host" public_ssh="false":
+  cd {{justfile_directory()}} && pnpm run clawdlets:infra -- apply --host {{host}} --public-ssh={{public_ssh}}
 
 server-units target_host:
   cd {{justfile_directory()}} && pnpm run clawdlets:server -- status --target-host {{target_host}}

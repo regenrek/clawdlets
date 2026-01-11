@@ -33,7 +33,7 @@ Goal: prove clawdlets can provision + operate a single Hetzner host end-to-end w
 - `clawdlets lockdown --target-host admin@<tail-ip>` succeeds.
 - Public SSH closed:
   - Hetzner firewall removes TCP/22 from internet
-- NixOS only allows SSH via `tailscale0` when `bootstrapSsh=false`
+- NixOS only allows SSH via `tailscale0` when `publicSsh.enable=false`
 
 ### Day-2 ops
 

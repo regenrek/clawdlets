@@ -253,13 +253,13 @@ After WireGuard works:
 1) Disable bootstrap SSH in canonical config:
 
 ```bash
-clawdlets host set --bootstrap-ssh false
+clawdlets host set --public-ssh false
 ```
 
 2) Remove public SSH rule from Hetzner firewall:
 
 ```bash
-clawdlets infra apply --bootstrap-ssh=false
+clawdlets infra apply --public-ssh=false
 ```
 
 Optional: one-shot helper (rebuild over SSH + terraform apply):

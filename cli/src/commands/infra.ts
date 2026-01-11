@@ -15,15 +15,15 @@ function getHost(stackHosts: Record<string, unknown>, host: string): unknown {
 const infraApply = defineCommand({
   meta: {
     name: "apply",
-    description: "Apply Hetzner terraform for a host (bootstrap ssh toggle lives in server/lockdown).",
+    description: "Apply Hetzner terraform for a host (public SSH toggle lives in server/lockdown).",
   },
   args: {
     stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
     host: { type: "string", description: "Host name (default: clawdbot-fleet-host).", default: "clawdbot-fleet-host" },
-    bootstrapSsh: {
+    "public-ssh": {
       type: "boolean",
       description: "Whether public SSH (22) is open in Hetzner firewall.",
-      default: true,
+      default: false,
     },
     dryRun: { type: "boolean", description: "Print commands without executing.", default: false },
   },
@@ -46,7 +46,7 @@ const infraApply = defineCommand({
         adminCidr: host.terraform.adminCidr,
         sshPubkeyFile,
         serverType: host.hetzner.serverType,
-        bootstrapSsh: Boolean(args.bootstrapSsh),
+        publicSsh: Boolean((args as any)["public-ssh"]),
       },
       nixBin: envLoaded.env.NIX_BIN || "nix",
       dryRun: args.dryRun,
@@ -67,4 +67,3 @@ export const infra = defineCommand({
     apply: infraApply,
   },
 });
-

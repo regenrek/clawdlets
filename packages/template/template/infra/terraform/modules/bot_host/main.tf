@@ -30,26 +30,41 @@ variable "admin_cidr" {
   type = string
 }
 
+variable "admin_cidr_is_world_open" {
+  type = bool
+  default = false
+  description = "Explicitly allow 0.0.0.0/0 or ::/0 when public_ssh is enabled (not recommended)."
+}
+
 variable "ssh_key_id" {
   type = string
 }
 
-variable "bootstrap_ssh" {
+variable "public_ssh" {
   type = bool
-  default = true
+  default = false
 }
 
 resource "hcloud_firewall" "fw" {
   name = "${var.name}-fw"
 
+  lifecycle {
+    precondition {
+      condition = (!var.public_ssh)
+        || var.admin_cidr_is_world_open
+        || (var.admin_cidr != "0.0.0.0/0" && var.admin_cidr != "::/0")
+      error_message = "refusing to open public SSH with admin_cidr=0.0.0.0/0 (or ::/0); set admin_cidr_is_world_open=true to override"
+    }
+  }
+
   dynamic "rule" {
-    for_each = var.bootstrap_ssh ? [1] : []
+    for_each = var.public_ssh ? [1] : []
     content {
       direction   = "in"
       protocol    = "tcp"
       port        = "22"
       source_ips  = [var.admin_cidr]
-      description = "Bootstrap SSH from admin CIDR"
+      description = "Public SSH from admin CIDR"
     }
   }
 }

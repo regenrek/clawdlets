@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "fleet": {
     "guildId": "",
     "bots": ["maren", "sonja", "gunnar", "melinda"],
@@ -11,9 +11,10 @@
   "hosts": {
     "clawdbot-fleet-host": {
       "enable": false,
-      "bootstrapSsh": true,
       "diskDevice": "/dev/disk/by-id/CHANGE_ME",
       "sshAuthorizedKeys": [],
+      "publicSsh": { "enable": false },
+      "provisioning": { "enable": false },
       "tailnet": { "mode": "tailscale" },
       "agentModelPrimary": "zai/glm-4.7"
     }

@@ -10,7 +10,7 @@ let
     else defaultHostSecretsDir;
 
   provisioningEnabled = cfg.provisioning.enable;
-  provisioningPublicSsh = cfg.provisioning.publicSsh;
+  publicSshEnabled = cfg.publicSsh.enable;
 
   isTailscale = cfg.tailnet.mode == "tailscale";
   tailscaleCfg = cfg.tailnet.tailscale;
@@ -35,13 +35,15 @@ in
       enable = lib.mkOption {
         type = lib.types.bool;
         default = false;
-        description = "Bootstrap/provisioning mode (relaxes validation + optional public SSH).";
+        description = "Bootstrap/provisioning mode (relaxes validation).";
       };
+    };
 
-      publicSsh = lib.mkOption {
+    publicSsh = {
+      enable = lib.mkOption {
         type = lib.types.bool;
-        default = true;
-        description = "Allow public SSH when provisioning.enable is true.";
+        default = false;
+        description = "Allow SSH on port 22 from the public internet (prefer tailnet).";
       };
     };
 
@@ -146,8 +148,8 @@ in
 
     networking.firewall = {
       enable = true;
-      allowedTCPPorts = lib.mkIf (provisioningEnabled && provisioningPublicSsh) [ 22 ];
-      interfaces.tailscale0.allowedTCPPorts = lib.mkIf (isTailscale && !provisioningEnabled) [ 22 ];
+      allowedTCPPorts = lib.mkIf publicSshEnabled [ 22 ];
+      interfaces.tailscale0.allowedTCPPorts = lib.mkIf (isTailscale && !publicSshEnabled) [ 22 ];
     };
 
     networking.nftables.enable = true;
@@ -155,7 +157,7 @@ in
 
     sops = {
       age.keyFile = cfg.secrets.ageKeyFile;
-      validateSopsFiles = !provisioningEnabled;
+      validateSopsFiles = false;
 
       secrets = lib.optionalAttrs (isTailscale && tailscaleCfg.authKeySecret != null && tailscaleCfg.authKeySecret != "") {
         "${tailscaleCfg.authKeySecret}" = mkSopsSecret tailscaleCfg.authKeySecret;
@@ -174,8 +176,9 @@ in
         assertion =
           (!isTailscale)
           || provisioningEnabled
+          || publicSshEnabled
           || (tailscaleCfg.authKeySecret != null && tailscaleCfg.authKeySecret != "");
-        message = "clawdlets.tailnet.tailscale.authKeySecret must be set when tailnet mode is tailscale (or enable clawdlets.provisioning.enable for first boot).";
+        message = "clawdlets.tailnet.tailscale.authKeySecret must be set when tailnet mode is tailscale (or enable clawdlets.provisioning.enable / clawdlets.publicSsh.enable for first boot).";
       }
     ];
   };
