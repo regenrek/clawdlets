@@ -30,8 +30,8 @@ importers:
         version: 3.25.1(zod@3.25.76)
     devDependencies:
       '@types/node':
-        specifier: ^24.10.0
-        version: 24.10.4
+        specifier: ^25.0.6
+        version: 25.0.6
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
@@ -49,23 +49,23 @@ importers:
         version: 3.25.76
     devDependencies:
       '@types/node':
-        specifier: ^24.10.0
-        version: 24.10.4
+        specifier: ^25.0.6
+        version: 25.0.6
       '@vitest/coverage-v8':
         specifier: ^4.0.13
-        version: 4.0.16(vitest@4.0.16(@types/node@24.10.4)(yaml@2.8.2))
+        version: 4.0.16(vitest@4.0.16(@types/node@25.0.6)(yaml@2.8.2))
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
       vitest:
         specifier: ^4.0.13
-        version: 4.0.16(@types/node@24.10.4)(yaml@2.8.2)
+        version: 4.0.16(@types/node@25.0.6)(yaml@2.8.2)
 
   packages/template:
     devDependencies:
       '@types/node':
-        specifier: ^24.10.0
-        version: 24.10.4
+        specifier: ^25.0.6
+        version: 25.0.6
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
@@ -402,8 +402,8 @@ packages:
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
-  '@types/node@24.10.4':
-    resolution: {integrity: sha512-vnDVpYPMzs4wunl27jHrfmwojOGKya0xyM3sH+UE5iv5uPS6vX7UIoh6m+vQc5LGBq52HBKPIn/zcSZVzeDEZg==}
+  '@types/node@25.0.6':
+    resolution: {integrity: sha512-NNu0sjyNxpoiW3YuVFfNz7mxSQ+S4X2G28uqg2s+CzoqoQjLPsWSbsFFyztIAqt2vb8kfEAsJNepMGPTxFDx3Q==}
 
   '@vitest/coverage-v8@4.0.16':
     resolution: {integrity: sha512-2rNdjEIsPRzsdu6/9Eq0AYAzYdpP6Bx9cje9tL3FE5XzXRQF1fNU9pe/1yE8fCrS0HD+fBtt6gLPh6LI57tX7A==}
@@ -910,11 +910,11 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
-  '@types/node@24.10.4':
+  '@types/node@25.0.6':
     dependencies:
       undici-types: 7.16.0
 
-  '@vitest/coverage-v8@4.0.16(vitest@4.0.16(@types/node@24.10.4)(yaml@2.8.2))':
+  '@vitest/coverage-v8@4.0.16(vitest@4.0.16(@types/node@25.0.6)(yaml@2.8.2))':
     dependencies:
       '@bcoe/v8-coverage': 1.0.2
       '@vitest/utils': 4.0.16
@@ -927,7 +927,7 @@ snapshots:
       obug: 2.1.1
       std-env: 3.10.0
       tinyrainbow: 3.0.3
-      vitest: 4.0.16(@types/node@24.10.4)(yaml@2.8.2)
+      vitest: 4.0.16(@types/node@25.0.6)(yaml@2.8.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -940,13 +940,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.0.3
 
-  '@vitest/mocker@4.0.16(vite@7.3.1(@types/node@24.10.4)(yaml@2.8.2))':
+  '@vitest/mocker@4.0.16(vite@7.3.1(@types/node@25.0.6)(yaml@2.8.2))':
     dependencies:
       '@vitest/spy': 4.0.16
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 7.3.1(@types/node@24.10.4)(yaml@2.8.2)
+      vite: 7.3.1(@types/node@25.0.6)(yaml@2.8.2)
 
   '@vitest/pretty-format@4.0.16':
     dependencies:
@@ -1157,7 +1157,7 @@ snapshots:
 
   undici-types@7.16.0: {}
 
-  vite@7.3.1(@types/node@24.10.4)(yaml@2.8.2):
+  vite@7.3.1(@types/node@25.0.6)(yaml@2.8.2):
     dependencies:
       esbuild: 0.27.2
       fdir: 6.5.0(picomatch@4.0.3)
@@ -1166,14 +1166,14 @@ snapshots:
       rollup: 4.55.1
       tinyglobby: 0.2.15
     optionalDependencies:
-      '@types/node': 24.10.4
+      '@types/node': 25.0.6
       fsevents: 2.3.3
       yaml: 2.8.2
 
-  vitest@4.0.16(@types/node@24.10.4)(yaml@2.8.2):
+  vitest@4.0.16(@types/node@25.0.6)(yaml@2.8.2):
     dependencies:
       '@vitest/expect': 4.0.16
-      '@vitest/mocker': 4.0.16(vite@7.3.1(@types/node@24.10.4)(yaml@2.8.2))
+      '@vitest/mocker': 4.0.16(vite@7.3.1(@types/node@25.0.6)(yaml@2.8.2))
       '@vitest/pretty-format': 4.0.16
       '@vitest/runner': 4.0.16
       '@vitest/snapshot': 4.0.16
@@ -1190,10 +1190,10 @@ snapshots:
       tinyexec: 1.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.0.3
-      vite: 7.3.1(@types/node@24.10.4)(yaml@2.8.2)
+      vite: 7.3.1(@types/node@25.0.6)(yaml@2.8.2)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 24.10.4
+      '@types/node': 25.0.6
     transitivePeerDependencies:
       - jiti
       - less
