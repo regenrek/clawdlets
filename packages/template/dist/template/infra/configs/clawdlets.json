@@ -1,6 +1,7 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "defaultHost": "clawdbot-fleet-host",
+  "baseFlake": "",
   "fleet": {
     "guildId": "",
     "bots": ["maren", "sonja", "gunnar", "melinda"],
@@ -14,6 +15,9 @@
       "enable": false,
       "diskDevice": "/dev/disk/by-id/CHANGE_ME",
       "sshAuthorizedKeys": [],
+      "flakeHost": "",
+      "hetzner": { "serverType": "cx43" },
+      "opentofu": { "adminCidr": "", "sshPubkeyFile": "~/.ssh/id_ed25519.pub" },
       "publicSsh": { "enable": false },
       "provisioning": { "enable": false },
       "tailnet": { "mode": "tailscale" },

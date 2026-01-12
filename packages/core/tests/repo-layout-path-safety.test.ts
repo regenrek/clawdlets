@@ -19,13 +19,12 @@ describe("repo-layout path safety", () => {
     const { getRepoLayout, getHostSecretsDir, getHostSecretFile, getHostExtraFilesKeyPath } = await import("../src/repo-layout");
     const layout = getRepoLayout("/repo", "/repo/.clawdlets");
 
-    expect(getHostSecretsDir(layout, "clawdbot-fleet-host")).toBe(path.join("/repo", ".clawdlets", "secrets", "hosts", "clawdbot-fleet-host"));
+    expect(getHostSecretsDir(layout, "clawdbot-fleet-host")).toBe(path.join("/repo", "secrets", "hosts", "clawdbot-fleet-host"));
     expect(getHostSecretFile(layout, "clawdbot-fleet-host", "admin_password_hash")).toBe(
-      path.join("/repo", ".clawdlets", "secrets", "hosts", "clawdbot-fleet-host", "admin_password_hash.yaml"),
+      path.join("/repo", "secrets", "hosts", "clawdbot-fleet-host", "admin_password_hash.yaml"),
     );
     expect(getHostExtraFilesKeyPath(layout, "clawdbot-fleet-host")).toBe(
       path.join("/repo", ".clawdlets", "extra-files", "clawdbot-fleet-host", "var", "lib", "sops-nix", "key.txt"),
     );
   });
 });
-

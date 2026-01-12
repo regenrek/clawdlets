@@ -5,9 +5,9 @@ import process from "node:process";
 import { defineCommand } from "citty";
 import { run } from "@clawdbot/clawdlets-core/lib/run";
 import { shellQuote, sshRun } from "@clawdbot/clawdlets-core/lib/ssh-remote";
-import { loadStack } from "@clawdbot/clawdlets-core/stack";
+import { getHostRemoteSecretsDir, getHostSecretsDir } from "@clawdbot/clawdlets-core/repo-layout";
 import { needsSudo, requireTargetHost } from "./common.js";
-import { requireStackHostOrExit, resolveHostNameOrExit } from "../../lib/host-resolve.js";
+import { loadHostContextOrExit } from "../../lib/context.js";
 
 export const secretsSync = defineCommand({
   meta: {
@@ -15,24 +15,23 @@ export const secretsSync = defineCommand({
     description: "Copy local secrets file to the server filesystem path.",
   },
   args: {
-    stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
+    runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
     host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
-    targetHost: { type: "string", description: "SSH target override (default: from stack)." },
+    targetHost: { type: "string", description: "SSH target override (default: from clawdlets.json)." },
     sshTty: { type: "boolean", description: "Allocate TTY for sudo prompts.", default: true },
   },
   async run({ args }) {
-    const { layout, stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = resolveHostNameOrExit({ cwd: process.cwd(), stackDir: args.stackDir, hostArg: args.host });
-    if (!hostName) return;
-    const host = requireStackHostOrExit(stack, hostName);
-    if (!host) return;
+    const cwd = process.cwd();
+    const ctx = loadHostContextOrExit({ cwd, runtimeDir: (args as any).runtimeDir, hostArg: args.host });
+    if (!ctx) return;
+    const { layout, hostName, hostCfg } = ctx;
 
-    const targetHost = requireTargetHost(String(args.targetHost || host.targetHost || ""), hostName);
+    const targetHost = requireTargetHost(String(args.targetHost || hostCfg.targetHost || ""), hostName);
 
-    const localDir = path.join(layout.stackDir, host.secrets.localDir);
+    const localDir = getHostSecretsDir(layout, hostName);
     if (!fs.existsSync(localDir)) throw new Error(`missing local secrets dir: ${localDir}`);
 
-    const remoteDir = host.secrets.remoteDir;
+    const remoteDir = getHostRemoteSecretsDir(hostName);
     const tarLocal = path.join(os.tmpdir(), `clawdlets-secrets.${hostName}.${process.pid}.tgz`);
     const tarRemote = `/tmp/clawdlets-secrets.${hostName}.${process.pid}.tgz`;
 

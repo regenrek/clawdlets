@@ -1,9 +1,8 @@
 import process from "node:process";
 import { defineCommand } from "citty";
 import { shellQuote, sshRun } from "@clawdbot/clawdlets-core/lib/ssh-remote";
-import { loadStack } from "@clawdbot/clawdlets-core/stack";
 import { needsSudo, requireTargetHost } from "./common.js";
-import { requireStackHostOrExit, resolveHostNameOrExit } from "../../lib/host-resolve.js";
+import { loadHostContextOrExit } from "../../lib/context.js";
 
 function normalizeKind(raw: string): "prs" | "issues" {
   const v = raw.trim();
@@ -17,18 +16,17 @@ const serverGithubSyncStatus = defineCommand({
     description: "Show GitHub sync timers (clawdbot-gh-sync-*.timer).",
   },
   args: {
-    stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
+    runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
     host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
-    targetHost: { type: "string", description: "SSH target override (default: from stack)." },
+    targetHost: { type: "string", description: "SSH target override (default: from clawdlets.json)." },
     sshTty: { type: "boolean", description: "Allocate TTY for sudo prompts.", default: true },
   },
   async run({ args }) {
-    const { stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = resolveHostNameOrExit({ cwd: process.cwd(), stackDir: args.stackDir, hostArg: args.host });
-    if (!hostName) return;
-    const host = requireStackHostOrExit(stack, hostName);
-    if (!host) return;
-    const targetHost = requireTargetHost(String(args.targetHost || host.targetHost || ""), hostName);
+    const cwd = process.cwd();
+    const ctx = loadHostContextOrExit({ cwd, runtimeDir: (args as any).runtimeDir, hostArg: args.host });
+    if (!ctx) return;
+    const { hostName, hostCfg } = ctx;
+    const targetHost = requireTargetHost(String(args.targetHost || hostCfg.targetHost || ""), hostName);
 
     const sudo = needsSudo(targetHost);
     const remoteCmd = [
@@ -49,19 +47,18 @@ const serverGithubSyncRun = defineCommand({
     description: "Run a GitHub sync now (oneshot).",
   },
   args: {
-    stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
+    runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
     host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
-    targetHost: { type: "string", description: "SSH target override (default: from stack)." },
+    targetHost: { type: "string", description: "SSH target override (default: from clawdlets.json)." },
     bot: { type: "string", description: "Bot id (default: all bots with sync enabled)." },
     sshTty: { type: "boolean", description: "Allocate TTY for sudo prompts.", default: true },
   },
   async run({ args }) {
-    const { stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = resolveHostNameOrExit({ cwd: process.cwd(), stackDir: args.stackDir, hostArg: args.host });
-    if (!hostName) return;
-    const host = requireStackHostOrExit(stack, hostName);
-    if (!host) return;
-    const targetHost = requireTargetHost(String(args.targetHost || host.targetHost || ""), hostName);
+    const cwd = process.cwd();
+    const ctx = loadHostContextOrExit({ cwd, runtimeDir: (args as any).runtimeDir, hostArg: args.host });
+    if (!ctx) return;
+    const { hostName, hostCfg } = ctx;
+    const targetHost = requireTargetHost(String(args.targetHost || hostCfg.targetHost || ""), hostName);
 
     const bot = String(args.bot || "").trim();
     const unit = bot ? `clawdbot-gh-sync-${bot}.service` : "clawdbot-gh-sync-*.service";
@@ -82,21 +79,20 @@ const serverGithubSyncLogs = defineCommand({
     description: "Show GitHub sync logs (journalctl).",
   },
   args: {
-    stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
+    runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
     host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
-    targetHost: { type: "string", description: "SSH target override (default: from stack)." },
+    targetHost: { type: "string", description: "SSH target override (default: from clawdlets.json)." },
     bot: { type: "string", description: "Bot id (required)." },
     follow: { type: "boolean", description: "Follow logs.", default: false },
     lines: { type: "string", description: "Number of lines (default: 200).", default: "200" },
     sshTty: { type: "boolean", description: "Allocate TTY for sudo prompts.", default: true },
   },
   async run({ args }) {
-    const { stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = resolveHostNameOrExit({ cwd: process.cwd(), stackDir: args.stackDir, hostArg: args.host });
-    if (!hostName) return;
-    const host = requireStackHostOrExit(stack, hostName);
-    if (!host) return;
-    const targetHost = requireTargetHost(String(args.targetHost || host.targetHost || ""), hostName);
+    const cwd = process.cwd();
+    const ctx = loadHostContextOrExit({ cwd, runtimeDir: (args as any).runtimeDir, hostArg: args.host });
+    if (!ctx) return;
+    const { hostName, hostCfg } = ctx;
+    const targetHost = requireTargetHost(String(args.targetHost || hostCfg.targetHost || ""), hostName);
 
     const bot = String(args.bot || "").trim();
     if (!bot) throw new Error("missing --bot (example: --bot maren)");
@@ -123,21 +119,20 @@ const serverGithubSyncShow = defineCommand({
     description: "Show the last synced snapshot (prs|issues) from bot workspace memory.",
   },
   args: {
-    stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
+    runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
     host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
-    targetHost: { type: "string", description: "SSH target override (default: from stack)." },
+    targetHost: { type: "string", description: "SSH target override (default: from clawdlets.json)." },
     bot: { type: "string", description: "Bot id (required)." },
     kind: { type: "string", description: "Snapshot kind: prs|issues.", default: "prs" },
     lines: { type: "string", description: "Max lines to print (default: 200).", default: "200" },
     sshTty: { type: "boolean", description: "Allocate TTY for sudo prompts.", default: true },
   },
   async run({ args }) {
-    const { stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = resolveHostNameOrExit({ cwd: process.cwd(), stackDir: args.stackDir, hostArg: args.host });
-    if (!hostName) return;
-    const host = requireStackHostOrExit(stack, hostName);
-    if (!host) return;
-    const targetHost = requireTargetHost(String(args.targetHost || host.targetHost || ""), hostName);
+    const cwd = process.cwd();
+    const ctx = loadHostContextOrExit({ cwd, runtimeDir: (args as any).runtimeDir, hostArg: args.host });
+    if (!ctx) return;
+    const { hostName, hostCfg } = ctx;
+    const targetHost = requireTargetHost(String(args.targetHost || hostCfg.targetHost || ""), hostName);
 
     const bot = String(args.bot || "").trim();
     if (!bot) throw new Error("missing --bot (example: --bot maren)");

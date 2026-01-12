@@ -1,7 +1,7 @@
 docs:
   - path: docs/overview.md
     when: mental model, repo layout, lifecycle
-    summary: git-safe infra; instance data in .clawdlets; bootstrap -> lockdown -> ops
+    summary: git-safe infra; encrypted secrets in /secrets; runtime in .clawdlets; bootstrap -> lockdown -> ops
   - path: docs/quickstart.md
     when: first run
     summary: minimal command sequence to deploy one host
@@ -11,8 +11,8 @@ docs:
   - path: docs/cli.md
     when: you need the right command
     summary: clawdlets and just cookbook
-  - path: docs/stack.md
-    when: editing .clawdlets/stack.json
+  - path: docs/config.md
+    when: editing infra/configs/clawdlets.json
     summary: schema/fields/example
   - path: docs/agent-config.md
     when: routing, skills, workspaces

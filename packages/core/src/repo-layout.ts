@@ -1,10 +1,11 @@
 import path from "node:path";
-import { assertSafeHostName, assertSafeSecretName } from "./lib/identifiers.js";
+import { assertSafeHostName, assertSafeOperatorId, assertSafeSecretName } from "./lib/identifiers.js";
 
 export type RepoLayout = {
   repoRoot: string;
 
-  stackDir: string;
+  // Local runtime dir (gitignored). Defaults to <repoRoot>/.clawdlets.
+  runtimeDir: string;
 
   infraDir: string;
   opentofuDir: string;
@@ -16,15 +17,21 @@ export type RepoLayout = {
   nixHostsDir: string;
   nixHostModulePath: string;
 
+  // Canonical secrets dir (committed; encrypted-at-rest via sops).
   secretsDir: string;
   secretsHostsDir: string;
-  secretsOperatorsDir: string;
+  secretsKeysDir: string;
+  secretsHostKeysDir: string;
   extraFilesDir: string;
   sopsConfigPath: string;
+
+  // Local private keys (gitignored).
+  localKeysDir: string;
+  localOperatorKeysDir: string;
 };
 
-export function getRepoLayout(repoRoot: string, stackDir?: string): RepoLayout {
-  const resolvedStackDir = stackDir ?? path.join(repoRoot, ".clawdlets");
+export function getRepoLayout(repoRoot: string, runtimeDir?: string): RepoLayout {
+  const resolvedRuntimeDir = runtimeDir ?? path.join(repoRoot, ".clawdlets");
   const infraDir = path.join(repoRoot, "infra");
   const opentofuDir = path.join(infraDir, "opentofu");
   const configsDir = path.join(infraDir, "configs");
@@ -33,15 +40,18 @@ export function getRepoLayout(repoRoot: string, stackDir?: string): RepoLayout {
   const nixDir = path.join(infraDir, "nix");
   const nixHostsDir = path.join(nixDir, "hosts");
   const nixHostModulePath = path.join(nixHostsDir, "clawdlets-host.nix");
-  const secretsDir = path.join(resolvedStackDir, "secrets");
+  const secretsDir = path.join(repoRoot, "secrets");
   const secretsHostsDir = path.join(secretsDir, "hosts");
-  const secretsOperatorsDir = path.join(secretsDir, "operators");
-  const extraFilesDir = path.join(resolvedStackDir, "extra-files");
+  const extraFilesDir = path.join(resolvedRuntimeDir, "extra-files");
+  const secretsKeysDir = path.join(secretsDir, "keys");
+  const secretsHostKeysDir = path.join(secretsKeysDir, "hosts");
   const sopsConfigPath = path.join(secretsDir, ".sops.yaml");
+  const localKeysDir = path.join(resolvedRuntimeDir, "keys");
+  const localOperatorKeysDir = path.join(localKeysDir, "operators");
 
   return {
     repoRoot,
-    stackDir: resolvedStackDir,
+    runtimeDir: resolvedRuntimeDir,
     infraDir,
     opentofuDir,
     configsDir,
@@ -52,9 +62,12 @@ export function getRepoLayout(repoRoot: string, stackDir?: string): RepoLayout {
     nixHostModulePath,
     secretsDir,
     secretsHostsDir,
-    secretsOperatorsDir,
+    secretsKeysDir,
+    secretsHostKeysDir,
     extraFilesDir,
     sopsConfigPath,
+    localKeysDir,
+    localOperatorKeysDir,
   };
 }
 
@@ -87,4 +100,19 @@ export function getHostExtraFilesKeyPath(layout: RepoLayout, host: string): stri
 export function getHostExtraFilesSecretsDir(layout: RepoLayout, host: string): string {
   assertSafeHostName(host);
   return path.join(getHostExtraFilesDir(layout, host), "var", "lib", "clawdlets", "secrets", "hosts", host);
+}
+
+export function getHostRemoteSecretsDir(host: string): string {
+  assertSafeHostName(host);
+  return `/var/lib/clawdlets/secrets/hosts/${host}`;
+}
+
+export function getLocalOperatorAgeKeyPath(layout: RepoLayout, operatorId: string): string {
+  assertSafeOperatorId(operatorId);
+  return path.join(layout.localOperatorKeysDir, `${operatorId}.agekey`);
+}
+
+export function getHostEncryptedAgeKeyFile(layout: RepoLayout, host: string): string {
+  assertSafeHostName(host);
+  return path.join(layout.secretsHostKeysDir, `${host}.agekey.yaml`);
 }

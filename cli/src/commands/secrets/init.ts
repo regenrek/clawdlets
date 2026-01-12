@@ -5,18 +5,16 @@ import { defineCommand } from "citty";
 import * as p from "@clack/prompts";
 import { ageKeygen } from "@clawdbot/clawdlets-core/lib/age-keygen";
 import { parseAgeKeyFile } from "@clawdbot/clawdlets-core/lib/age";
-import { upsertDotenv } from "@clawdbot/clawdlets-core/lib/dotenv-file";
 import { ensureDir, writeFileAtomic } from "@clawdbot/clawdlets-core/lib/fs-safe";
 import { mkpasswdYescryptHash } from "@clawdbot/clawdlets-core/lib/mkpasswd";
-import { removeSopsCreationRule, sopsPathRegexForDirFiles, upsertSopsCreationRule } from "@clawdbot/clawdlets-core/lib/sops-config";
+import { sopsPathRegexForDirFiles, sopsPathRegexForPathSuffix, upsertSopsCreationRule } from "@clawdbot/clawdlets-core/lib/sops-config";
 import { sopsDecryptYamlFile, sopsEncryptYamlToFile } from "@clawdbot/clawdlets-core/lib/sops";
 import { sanitizeOperatorId } from "@clawdbot/clawdlets-core/lib/identifiers";
 import { buildSecretsInitTemplate, isPlaceholderSecretValue, listSecretsInitPlaceholders, parseSecretsInitJson, validateSecretsInitNonInteractive, type SecretsInitJson } from "@clawdbot/clawdlets-core/lib/secrets-init";
-import { loadStack, loadStackEnv } from "@clawdbot/clawdlets-core/stack";
-import { assertSafeHostName, loadClawdletsConfig } from "@clawdbot/clawdlets-core/lib/clawdlets-config";
 import { readYamlScalarFromMapping } from "@clawdbot/clawdlets-core/lib/yaml-scalar";
+import { getHostEncryptedAgeKeyFile, getHostExtraFilesKeyPath, getHostExtraFilesSecretsDir, getHostSecretsDir, getLocalOperatorAgeKeyPath } from "@clawdbot/clawdlets-core/repo-layout";
 import { cancelFlow, navOnCancel, NAV_EXIT } from "../../lib/wizard.js";
-import { requireStackHostOrExit, resolveHostNameOrExit } from "../../lib/host-resolve.js";
+import { loadHostContextOrExit } from "../../lib/context.js";
 import { upsertYamlScalarLine } from "./common.js";
 
 function wantsInteractive(flag: boolean | undefined): boolean {
@@ -44,10 +42,10 @@ function readSecretsInitJson(fromJson: string): SecretsInitJson {
 export const secretsInit = defineCommand({
   meta: {
     name: "init",
-    description: "Create or update an encrypted secrets file (sops + age).",
+    description: "Create/update secrets in /secrets (sops+age) and generate .clawdlets/extra-files/<host>/...",
   },
   args: {
-    stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
+    runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
     host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
     interactive: { type: "boolean", description: "Prompt for secret values (requires TTY).", default: false },
     fromJson: { type: "string", description: "Read secret values from JSON file (or '-' for stdin) (non-interactive)." },
@@ -60,12 +58,10 @@ export const secretsInit = defineCommand({
     dryRun: { type: "boolean", description: "Print actions without writing.", default: false },
   },
   async run({ args }) {
-    const { layout, stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = resolveHostNameOrExit({ cwd: process.cwd(), stackDir: args.stackDir, hostArg: args.host });
-    if (!hostName) return;
-    assertSafeHostName(hostName);
-    const host = requireStackHostOrExit(stack, hostName);
-    if (!host) return;
+    const cwd = process.cwd();
+    const ctx = loadHostContextOrExit({ cwd, runtimeDir: (args as any).runtimeDir, hostArg: args.host });
+    if (!ctx) return;
+    const { layout, config: clawdletsConfig, hostName, hostCfg } = ctx;
 
     const hasTty = Boolean(process.stdin.isTTY && process.stdout.isTTY);
     let interactive = wantsInteractive(Boolean(args.interactive));
@@ -74,27 +70,23 @@ export const secretsInit = defineCommand({
 
     const operatorId = sanitizeOperatorId(String(args.operator || process.env.USER || "operator"));
 
-    const secretsDir = path.join(layout.stackDir, "secrets");
-    const sopsConfigPath = path.join(secretsDir, ".sops.yaml");
-    const operatorKeyPath = path.join(secretsDir, "operators", `${operatorId}.agekey`);
-    const operatorPubPath = path.join(secretsDir, "operators", `${operatorId}.age.pub`);
-    const hostKeyPath = path.join(secretsDir, "hosts", `${hostName}.agekey`);
-    const hostPubPath = path.join(secretsDir, "hosts", `${hostName}.age.pub`);
-    const extraFilesKeyPath = path.join(layout.stackDir, "extra-files", hostName, "var/lib/sops-nix/key.txt");
-    const extraFilesSecretsDir = path.join(layout.stackDir, "extra-files", hostName, "var/lib/clawdlets/secrets/hosts", hostName);
+    const secretsDir = layout.secretsDir;
+    const sopsConfigPath = layout.sopsConfigPath;
+    const operatorKeyPath = getLocalOperatorAgeKeyPath(layout, operatorId);
+    const operatorPubPath = path.join(layout.localOperatorKeysDir, `${operatorId}.age.pub`);
+    const hostKeyFile = getHostEncryptedAgeKeyFile(layout, hostName);
+    const extraFilesKeyPath = getHostExtraFilesKeyPath(layout, hostName);
+    const extraFilesSecretsDir = getHostExtraFilesSecretsDir(layout, hostName);
 
-    const localSecretsDir = path.join(layout.stackDir, host.secrets.localDir);
+    const localSecretsDir = getHostSecretsDir(layout, hostName);
 
-    const { config: clawdletsConfig } = loadClawdletsConfig({ repoRoot: layout.repoRoot, stackDir: args.stackDir });
     const bots = clawdletsConfig.fleet.bots;
     if (bots.length === 0) throw new Error("fleet.bots is empty (set bots in infra/configs/clawdlets.json)");
 
-    const clawdletsHostCfg = clawdletsConfig.hosts[hostName];
-    if (!clawdletsHostCfg) throw new Error(`missing host in infra/configs/clawdlets.json: ${hostName}`);
-    const tailnetMode = String(clawdletsHostCfg.tailnet?.mode || "none");
+    const tailnetMode = String(hostCfg.tailnet?.mode || "none");
     const requiresTailscaleAuthKey = tailnetMode === "tailscale";
 
-    const defaultSecretsJsonPath = path.join(layout.stackDir, "secrets.json");
+    const defaultSecretsJsonPath = path.join(layout.runtimeDir, "secrets.json");
     const defaultSecretsJsonDisplay = path.relative(process.cwd(), defaultSecretsJsonPath) || defaultSecretsJsonPath;
 
     let fromJson = args.fromJson ? String(args.fromJson) : undefined;
@@ -146,8 +138,7 @@ export const secretsInit = defineCommand({
       if (!ok) return;
     }
 
-    const envLoaded = loadStackEnv({ cwd: process.cwd(), stackDir: args.stackDir, envFile: stack.envFile });
-    const nix = { nixBin: envLoaded.env.NIX_BIN || "nix", cwd: layout.repoRoot, dryRun: Boolean(args.dryRun) } as const;
+    const nix = { nixBin: String(process.env.NIX_BIN || "nix").trim() || "nix", cwd: layout.repoRoot, dryRun: Boolean(args.dryRun) } as const;
 
     const ensureAgePair = async (keyPath: string, pubPath: string) => {
       if (fs.existsSync(keyPath) && fs.existsSync(pubPath)) {
@@ -168,29 +159,62 @@ export const secretsInit = defineCommand({
     };
 
     const operatorKeys = await ensureAgePair(operatorKeyPath, operatorPubPath);
-    const hostKeys = await ensureAgePair(hostKeyPath, hostPubPath);
 
     const existingSops = fs.existsSync(sopsConfigPath) ? fs.readFileSync(sopsConfigPath, "utf8") : undefined;
-    const localSecretsDirRelToSopsConfigDir = path
-      .relative(secretsDir, localSecretsDir)
-      .replace(/\\/g, "/");
+    const hostKeyRel = path.relative(secretsDir, hostKeyFile).replace(/\\/g, "/");
 
-    const legacySopsPathRegex = sopsPathRegexForDirFiles(`secrets/hosts/${hostName}`, "yaml");
-    const withoutLegacy = removeSopsCreationRule({ existingYaml: existingSops, pathRegex: legacySopsPathRegex });
-    const withoutStdin = removeSopsCreationRule({ existingYaml: withoutLegacy, pathRegex: "^/dev/stdin$" });
+    const withHostKeyRule = upsertSopsCreationRule({
+      existingYaml: existingSops,
+      pathRegex: sopsPathRegexForPathSuffix(hostKeyRel),
+      ageRecipients: [operatorKeys.publicKey],
+    });
 
+    let hostKeys: { secretKey: string; publicKey: string };
+    if (fs.existsSync(hostKeyFile)) {
+      if (args.dryRun) {
+        hostKeys = {
+          publicKey: "age1dryrundryrundryrundryrundryrundryrundryrundryrundryrun0l9p4",
+          secretKey: "AGE-SECRET-KEY-DRYRUNDRYRUNDRYRUNDRYRUNDRYRUNDRYRUNDRYRUNDRYRUN",
+        };
+      } else {
+        const decrypted = await sopsDecryptYamlFile({
+          filePath: hostKeyFile,
+          ageKeyFile: operatorKeyPath,
+          nix,
+        });
+        const secretKey = readYamlScalarFromMapping({ yamlText: decrypted, key: "age_secret_key" })?.trim() || "";
+        const publicKey = readYamlScalarFromMapping({ yamlText: decrypted, key: "age_public_key" })?.trim() || "";
+        if (!secretKey || !publicKey) throw new Error(`invalid host age key file: ${hostKeyFile}`);
+        hostKeys = { secretKey, publicKey };
+      }
+    } else {
+      const pair = await ageKeygen(nix);
+      hostKeys = { secretKey: pair.secretKey, publicKey: pair.publicKey };
+
+      const plaintextYaml =
+        upsertYamlScalarLine({
+          text: upsertYamlScalarLine({ text: "\n", key: "age_public_key", value: pair.publicKey }),
+          key: "age_secret_key",
+          value: pair.secretKey,
+        }) + "\n";
+
+      if (!args.dryRun) {
+        await ensureDir(path.dirname(sopsConfigPath));
+        await writeFileAtomic(sopsConfigPath, withHostKeyRule, { mode: 0o644 });
+        await sopsEncryptYamlToFile({ plaintextYaml, outPath: hostKeyFile, configPath: sopsConfigPath, nix });
+      }
+    }
+
+    const hostSecretsRel = path.relative(secretsDir, localSecretsDir).replace(/\\/g, "/");
     const nextSops = upsertSopsCreationRule({
-      existingYaml: withoutStdin,
-      // sops matches against a path relative to the config dir; our config lives at <stackDir>/secrets/.sops.yaml.
-      pathRegex: sopsPathRegexForDirFiles(localSecretsDirRelToSopsConfigDir, "yaml"),
+      existingYaml: withHostKeyRule,
+      pathRegex: sopsPathRegexForDirFiles(hostSecretsRel, "yaml"),
       ageRecipients: [hostKeys.publicKey, operatorKeys.publicKey],
     });
+
     if (!args.dryRun) {
       await ensureDir(path.dirname(sopsConfigPath));
       await writeFileAtomic(sopsConfigPath, nextSops, { mode: 0o644 });
-    }
-
-    if (!args.dryRun) {
       await ensureDir(path.dirname(extraFilesKeyPath));
       await writeFileAtomic(extraFilesKeyPath, `${hostKeys.secretKey}\n`, { mode: 0o600 });
     }
@@ -333,15 +357,10 @@ export const secretsInit = defineCommand({
       }
     }
 
-    const stackEnvPath = path.join(layout.stackDir, stack.envFile || ".env");
-    const envText = fs.existsSync(stackEnvPath) ? fs.readFileSync(stackEnvPath, "utf8") : "";
-    const nextEnvText = upsertDotenv(envText, { SOPS_AGE_KEY_FILE: operatorKeyPath });
-    if (!args.dryRun) {
-      await writeFileAtomic(stackEnvPath, nextEnvText, { mode: 0o600 });
-    }
-
     console.log(`ok: secrets ready at ${localSecretsDir}`);
     console.log(`ok: sops config at ${sopsConfigPath}`);
+    console.log(`ok: operator age key at ${operatorKeyPath}`);
+    console.log(`ok: host age key (encrypted) at ${hostKeyFile}`);
     console.log(`ok: extra-files key at ${extraFilesKeyPath}`);
     console.log(`ok: extra-files secrets at ${extraFilesSecretsDir}`);
   },

@@ -26,17 +26,17 @@ Ready to ship? Check out the [Quickstart Guide](docs/quickstart.md) to get your 
 Goal: deploy a fresh Hetzner server with this repo (no leaked secrets).
 
 Constraints:
-- do not commit any instance data; keep everything in .clawdlets/ (gitignored)
+- do not commit plaintext secrets; keep private operator keys in .clawdlets/ (gitignored) and commit encrypted secrets under /secrets
 - do not run live actions unless I confirm (bootstrap/lockdown/opentofu apply)
 - no shims/workarounds; fix root cause; single source of truth
 
 What I want:
-1) exact local commands (macOS) for: pnpm install, clawdlets project init, clawdlets stack init, clawdlets secrets init, doctor
-2) which commands are wizard/interactive (project init / stack init / secrets init) vs. non-interactive (config/fleet/host)
+1) exact local commands (macOS) for: pnpm install, clawdlets project init, clawdlets host set, clawdlets secrets init, doctor
+2) which commands are wizard/interactive (project init / secrets init) vs. non-interactive (config/fleet/host)
 3) exact deploy steps: infra apply -> bootstrap -> connect via Tailscale -> lockdown
 4) exact ops commands: server status/logs/restart; rebuild pinned by full git SHA
 5) non-interactive agent-friendly commands:
-   - stack init: pass flags (admin cidr, ssh pubkey file, hcloud token) instead of prompts
+   - host set: set admin cidr, ssh pubkey file, disk device without prompts
    - secrets init: use --from-json <path|-> (never pass secrets via argv flags)
 6) if something fails: ask for the exact error output and propose the next command
 
@@ -48,7 +48,7 @@ Start by reading docs/README.md, then tell me the minimal command sequence for o
 - Start here: `docs/README.md`
 - [Overview](docs/overview.md) – Mental model + lifecycle.
 - [CLI Cookbook](docs/cli.md) – Common commands and patterns.
-- [Stack Config](docs/stack.md) – `.clawdlets/stack.json` reference.
+- [Config Reference](docs/config.md) – `infra/configs/clawdlets.json` reference.
 - [Installation Guide](docs/install.md) – Prerequisites and setup.
 - [Deployment & Updates](docs/deploy.md) – How to ship changes.
 - [Agent Configuration](docs/agent-config.md) – Routing, skills, and workspaces.

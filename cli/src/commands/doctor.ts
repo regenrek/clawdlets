@@ -6,10 +6,10 @@ import { resolveHostNameOrExit } from "../lib/host-resolve.js";
 export const doctor = defineCommand({
   meta: {
     name: "doctor",
-    description: "Validate local stack/env for deploying a host.",
+    description: "Validate repo + runtime inputs for deploying a host.",
   },
   args: {
-    stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
+    runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
     host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
     scope: {
       type: "string",
@@ -20,7 +20,7 @@ export const doctor = defineCommand({
     strict: { type: "boolean", description: "Fail on warn too (deploy gating).", default: false },
   },
   async run({ args }) {
-    const hostName = resolveHostNameOrExit({ cwd: process.cwd(), stackDir: args.stackDir, hostArg: args.host });
+    const hostName = resolveHostNameOrExit({ cwd: process.cwd(), runtimeDir: (args as any).runtimeDir, hostArg: args.host });
     if (!hostName) return;
     const scopeRaw = String(args.scope || "all").trim();
     if (scopeRaw !== "repo" && scopeRaw !== "deploy" && scopeRaw !== "all") {
@@ -29,7 +29,7 @@ export const doctor = defineCommand({
 
     const checks = await collectDoctorChecks({
       cwd: process.cwd(),
-      stackDir: args.stackDir,
+      runtimeDir: (args as any).runtimeDir,
       host: hostName,
       scope: scopeRaw,
     });

@@ -20,7 +20,7 @@ Do **not**:
 Do:
 
 - change config in `infra/` + rebuild
-- rotate secrets by editing `.clawdlets/secrets/hosts/<host>/<secret>.yaml` (sops) then `clawdlets secrets sync` + rebuild
+- rotate secrets by editing `secrets/hosts/<host>/<secret>.yaml` (sops) then `clawdlets secrets sync` + rebuild
 - use `clawdlets server status|logs|restart|rebuild` for day-2 ops
 - run `clawdlets server audit --target-host <host>` after bootstrap/lockdown and after major changes
 

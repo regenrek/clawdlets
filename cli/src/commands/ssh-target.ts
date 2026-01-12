@@ -10,7 +10,7 @@ export function requireTargetHost(targetHost: string, hostName: string): string 
   throw new Error(
     [
       `missing target host for ${hostName}`,
-      "set it in .clawdlets/stack.json (hosts.<host>.targetHost) or pass --target-host",
+      "set it in infra/configs/clawdlets.json (hosts.<host>.targetHost) or pass --target-host",
       "recommended: use an SSH config alias (e.g. botsmj)",
     ].join("; "),
   );

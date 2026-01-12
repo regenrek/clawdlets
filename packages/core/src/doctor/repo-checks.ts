@@ -71,30 +71,25 @@ export async function addRepoChecks(params: {
   }
 
   {
-    const templateSecretsDir = path.join(repoRoot, "packages", "template", "dist", "template", "infra", "secrets");
-    const repoSecretsDir = path.join(repoRoot, "infra", "secrets");
+    const legacyRepoSecretsDir = path.join(repoRoot, "infra", "secrets");
 
-    if (dirHasAnyFile(repoSecretsDir) || dirHasAnyFile(templateSecretsDir)) {
+    if (dirHasAnyFile(legacyRepoSecretsDir)) {
       params.push({
         scope: "repo",
         status: "missing",
         label: "public repo hygiene",
-        detail: `infra/secrets must not exist (found files in ${dirHasAnyFile(repoSecretsDir) ? "infra/secrets" : ""}${dirHasAnyFile(repoSecretsDir) && dirHasAnyFile(templateSecretsDir) ? " + " : ""}${dirHasAnyFile(templateSecretsDir) ? "template infra/secrets" : ""})`,
+        detail: "infra/secrets must not exist (legacy; secrets now live under /secrets and must be sops-encrypted)",
       });
     } else {
       try {
         const out = await capture("git", ["ls-files", "-z"], { cwd: repoRoot });
         const tracked = out.split("\0").filter(Boolean);
         const trackedClawdlets = tracked.filter((p) => p === ".clawdlets" || p.startsWith(".clawdlets/"));
-        const trackedSecrets = tracked.filter((p) =>
-          p === "infra/secrets" ||
-          p.startsWith("infra/secrets/") ||
-          p === "packages/template/dist/template/infra/secrets" ||
-          p.startsWith("packages/template/dist/template/infra/secrets/"),
-        );
+        const trackedLegacySecrets = tracked.filter((p) => p === "infra/secrets" || p.startsWith("infra/secrets/"));
+        const trackedPlainAgeKeys = tracked.filter((p) => p.startsWith("secrets/") && p.endsWith(".agekey"));
 
-        if (trackedClawdlets.length > 0 || trackedSecrets.length > 0) {
-          const bad = [...trackedClawdlets, ...trackedSecrets];
+        if (trackedClawdlets.length > 0 || trackedLegacySecrets.length > 0 || trackedPlainAgeKeys.length > 0) {
+          const bad = [...trackedClawdlets, ...trackedLegacySecrets, ...trackedPlainAgeKeys];
           params.push({
             scope: "repo",
             status: "missing",
@@ -106,7 +101,7 @@ export async function addRepoChecks(params: {
             scope: "repo",
             status: "ok",
             label: "public repo hygiene",
-            detail: "(no tracked .clawdlets; no infra/secrets)",
+            detail: "(no tracked .clawdlets; no infra/secrets; no plaintext *.agekey in /secrets)",
           });
         }
       } catch {

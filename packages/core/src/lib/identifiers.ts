@@ -38,6 +38,10 @@ export function assertSafeSecretName(secretName: string): void {
   void SecretNameSchema.parse(secretName);
 }
 
+export function assertSafeOperatorId(operatorId: string): void {
+  void OperatorIdSchema.parse(operatorId);
+}
+
 export function sanitizeOperatorId(raw: string): string {
   const cleaned =
     String(raw || "operator")
@@ -46,4 +50,3 @@ export function sanitizeOperatorId(raw: string): string {
   if (cleaned === "." || cleaned === "..") return "operator";
   return cleaned;
 }
-

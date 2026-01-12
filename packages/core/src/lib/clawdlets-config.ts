@@ -4,8 +4,9 @@ import { writeFileAtomic } from "./fs-safe.js";
 import type { RepoLayout } from "../repo-layout.js";
 import { getRepoLayout } from "../repo-layout.js";
 import { BotIdSchema, HostNameSchema, assertSafeHostName } from "./identifiers.js";
+import { isValidTargetHost } from "./ssh-remote.js";
 
-export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 2 as const;
+export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 3 as const;
 
 const JsonObjectSchema: z.ZodType<Record<string, unknown>> = z.record(z.any());
 
@@ -45,6 +46,26 @@ const HostSchema = z.object({
   enable: z.boolean().default(false),
   diskDevice: z.string().trim().default("/dev/disk/by-id/CHANGE_ME"),
   sshAuthorizedKeys: z.array(z.string().trim().min(1)).default([]),
+  flakeHost: z.string().trim().default(""),
+  targetHost: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .refine((v) => (v ? isValidTargetHost(v) : true), {
+      message: "invalid targetHost (expected ssh alias or user@host)",
+    }),
+  hetzner: z
+    .object({
+      serverType: z.string().trim().min(1).default("cx43"),
+    })
+    .default({ serverType: "cx43" }),
+  opentofu: z
+    .object({
+      adminCidr: z.string().trim().default(""),
+      sshPubkeyFile: z.string().trim().default("~/.ssh/id_ed25519.pub"),
+    })
+    .default({ adminCidr: "", sshPubkeyFile: "~/.ssh/id_ed25519.pub" }),
   publicSsh: z
     .object({
       enable: z.boolean().default(false),
@@ -66,6 +87,7 @@ const HostSchema = z.object({
 export const ClawdletsConfigSchema = z.object({
   schemaVersion: z.literal(CLAWDLETS_CONFIG_SCHEMA_VERSION),
   defaultHost: HostNameSchema.optional(),
+  baseFlake: z.string().trim().default(""),
   fleet: FleetSchema.default({}),
   hosts: z.record(HostNameSchema, HostSchema).refine((v) => Object.keys(v).length > 0, {
     message: "hosts must not be empty",
@@ -92,6 +114,7 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
   return ClawdletsConfigSchema.parse({
     schemaVersion: CLAWDLETS_CONFIG_SCHEMA_VERSION,
     defaultHost: host,
+    baseFlake: "",
     fleet: {
       guildId: "",
       bots,
@@ -105,6 +128,9 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
         enable: false,
         diskDevice: "/dev/disk/by-id/CHANGE_ME",
         sshAuthorizedKeys: [],
+        flakeHost: "",
+        hetzner: { serverType: "cx43" },
+        opentofu: { adminCidr: "", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
         publicSsh: { enable: false },
         provisioning: { enable: false },
         tailnet: { mode: "tailscale" },
@@ -172,12 +198,12 @@ export function resolveHostName(params: { config: ClawdletsConfig; host?: unknow
   };
 }
 
-export function loadClawdletsConfig(params: { repoRoot: string; stackDir?: string }): {
+export function loadClawdletsConfig(params: { repoRoot: string; runtimeDir?: string }): {
   layout: RepoLayout;
   configPath: string;
   config: ClawdletsConfig;
 } {
-  const layout = getRepoLayout(params.repoRoot, params.stackDir);
+  const layout = getRepoLayout(params.repoRoot, params.runtimeDir);
   const configPath = layout.clawdletsConfigPath;
   if (!fs.existsSync(configPath)) throw new Error(`missing clawdlets config: ${configPath}`);
   const raw = fs.readFileSync(configPath, "utf8");

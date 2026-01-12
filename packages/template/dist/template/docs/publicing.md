@@ -8,7 +8,7 @@ Goal: publish repo without leaking:
 ## Rules
 
 - `.clawdlets/` must never be tracked.
-- Don’t commit secrets/keys anywhere in git. Use `.clawdlets/` only.
+- Don’t commit plaintext tokens or private keys. Encrypted secrets live under `secrets/` (sops+age); local operator private keys stay in `.clawdlets/`.
 - Keep host-specific values out of `infra/nix/hosts/*.nix` and `infra/configs/clawdlets.json` before publishing (ship placeholders).
 
 ## Recommended process (no history)
@@ -33,5 +33,4 @@ git commit -m "chore: initial public import"
 
 ## What users do in public repo
 
-- run `CLAWDLETS_INTERACTIVE=1 clawdlets stack init` → creates `.clawdlets/`
-- run `CLAWDLETS_INTERACTIVE=1 clawdlets secrets init` → generates local keys + encrypted secrets
+- run `CLAWDLETS_INTERACTIVE=1 clawdlets secrets init` → generates local operator keys + creates `secrets/` (encrypted) + generates `.clawdlets/extra-files/<host>/...`

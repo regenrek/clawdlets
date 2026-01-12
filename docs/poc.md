@@ -6,10 +6,12 @@ Goal: prove clawdlets can provision + operate a single Hetzner host end-to-end w
 
 ### Provision + install
 
-- `CLAWDLETS_INTERACTIVE=1 clawdlets stack init` created `.clawdlets/stack.json` (schemaVersion 2).
-- `CLAWDLETS_INTERACTIVE=1 clawdlets secrets init` created:
-  - `.clawdlets/secrets/.sops.yaml`
-  - `.clawdlets/secrets/hosts/<host>/*.yaml` (one secret per file)
+- `infra/configs/clawdlets.json` exists (schemaVersion 3) and is the single source of truth for fleet + hosts.
+- `CLAWDLETS_INTERACTIVE=1 clawdlets secrets init` created/updated:
+  - `secrets/.sops.yaml`
+  - `secrets/keys/hosts/<host>.agekey.yaml` (encrypted host age key)
+  - `secrets/hosts/<host>/*.yaml` (one secret per file; encrypted)
+  - `.clawdlets/keys/operators/<operator>.agekey` (local operator key; never committed)
   - `.clawdlets/extra-files/<host>/var/lib/sops-nix/key.txt`
   - `.clawdlets/extra-files/<host>/var/lib/clawdlets/secrets/hosts/<host>/*.yaml`
 - `clawdlets doctor --scope deploy` passes.
@@ -30,7 +32,7 @@ Goal: prove clawdlets can provision + operate a single Hetzner host end-to-end w
 
 - Tailnet works (WireGuard or Tailscale).
 - `clawdlets doctor --scope deploy --strict` passes.
-- `clawdlets lockdown --target-host admin@<tail-ip>` succeeds.
+- `clawdlets host set --target-host admin@<tail-ip>` then `clawdlets lockdown` succeeds.
 - Public SSH closed:
   - Hetzner firewall removes TCP/22 from internet
   - NixOS only allows SSH via `tailscale0` when `publicSsh.enable=false`
@@ -39,7 +41,7 @@ Goal: prove clawdlets can provision + operate a single Hetzner host end-to-end w
 
 - Rebuild pinned: `clawdlets server rebuild --target-host <host> --rev HEAD` works.
 - Rotate a Discord token:
-  - edit `.clawdlets/secrets/hosts/<host>/discord_token_<bot>.yaml` with `sops`
+  - edit `secrets/hosts/<host>/discord_token_<bot>.yaml` with `sops`
   - `clawdlets secrets sync`
   - rebuild pinned; bot uses new token
 - Roll back by rebuilding an older commit SHA (pinned) and confirm bot still runs.

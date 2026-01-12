@@ -5,11 +5,9 @@ import { defineCommand } from "citty";
 import YAML from "yaml";
 import { sopsDecryptYamlFile } from "@clawdbot/clawdlets-core/lib/sops";
 import { sanitizeOperatorId } from "@clawdbot/clawdlets-core/lib/identifiers";
-import { loadClawdletsConfig } from "@clawdbot/clawdlets-core/lib/clawdlets-config";
 import { isPlaceholderSecretValue } from "@clawdbot/clawdlets-core/lib/secrets-init";
-import { loadStack } from "@clawdbot/clawdlets-core/stack";
-import { readDotenvFile } from "./common.js";
-import { requireStackHostOrExit, resolveHostNameOrExit } from "../../lib/host-resolve.js";
+import { getHostSecretsDir, getLocalOperatorAgeKeyPath } from "@clawdbot/clawdlets-core/repo-layout";
+import { loadHostContextOrExit } from "../../lib/context.js";
 
 export const secretsVerify = defineCommand({
   meta: {
@@ -17,7 +15,7 @@ export const secretsVerify = defineCommand({
     description: "Verify secrets decrypt correctly and contain no placeholders.",
   },
   args: {
-    stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
+    runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
     host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
     operator: {
       type: "string",
@@ -27,29 +25,24 @@ export const secretsVerify = defineCommand({
     json: { type: "boolean", description: "Output JSON.", default: false },
   },
   async run({ args }) {
-    const { layout, stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = resolveHostNameOrExit({ cwd: process.cwd(), stackDir: args.stackDir, hostArg: args.host });
-    if (!hostName) return;
-    const host = requireStackHostOrExit(stack, hostName);
-    if (!host) return;
+    const cwd = process.cwd();
+    const ctx = loadHostContextOrExit({ cwd, runtimeDir: (args as any).runtimeDir, hostArg: args.host });
+    if (!ctx) return;
+    const { layout, config, hostName, hostCfg } = ctx;
 
     const operatorId = sanitizeOperatorId(String(args.operator || process.env.USER || "operator"));
 
-    const envPath = path.join(layout.stackDir, stack.envFile || ".env");
-    const env = readDotenvFile(envPath);
-
     const operatorKeyPath =
       (args.ageKeyFile ? String(args.ageKeyFile).trim() : "") ||
-      (env.SOPS_AGE_KEY_FILE ? env.SOPS_AGE_KEY_FILE.trim() : "") ||
-      path.join(layout.stackDir, "secrets", "operators", `${operatorId}.agekey`);
+      (process.env.SOPS_AGE_KEY_FILE ? String(process.env.SOPS_AGE_KEY_FILE).trim() : "") ||
+      getLocalOperatorAgeKeyPath(layout, operatorId);
 
-    const nix = { nixBin: String(env.NIX_BIN || process.env.NIX_BIN || "nix").trim() || "nix", cwd: layout.repoRoot, dryRun: false } as const;
+    const nix = { nixBin: String(process.env.NIX_BIN || "nix").trim() || "nix", cwd: layout.repoRoot, dryRun: false } as const;
 
-    const localDir = path.join(layout.stackDir, host.secrets.localDir);
-    const { config } = loadClawdletsConfig({ repoRoot: layout.repoRoot, stackDir: args.stackDir });
+    const localDir = getHostSecretsDir(layout, hostName);
     const bots = config.fleet.bots;
 
-    const tailnetMode = String(config.hosts[hostName]?.tailnet?.mode || "none");
+    const tailnetMode = String(hostCfg.tailnet?.mode || "none");
     const requiredSecrets = [
       ...(tailnetMode === "tailscale" ? ["tailscale_auth_key"] : []),
       "admin_password_hash",

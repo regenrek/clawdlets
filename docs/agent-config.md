@@ -17,7 +17,7 @@ Set values via CLI (no manual Nix edits):
 - routing overrides (example):
   - `clawdlets config set --path fleet.routingOverrides.maren --value-json '{"channels":["dev"],"requireMention":true}'`
 
-If you change `bots`, update `.clawdlets/secrets/hosts/<host>/discord_token_<name>.yaml`, sync, then rebuild.
+If you change `bots`, update `secrets/hosts/<host>/discord_token_<name>.yaml`, sync, then rebuild.
 
 ## Documents (AGENTS / SOUL / TOOLS / IDENTITY)
 

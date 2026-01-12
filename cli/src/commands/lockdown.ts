@@ -1,13 +1,17 @@
+import fs from "node:fs";
 import process from "node:process";
+import path from "node:path";
 import { defineCommand } from "citty";
 import { applyOpenTofuVars } from "@clawdbot/clawdlets-core/lib/opentofu";
 import { resolveGitRev } from "@clawdbot/clawdlets-core/lib/git";
 import { expandPath } from "@clawdbot/clawdlets-core/lib/path-expand";
-import { loadStack, loadStackEnv, resolveStackBaseFlake } from "@clawdbot/clawdlets-core/stack";
 import { shellQuote, sshRun } from "@clawdbot/clawdlets-core/lib/ssh-remote";
+import { findRepoRoot } from "@clawdbot/clawdlets-core/lib/repo";
+import { loadClawdletsConfig } from "@clawdbot/clawdlets-core/lib/clawdlets-config";
+import { resolveBaseFlake } from "@clawdbot/clawdlets-core/lib/base-flake";
 import { requireDeployGate } from "../lib/deploy-gate.js";
 import { needsSudo, requireTargetHost } from "./ssh-target.js";
-import { requireStackHostOrExit, resolveHostNameOrExit } from "../lib/host-resolve.js";
+import { resolveHostNameOrExit } from "../lib/host-resolve.js";
 
 function resolveHostFromFlake(flakeBase: string): string | null {
   const hashIndex = flakeBase.indexOf("#");
@@ -22,10 +26,10 @@ export const lockdown = defineCommand({
     description: "Rebuild over tailnet and remove public SSH from Hetzner firewall.",
   },
   args: {
-    stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
+    runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
     host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
-    targetHost: { type: "string", description: "SSH target override (default: from stack)." },
-    flake: { type: "string", description: "Override base flake (default: stack.base.flake)." },
+    targetHost: { type: "string", description: "SSH target override (default: from clawdlets.json)." },
+    flake: { type: "string", description: "Override base flake (default: clawdlets.json baseFlake or git origin)." },
     rev: { type: "string", description: "Git rev to pin (HEAD/sha/tag).", default: "HEAD" },
     ref: { type: "string", description: "Git ref to pin (branch or tag)." },
     skipRebuild: { type: "boolean", description: "Skip nixos-rebuild.", default: false },
@@ -34,29 +38,30 @@ export const lockdown = defineCommand({
     dryRun: { type: "boolean", description: "Print commands without executing.", default: false },
   },
   async run({ args }) {
-    const { layout, stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = resolveHostNameOrExit({ cwd: process.cwd(), stackDir: args.stackDir, hostArg: args.host });
+    const cwd = process.cwd();
+    const repoRoot = findRepoRoot(cwd);
+    const hostName = resolveHostNameOrExit({ cwd, runtimeDir: (args as any).runtimeDir, hostArg: args.host });
     if (!hostName) return;
-    const host = requireStackHostOrExit(stack, hostName);
-    if (!host) return;
+    const { layout, config: clawdletsConfig } = loadClawdletsConfig({ repoRoot, runtimeDir: (args as any).runtimeDir });
+    const hostCfg = clawdletsConfig.hosts[hostName];
+    if (!hostCfg) throw new Error(`missing host in infra/configs/clawdlets.json: ${hostName}`);
 
-    await requireDeployGate({ stackDir: args.stackDir, host: hostName, scope: "deploy", strict: true });
+    await requireDeployGate({ runtimeDir: (args as any).runtimeDir, host: hostName, scope: "deploy", strict: true });
 
-    const targetHost = requireTargetHost(String(args.targetHost || host.targetHost || ""), hostName);
+    const targetHost = requireTargetHost(String(args.targetHost || hostCfg.targetHost || ""), hostName);
 
-    const envLoaded = loadStackEnv({ cwd: process.cwd(), stackDir: args.stackDir, envFile: stack.envFile });
-    const hcloudToken = String(envLoaded.env.HCLOUD_TOKEN || "").trim();
-    const githubToken = String(envLoaded.env.GITHUB_TOKEN || "").trim();
+    const hcloudToken = String(process.env.HCLOUD_TOKEN || "").trim();
+    const githubToken = String(process.env.GITHUB_TOKEN || "").trim();
 
-    const baseResolved = await resolveStackBaseFlake({ repoRoot: layout.repoRoot, stack });
+    const baseResolved = await resolveBaseFlake({ repoRoot, config: clawdletsConfig });
     const flakeBase = String(args.flake || baseResolved.flake || "").trim();
-    if (!flakeBase) throw new Error("missing base flake (set stack.base.flake, set git origin, or pass --flake)");
+    if (!flakeBase) throw new Error("missing base flake (set baseFlake in infra/configs/clawdlets.json, set git origin, or pass --flake)");
 
     const rev = String(args.rev || "").trim();
     const ref = String(args.ref || "").trim();
     if (rev && ref) throw new Error("use either --rev or --ref (not both)");
 
-    const requestedHost = String(host.flakeHost || hostName).trim() || hostName;
+    const requestedHost = String(hostCfg.flakeHost || hostName).trim() || hostName;
     const hostFromFlake = resolveHostFromFlake(flakeBase);
     if (hostFromFlake && hostFromFlake !== requestedHost) throw new Error(`flake host mismatch: ${hostFromFlake} vs ${requestedHost}`);
 
@@ -91,18 +96,28 @@ export const lockdown = defineCommand({
     }
 
     if (!args.skipTofu) {
-      if (!hcloudToken) throw new Error("missing HCLOUD_TOKEN (stack env)");
-      const sshPubkeyFile = expandPath(host.opentofu.sshPubkeyFile);
+      if (!hcloudToken) throw new Error("missing HCLOUD_TOKEN (set env var)");
+
+      const adminCidr = String(hostCfg.opentofu.adminCidr || "").trim();
+      if (!adminCidr) throw new Error(`missing opentofu.adminCidr for ${hostName} (set via: clawdlets host set --admin-cidr ...)`);
+
+      const sshPubkeyFileRaw = String(hostCfg.opentofu.sshPubkeyFile || "").trim();
+      if (!sshPubkeyFileRaw) throw new Error(`missing opentofu.sshPubkeyFile for ${hostName} (set via: clawdlets host set --ssh-pubkey-file ...)`);
+      const sshPubkeyFileExpanded = expandPath(sshPubkeyFileRaw);
+      const sshPubkeyFile = path.isAbsolute(sshPubkeyFileExpanded)
+        ? sshPubkeyFileExpanded
+        : path.resolve(repoRoot, sshPubkeyFileExpanded);
+      if (!fs.existsSync(sshPubkeyFile)) throw new Error(`ssh pubkey file not found: ${sshPubkeyFile}`);
       await applyOpenTofuVars({
         repoRoot: layout.repoRoot,
         vars: {
           hcloudToken,
-          adminCidr: host.opentofu.adminCidr,
+          adminCidr,
           sshPubkeyFile,
-          serverType: host.hetzner.serverType,
+          serverType: hostCfg.hetzner.serverType,
           publicSsh: false,
         },
-        nixBin: envLoaded.env.NIX_BIN || "nix",
+        nixBin: String(process.env.NIX_BIN || "nix").trim() || "nix",
         dryRun: args.dryRun,
         redact: [hcloudToken, githubToken].filter(Boolean) as string[],
       });

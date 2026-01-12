@@ -5,14 +5,16 @@ import { defineCommand } from "citty";
 import { applyOpenTofuVars } from "@clawdbot/clawdlets-core/lib/opentofu";
 import { resolveGitRev } from "@clawdbot/clawdlets-core/lib/git";
 import { capture, run } from "@clawdbot/clawdlets-core/lib/run";
-import { loadStack, loadStackEnv, resolveStackBaseFlake } from "@clawdbot/clawdlets-core/stack";
 import { checkGithubRepoVisibility, tryParseGithubFlakeUri } from "@clawdbot/clawdlets-core/lib/github";
 import { expandPath } from "@clawdbot/clawdlets-core/lib/path-expand";
+import { findRepoRoot } from "@clawdbot/clawdlets-core/lib/repo";
 import { evalFleetConfig } from "@clawdbot/clawdlets-core/lib/fleet-nix-eval";
 import { withFlakesEnv } from "@clawdbot/clawdlets-core/lib/nix-flakes";
 import { loadClawdletsConfig } from "@clawdbot/clawdlets-core/lib/clawdlets-config";
+import { resolveBaseFlake } from "@clawdbot/clawdlets-core/lib/base-flake";
+import { getHostExtraFilesDir, getHostExtraFilesKeyPath, getHostExtraFilesSecretsDir } from "@clawdbot/clawdlets-core/repo-layout";
 import { requireDeployGate } from "../lib/deploy-gate.js";
-import { requireStackHostOrExit, resolveHostNameOrExit } from "../lib/host-resolve.js";
+import { resolveHostNameOrExit } from "../lib/host-resolve.js";
 
 async function purgeKnownHosts(ipv4: string, opts: { dryRun: boolean }) {
   const rm = async (host: string) => {
@@ -37,56 +39,67 @@ export const bootstrap = defineCommand({
   meta: {
     name: "bootstrap",
     description: "Provision Hetzner VM + install NixOS via nixos-anywhere.",
-  },
-  args: {
-    stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
-    host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
-    flake: { type: "string", description: "Override base flake (default: stack.base.flake)." },
-    rev: { type: "string", description: "Git rev to pin (HEAD/sha/tag).", default: "HEAD" },
-    ref: { type: "string", description: "Git ref to pin (branch or tag)." },
-    "keep-public-ssh": { type: "boolean", description: "Keep public SSH open after install (not recommended).", default: false },
-    dryRun: { type: "boolean", description: "Print commands without executing.", default: false },
-  },
-  async run({ args }) {
-    const { layout, stack } = loadStack({ cwd: process.cwd(), stackDir: args.stackDir });
-    const hostName = resolveHostNameOrExit({ cwd: process.cwd(), stackDir: args.stackDir, hostArg: args.host });
-    if (!hostName) return;
-    const host = requireStackHostOrExit(stack, hostName);
-    if (!host) return;
+	  },
+	  args: {
+	    runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
+	    host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
+	    flake: { type: "string", description: "Override base flake (default: clawdlets.json baseFlake or git origin)." },
+	    rev: { type: "string", description: "Git rev to pin (HEAD/sha/tag).", default: "HEAD" },
+	    ref: { type: "string", description: "Git ref to pin (branch or tag)." },
+	    "keep-public-ssh": { type: "boolean", description: "Keep public SSH open after install (not recommended).", default: false },
+	    dryRun: { type: "boolean", description: "Print commands without executing.", default: false },
+	  },
+	  async run({ args }) {
+	    const cwd = process.cwd();
+	    const repoRoot = findRepoRoot(cwd);
+	    const hostName = resolveHostNameOrExit({ cwd, runtimeDir: (args as any).runtimeDir, hostArg: args.host });
+	    if (!hostName) return;
+	    const { layout, config: clawdletsConfig } = loadClawdletsConfig({ repoRoot, runtimeDir: (args as any).runtimeDir });
+	    const hostCfg = clawdletsConfig.hosts[hostName];
+	    if (!hostCfg) throw new Error(`missing host in infra/configs/clawdlets.json: ${hostName}`);
 
-    await requireDeployGate({ stackDir: args.stackDir, host: hostName, scope: "deploy", strict: false });
+	    await requireDeployGate({ runtimeDir: (args as any).runtimeDir, host: hostName, scope: "deploy", strict: false });
 
-    const envLoaded = loadStackEnv({ cwd: process.cwd(), stackDir: args.stackDir, envFile: stack.envFile });
-    const hcloudToken = String(envLoaded.env.HCLOUD_TOKEN || "").trim();
-    if (!hcloudToken) throw new Error("missing HCLOUD_TOKEN (stack env)");
-    const githubToken = String(envLoaded.env.GITHUB_TOKEN || "").trim();
+	    const hcloudToken = String(process.env.HCLOUD_TOKEN || "").trim();
+	    if (!hcloudToken) throw new Error("missing HCLOUD_TOKEN (set env var)");
+	    const githubToken = String(process.env.GITHUB_TOKEN || "").trim();
 
-    const repoRoot = layout.repoRoot;
-    const opentofuDir = path.join(repoRoot, "infra", "opentofu");
-    const nixBin = envLoaded.env.NIX_BIN || "nix";
-    const sshPubkeyFile = expandPath(host.opentofu.sshPubkeyFile);
+	    const nixBin = String(process.env.NIX_BIN || "nix").trim() || "nix";
+	    const opentofuDir = layout.opentofuDir;
 
-    await applyOpenTofuVars({
-      repoRoot,
-      vars: {
-        hcloudToken,
-        adminCidr: host.opentofu.adminCidr,
-        sshPubkeyFile,
-        serverType: host.hetzner.serverType,
-        publicSsh: true,
-      },
-      nixBin,
-      dryRun: args.dryRun,
+	    const serverType = String(hostCfg.hetzner.serverType || "").trim();
+	    if (!serverType) throw new Error(`missing hetzner.serverType for ${hostName} (set via: clawdlets host set --server-type ...)`);
+
+	    const adminCidr = String(hostCfg.opentofu.adminCidr || "").trim();
+	    if (!adminCidr) throw new Error(`missing opentofu.adminCidr for ${hostName} (set via: clawdlets host set --admin-cidr ...)`);
+
+	    const sshPubkeyFileRaw = String(hostCfg.opentofu.sshPubkeyFile || "").trim();
+	    if (!sshPubkeyFileRaw) throw new Error(`missing opentofu.sshPubkeyFile for ${hostName} (set via: clawdlets host set --ssh-pubkey-file ...)`);
+	    const sshPubkeyFileExpanded = expandPath(sshPubkeyFileRaw);
+	    const sshPubkeyFile = path.isAbsolute(sshPubkeyFileExpanded) ? sshPubkeyFileExpanded : path.resolve(repoRoot, sshPubkeyFileExpanded);
+	    if (!fs.existsSync(sshPubkeyFile)) throw new Error(`ssh pubkey file not found: ${sshPubkeyFile}`);
+
+	    await applyOpenTofuVars({
+	      repoRoot,
+	      vars: {
+	        hcloudToken,
+	        adminCidr,
+	        sshPubkeyFile,
+	        serverType,
+	        publicSsh: true,
+	      },
+	      nixBin,
+	      dryRun: args.dryRun,
       redact: [hcloudToken, githubToken].filter(Boolean) as string[],
     });
 
-    const tofuEnv: NodeJS.ProcessEnv = {
-      ...process.env,
-      HCLOUD_TOKEN: hcloudToken,
-      ADMIN_CIDR: host.opentofu.adminCidr,
-      SSH_PUBKEY_FILE: sshPubkeyFile,
-      SERVER_TYPE: host.hetzner.serverType,
-    };
+	    const tofuEnv: NodeJS.ProcessEnv = {
+	      ...process.env,
+	      HCLOUD_TOKEN: hcloudToken,
+	      ADMIN_CIDR: adminCidr,
+	      SSH_PUBKEY_FILE: sshPubkeyFile,
+	      SERVER_TYPE: serverType,
+	    };
     const tofuEnvWithFlakes = withFlakesEnv(tofuEnv);
 
     const ipv4 = args.dryRun
@@ -100,15 +113,15 @@ export const bootstrap = defineCommand({
     console.log(`Target IPv4: ${ipv4}`);
     await purgeKnownHosts(ipv4, { dryRun: args.dryRun });
 
-    const baseResolved = await resolveStackBaseFlake({ repoRoot: layout.repoRoot, stack });
-    const flakeBase = String(args.flake || baseResolved.flake || "").trim();
-    if (!flakeBase) throw new Error("missing base flake (set stack.base.flake, set git origin, or pass --flake)");
+	    const baseResolved = await resolveBaseFlake({ repoRoot, config: clawdletsConfig });
+	    const flakeBase = String(args.flake || baseResolved.flake || "").trim();
+	    if (!flakeBase) throw new Error("missing base flake (set baseFlake in infra/configs/clawdlets.json, set git origin, or pass --flake)");
 
     const rev = String(args.rev || "").trim();
     const ref = String(args.ref || "").trim();
     if (rev && ref) throw new Error("use either --rev or --ref (not both)");
 
-    const requestedHost = String(host.flakeHost || hostName).trim() || hostName;
+	    const requestedHost = String(hostCfg.flakeHost || hostName).trim() || hostName;
     const hostFromFlake = resolveHostFromFlake(flakeBase);
     if (hostFromFlake && hostFromFlake !== requestedHost) throw new Error(`flake host mismatch: ${hostFromFlake} vs ${requestedHost}`);
 
@@ -138,25 +151,24 @@ export const bootstrap = defineCommand({
         repo: githubRepo.repo,
         token: githubToken || undefined,
       });
-      if (check.ok && check.status === "private-or-missing" && !githubToken) {
-        throw new Error(`base flake repo appears private (404). Set GITHUB_TOKEN in stack env and retry.`);
-      }
+	      if (check.ok && check.status === "private-or-missing" && !githubToken) {
+	        throw new Error(`base flake repo appears private (404). Set GITHUB_TOKEN in your environment and retry.`);
+	      }
       if (check.ok && check.status === "unauthorized") {
         throw new Error(`GITHUB_TOKEN rejected by GitHub (401).`);
       }
     }
 
-    const extraFiles = path.join(layout.stackDir, "extra-files", hostName);
-    const requiredKey = path.join(extraFiles, "var", "lib", "sops-nix", "key.txt");
-    if (!fs.existsSync(requiredKey)) {
-      throw new Error(`missing extra-files key: ${requiredKey} (run: clawdlets secrets init)`);
-    }
+	    const extraFiles = getHostExtraFilesDir(layout, hostName);
+	    const requiredKey = getHostExtraFilesKeyPath(layout, hostName);
+	    if (!fs.existsSync(requiredKey)) {
+	      throw new Error(`missing extra-files key: ${requiredKey} (run: clawdlets secrets init)`);
+	    }
 
     const fleetPath = path.join(repoRoot, "infra", "configs", "fleet.nix");
     const bots = (await evalFleetConfig({ repoRoot, fleetFilePath: fleetPath, nixBin })).bots;
 
-    const { config: clawdletsConfig } = loadClawdletsConfig({ repoRoot, stackDir: args.stackDir });
-    const tailnetMode = String(clawdletsConfig.hosts[hostName]?.tailnet?.mode || "none");
+	    const tailnetMode = String(hostCfg.tailnet?.mode || "none");
 
     const requiredSecrets = [
       ...(tailnetMode === "tailscale" ? ["tailscale_auth_key"] : []),
@@ -164,12 +176,10 @@ export const bootstrap = defineCommand({
       ...bots.map((b) => `discord_token_${b}`),
     ];
 
-    const remoteSecretsDir = String(host.secrets.remoteDir || "").trim();
-    if (!remoteSecretsDir) throw new Error(`missing stack host secrets.remoteDir for ${hostName}`);
-    const extraFilesSecretsDir = path.join(extraFiles, remoteSecretsDir.replace(/^\/+/, ""));
-    if (!fs.existsSync(extraFilesSecretsDir)) {
-      throw new Error(`missing extra-files secrets dir: ${extraFilesSecretsDir} (run: clawdlets secrets init)`);
-    }
+	    const extraFilesSecretsDir = getHostExtraFilesSecretsDir(layout, hostName);
+	    if (!fs.existsSync(extraFilesSecretsDir)) {
+	      throw new Error(`missing extra-files secrets dir: ${extraFilesSecretsDir} (run: clawdlets secrets init)`);
+	    }
 
     for (const secretName of requiredSecrets) {
       const f = path.join(extraFilesSecretsDir, `${secretName}.yaml`);
@@ -236,18 +246,18 @@ export const bootstrap = defineCommand({
       redact: [hcloudToken, githubToken].filter(Boolean) as string[],
     });
 
-    if (!Boolean((args as any)["keep-public-ssh"])) {
-      await applyOpenTofuVars({
-        repoRoot,
-        vars: {
-          hcloudToken,
-          adminCidr: host.opentofu.adminCidr,
-          sshPubkeyFile,
-          serverType: host.hetzner.serverType,
-          publicSsh: false,
-        },
-        nixBin,
-        dryRun: args.dryRun,
+	    if (!Boolean((args as any)["keep-public-ssh"])) {
+	      await applyOpenTofuVars({
+	        repoRoot,
+	        vars: {
+	          hcloudToken,
+	          adminCidr,
+	          sshPubkeyFile,
+	          serverType,
+	          publicSsh: false,
+	        },
+	        nixBin,
+	        dryRun: args.dryRun,
         redact: [hcloudToken, githubToken].filter(Boolean) as string[],
       });
     }

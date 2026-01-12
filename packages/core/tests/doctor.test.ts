@@ -87,51 +87,14 @@ describe("doctor", () => {
     const sshPub = path.join(repoRoot, "id_ed25519.pub");
     await writeFile(sshPub, "ssh-ed25519 AAAATEST test\n", "utf8");
 
-    const operatorKey = path.join(repoRoot, ".clawdlets", "secrets", "operators", "tester.agekey");
+    const operatorKey = path.join(repoRoot, ".clawdlets", "keys", "operators", "tester.agekey");
     await mkdir(path.dirname(operatorKey), { recursive: true });
     await writeFile(operatorKey, "AGE-SECRET-KEY-TEST\n", "utf8");
 
-    await mkdir(path.join(repoRoot, ".clawdlets"), { recursive: true });
-    await writeFile(
-      path.join(repoRoot, ".clawdlets", ".env"),
-      [
-        "HCLOUD_TOKEN=abc",
-        `SOPS_AGE_KEY_FILE=${operatorKey}`,
-        "",
-      ].join("\n"),
-      "utf8",
-    );
-
-    await writeFile(
-      path.join(repoRoot, ".clawdlets", "stack.json"),
-      JSON.stringify(
-	        {
-	          schemaVersion: 3,
-	          envFile: ".env",
-	          hosts: {
-	            "clawdbot-fleet-host": {
-	              flakeHost: "clawdbot-fleet-host",
-	              targetHost: "root@clawdbot-fleet-host",
-	              hetzner: { serverType: "cx43" },
-	              opentofu: {
-	                adminCidr: "203.0.113.10/32",
-	                sshPubkeyFile: "id_ed25519.pub",
-	              },
-              secrets: {
-                localDir: "secrets/hosts/clawdbot-fleet-host",
-                remoteDir: "/var/lib/clawdlets/secrets/hosts/clawdbot-fleet-host",
-              },
-            },
-          },
-        },
-        null,
-        2,
-      ) + "\n",
-      "utf8",
-    );
-
     const clawdletsConfig = {
-      schemaVersion: 2,
+      schemaVersion: 3,
+      defaultHost: "clawdbot-fleet-host",
+      baseFlake: "",
       fleet: {
         guildId: "",
         bots: ["alpha", "beta"],
@@ -145,6 +108,9 @@ describe("doctor", () => {
           enable: false,
           diskDevice: "/dev/disk/by-id/TEST",
           sshAuthorizedKeys: ["ssh-ed25519 AAAATEST test"],
+          flakeHost: "",
+          hetzner: { serverType: "cx43" },
+          opentofu: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "id_ed25519.pub" },
           publicSsh: { enable: false },
           provisioning: { enable: false },
           tailnet: { mode: "none" },
@@ -207,10 +173,11 @@ describe("doctor", () => {
     };
     mockFleetTemplate = structuredClone(mockFleetMain);
 
-    await mkdir(path.join(repoRoot, ".clawdlets", "secrets", "hosts"), { recursive: true });
+    await mkdir(path.join(repoRoot, "secrets", "hosts", "clawdbot-fleet-host"), { recursive: true });
+    await mkdir(path.join(repoRoot, "secrets", "keys", "hosts"), { recursive: true });
 
     await writeFile(
-      path.join(repoRoot, ".clawdlets", "secrets", ".sops.yaml"),
+      path.join(repoRoot, "secrets", ".sops.yaml"),
       [
         "creation_rules:",
         `  - path_regex: ${sopsPathRegexForDirFiles("hosts/clawdbot-fleet-host", "yaml")}`,
@@ -223,8 +190,13 @@ describe("doctor", () => {
       "utf8",
     );
 
-    const secretsDir = path.join(repoRoot, ".clawdlets", "secrets", "hosts", "clawdbot-fleet-host");
-    await mkdir(secretsDir, { recursive: true });
+    await writeFile(
+      path.join(repoRoot, "secrets", "keys", "hosts", "clawdbot-fleet-host.agekey.yaml"),
+      "age_public_key: age1a\nage_secret_key: AGE-SECRET-KEY-TEST\nsops: {}\n",
+      "utf8",
+    );
+
+    const secretsDir = path.join(repoRoot, "secrets", "hosts", "clawdbot-fleet-host");
     await writeFile(path.join(secretsDir, "admin_password_hash.yaml"), "admin_password_hash: y\nsops: {}\n", "utf8");
     await writeFile(path.join(secretsDir, "discord_token_alpha.yaml"), "discord_token_alpha: z\nsops: {}\n", "utf8");
     await writeFile(path.join(secretsDir, "discord_token_beta.yaml"), "discord_token_beta: z2\nsops: {}\n", "utf8");
@@ -285,6 +257,7 @@ describe("doctor", () => {
   });
 
   it("passes with a fully seeded repo", async () => {
+    process.env.HCLOUD_TOKEN = "abc";
     const { collectDoctorChecks } = await import("../src/doctor");
     const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host" });
     expect(checks.filter((c) => c.status === "missing")).toEqual([]);
@@ -343,13 +316,13 @@ describe("doctor", () => {
   });
 
 	  it("flags opentofu ssh pubkey file contents as invalid", async () => {
-	    const stackPath = path.join(repoRoot, ".clawdlets", "stack.json");
-	    const originalStack = await readFile(stackPath, "utf8");
+	    const configPath = path.join(repoRoot, "infra", "configs", "clawdlets.json");
+	    const original = await readFile(configPath, "utf8");
 
-	    const raw = JSON.parse(originalStack) as any;
+	    const raw = JSON.parse(original) as any;
 	    raw.hosts["clawdbot-fleet-host"].opentofu.sshPubkeyFile =
 	      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEaaaaaaaaaaaaaaaaaaaaaaa test";
-	    await writeFile(stackPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+	    await writeFile(configPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
 
     const { collectDoctorChecks } = await import("../src/doctor");
     const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host" });
@@ -362,7 +335,7 @@ describe("doctor", () => {
 	      ),
 	    ).toBe(true);
 
-    await writeFile(stackPath, originalStack, "utf8");
+    await writeFile(configPath, original, "utf8");
   });
 
   it("requires GITHUB_TOKEN when repo is private", async () => {

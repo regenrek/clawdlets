@@ -11,7 +11,6 @@
     "clawdlets:bootstrap": "node cli/dist/main.js bootstrap",
     "clawdlets:lockdown": "node cli/dist/main.js lockdown",
     "clawdlets:server": "node cli/dist/main.js server",
-    "clawdlets:stack": "node cli/dist/main.js stack",
     "clawdlets:secrets": "node cli/dist/main.js secrets",
     "clawdlets:infra": "node cli/dist/main.js infra",
     "clawdlets:help": "node cli/dist/main.js --help"
