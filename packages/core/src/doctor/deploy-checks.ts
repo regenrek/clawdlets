@@ -11,13 +11,18 @@ import {
 } from "../repo-layout.js";
 import { getHostAgeKeySopsCreationRulePathRegex, getHostAgeKeySopsCreationRulePathSuffix, getHostSecretsSopsCreationRulePathRegex, getHostSecretsSopsCreationRulePathSuffix } from "../lib/sops-rules.js";
 import { validateHostSecretsYamlFiles } from "../lib/secrets-policy.js";
+import { buildFleetEnvSecretsPlan } from "../lib/fleet-env-secrets.js";
 import { capture } from "../lib/run.js";
 import { looksLikeSshKeyContents, normalizeSshPublicKey } from "../lib/ssh.js";
 import { loadClawdletsConfig } from "../lib/clawdlets-config.js";
+import { isPlaceholderSecretValue } from "../lib/secrets-init.js";
+import { getRecommendedSecretNameForEnvVar } from "../lib/llm-provider-env.js";
 import { checkGithubRepoVisibility, tryParseGithubFlakeUri } from "../lib/github.js";
 import { tryGetOriginFlake } from "../lib/git.js";
 import { expandPath } from "../lib/path-expand.js";
 import { resolveBaseFlake } from "../lib/base-flake.js";
+import { sopsDecryptYamlFile } from "../lib/sops.js";
+import { readYamlScalarFromMapping } from "../lib/yaml-scalar.js";
 import type { DoctorPush } from "./types.js";
 
 export async function addDeployChecks(params: {
@@ -237,13 +242,45 @@ export async function addDeployChecks(params: {
       detail: getHostRemoteSecretsDir(host),
     });
 
-    if (params.fleetBots && params.fleetBots.length > 0) {
+    let envPlan: ReturnType<typeof buildFleetEnvSecretsPlan> | null = null;
+    try {
+      if (clawdletsCfg) envPlan = buildFleetEnvSecretsPlan({ config: clawdletsCfg as any, hostName: host });
+    } catch (e) {
+      params.push({ scope: "deploy", status: "warn", label: "envSecrets plan", detail: String((e as Error)?.message || e) });
+      envPlan = null;
+    }
+
+    if (envPlan && envPlan.missingEnvSecretMappings.length > 0) {
+      for (const m of envPlan.missingEnvSecretMappings.slice(0, 10)) {
+        const rec = getRecommendedSecretNameForEnvVar(m.envVar);
+        params.push({
+          scope: "deploy",
+          status: "missing",
+          label: `envSecrets mapping: ${m.envVar}`,
+          detail: `missing for bot=${m.bot} (model=${m.model}); set: clawdlets config set --path fleet.envSecrets.${m.envVar} --value ${rec || "<secret_name>"}`,
+        });
+      }
+      if (envPlan.missingEnvSecretMappings.length > 10) {
+        params.push({
+          scope: "deploy",
+          status: "missing",
+          label: "envSecrets mapping",
+          detail: `(+${envPlan.missingEnvSecretMappings.length - 10} more missing mappings)`,
+        });
+      }
+    }
+
+    const botsForSecrets = envPlan?.bots?.length ? envPlan.bots : params.fleetBots || [];
+    const envSecretsForHost = envPlan?.secretNamesAll || [];
+
+    if (botsForSecrets.length > 0) {
       const tailnetMode = String(clawdletsHostCfg?.tailnet?.mode || "none");
-      const required = [
+      const required = Array.from(new Set([
         ...(tailnetMode === "tailscale" ? ["tailscale_auth_key"] : []),
         "admin_password_hash",
-        ...params.fleetBots.map((b) => `discord_token_${b}`),
-      ];
+        ...envSecretsForHost,
+        ...botsForSecrets.map((b) => `discord_token_${b}`),
+      ]));
       for (const secretName of required) {
         const f = path.join(secretsLocalDir, `${secretName}.yaml`);
         params.push({
@@ -255,6 +292,42 @@ export async function addDeployChecks(params: {
       }
     } else {
       params.push({ scope: "deploy", status: "warn", label: "required secrets", detail: "(fleet bots list missing; cannot validate discord_token_<bot> secrets)" });
+    }
+
+    if (envPlan && envPlan.secretNamesRequired.length > 0 && params.sopsAgeKeyFile && fs.existsSync(params.sopsAgeKeyFile)) {
+      const nix = { nixBin: params.nixBin, cwd: params.repoRoot, dryRun: false, env: process.env } as const;
+      for (const secretName of envPlan.secretNamesRequired) {
+        const filePath = path.join(secretsLocalDir, `${secretName}.yaml`);
+        if (!fs.existsSync(filePath)) continue;
+        try {
+          const decrypted = await sopsDecryptYamlFile({
+            filePath,
+            configPath: params.layout.sopsConfigPath,
+            ageKeyFile: params.sopsAgeKeyFile,
+            nix,
+          });
+          const v = readYamlScalarFromMapping({ yamlText: decrypted, key: secretName }) || "";
+          const value = v.trim();
+          if (!value) {
+            params.push({ scope: "deploy", status: "missing", label: `secret value: ${secretName}`, detail: "(empty)" });
+            continue;
+          }
+          if (value === "<OPTIONAL>" || isPlaceholderSecretValue(value)) {
+            params.push({ scope: "deploy", status: "missing", label: `secret value: ${secretName}`, detail: `(placeholder: ${value})` });
+            continue;
+          }
+          params.push({ scope: "deploy", status: "ok", label: `secret value: ${secretName}` });
+        } catch (e) {
+          params.push({ scope: "deploy", status: "warn", label: `secret value: ${secretName}`, detail: String((e as Error)?.message || e) });
+        }
+      }
+    } else if (envPlan && envPlan.secretNamesRequired.length > 0) {
+      params.push({
+        scope: "deploy",
+        status: "warn",
+        label: "LLM API keys",
+        detail: "(set SOPS_AGE_KEY_FILE to verify required key values are not placeholders)",
+      });
     }
 
     if (fs.existsSync(params.layout.sopsConfigPath)) {

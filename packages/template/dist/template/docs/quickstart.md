@@ -59,6 +59,8 @@ clawdlets doctor --scope deploy
 
 Non-interactive: keep inputs in `.clawdlets/secrets.json` and run `clawdlets secrets init --from-json .clawdlets/secrets.json` (if the file is missing, `secrets init` will write a template and exit).
 
+LLM API keys are provided via `secrets.<secretName>` in that JSON (e.g. `secrets.z_ai_api_key`) and wired to env via `fleet.envSecrets` in `infra/configs/clawdlets.json`.
+
 3) Provision + install:
 ```bash
 clawdlets bootstrap

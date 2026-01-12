@@ -8,13 +8,15 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 ### Added
 - Base flake resolution: `infra/configs/clawdlets.json.baseFlake` (fallback: `git remote origin`) used by deploy commands (`bootstrap`, `lockdown`, `server rebuild`).
 - Non-interactive secrets provisioning: `clawdlets secrets init --from-json <path|->`.
+- Fleet-level secret env wiring: `infra/configs/clawdlets.json.fleet.envSecrets` (env var → sops secret name), used for LLM API keys.
 - New docs: `docs/config.md` (canonical config + host knobs).
 
 ### Changed
 - Workflow automation: `nix-clawdbot` bump PRs are created using a GitHub App token (so normal PR checks run) and are compatible with strict branch protection.
 - Repo layout: runtime state is `.clawdlets/` (gitignored); repo-canonical secrets are sops-encrypted in `secrets/`.
-- Config schema bump: `infra/configs/clawdlets.json` schemaVersion `3` (host deploy knobs moved into canonical config).
+- Config schema bump: `infra/configs/clawdlets.json` schemaVersion `4` (adds `fleet.envSecrets` and removes baked-in provider keys).
 - CLI flag rename: `--stack-dir` → `--runtime-dir`.
+- Secrets init JSON: replaces `zAiApiKey` with `secrets.<secretName>` map.
 
 ### Removed
 - Stack concept + `clawdlets stack` command.

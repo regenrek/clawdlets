@@ -11,6 +11,8 @@ import { upsertSopsCreationRule } from "@clawdbot/clawdlets-core/lib/sops-config
 import { sopsDecryptYamlFile, sopsEncryptYamlToFile } from "@clawdbot/clawdlets-core/lib/sops";
 import { getHostAgeKeySopsCreationRulePathRegex, getHostSecretsSopsCreationRulePathRegex } from "@clawdbot/clawdlets-core/lib/sops-rules";
 import { sanitizeOperatorId } from "@clawdbot/clawdlets-core/lib/identifiers";
+import { buildFleetEnvSecretsPlan } from "@clawdbot/clawdlets-core/lib/fleet-env-secrets";
+import { getRecommendedSecretNameForEnvVar } from "@clawdbot/clawdlets-core/lib/llm-provider-env";
 import { buildSecretsInitTemplate, isPlaceholderSecretValue, listSecretsInitPlaceholders, parseSecretsInitJson, validateSecretsInitNonInteractive, type SecretsInitJson } from "@clawdbot/clawdlets-core/lib/secrets-init";
 import { readYamlScalarFromMapping } from "@clawdbot/clawdlets-core/lib/yaml-scalar";
 import { getHostEncryptedAgeKeyFile, getHostExtraFilesKeyPath, getHostExtraFilesSecretsDir, getHostSecretsDir, getLocalOperatorAgeKeyPath } from "@clawdbot/clawdlets-core/repo-layout";
@@ -86,6 +88,23 @@ export const secretsInit = defineCommand({
     const tailnetMode = String(hostCfg.tailnet?.mode || "none");
     const requiresTailscaleAuthKey = tailnetMode === "tailscale";
 
+    const envPlan = buildFleetEnvSecretsPlan({ config: clawdletsConfig, hostName });
+    if (envPlan.missingEnvSecretMappings.length > 0) {
+      const first = envPlan.missingEnvSecretMappings[0]!;
+      const rec = getRecommendedSecretNameForEnvVar(first.envVar);
+      throw new Error(
+        `missing envSecrets mapping for ${first.envVar} (bot=${first.bot}); set: clawdlets config set --path fleet.envSecrets.${first.envVar} --value ${rec || "<secret_name>"} (or per-bot override under fleet.botOverrides.${first.bot}.envSecrets.${first.envVar})`,
+      );
+    }
+
+    const requiredEnvSecretNames = new Set<string>(envPlan.secretNamesRequired);
+    const envVarsBySecretName = envPlan.envVarsBySecretName;
+
+    const templateExtraSecrets: Record<string, string> = {};
+    for (const secretName of envPlan.secretNamesAll) {
+      templateExtraSecrets[secretName] = requiredEnvSecretNames.has(secretName) ? "<REPLACE_WITH_API_KEY>" : "<OPTIONAL>";
+    }
+
     const defaultSecretsJsonPath = path.join(layout.runtimeDir, "secrets.json");
     const defaultSecretsJsonDisplay = path.relative(process.cwd(), defaultSecretsJsonPath) || defaultSecretsJsonPath;
 
@@ -105,7 +124,7 @@ export const secretsInit = defineCommand({
           }
         }
       } else {
-        const template = buildSecretsInitTemplate({ bots, requiresTailscaleAuthKey });
+        const template = buildSecretsInitTemplate({ bots, requiresTailscaleAuthKey, secrets: templateExtraSecrets });
 
         if (!args.dryRun) {
           await ensureDir(path.dirname(defaultSecretsJsonPath));
@@ -219,41 +238,43 @@ export const secretsInit = defineCommand({
       await writeFileAtomic(extraFilesKeyPath, `${hostKeys.secretKey}\n`, { mode: 0o600 });
     }
 
-	    const readExistingScalar = async (secretName: string): Promise<string | null> => {
-	      const p0 = path.join(localSecretsDir, `${secretName}.yaml`);
-	      if (!fs.existsSync(p0)) return null;
-	      try {
-	        const decrypted = await sopsDecryptYamlFile({
-	          filePath: p0,
-	          ageKeyFile: operatorKeyPath,
-	          nix,
-	        });
-	        return readYamlScalarFromMapping({ yamlText: decrypted, key: secretName });
-	      } catch {
-	        return null;
-	      }
-	    };
+    const readExistingScalar = async (secretName: string): Promise<string | null> => {
+      const p0 = path.join(localSecretsDir, `${secretName}.yaml`);
+      if (!fs.existsSync(p0)) return null;
+      try {
+        const decrypted = await sopsDecryptYamlFile({
+          filePath: p0,
+          ageKeyFile: operatorKeyPath,
+          nix,
+        });
+        return readYamlScalarFromMapping({ yamlText: decrypted, key: secretName });
+      } catch {
+        return null;
+      }
+    };
 
     const flowSecrets = "secrets init";
     const values: {
       adminPassword: string;
       adminPasswordHash: string;
       tailscaleAuthKey: string;
-      zAiApiKey: string;
+      secrets: Record<string, string>;
       discordTokens: Record<string, string>;
-    } = { adminPassword: "", adminPasswordHash: "", tailscaleAuthKey: "", zAiApiKey: "", discordTokens: {} };
+    } = { adminPassword: "", adminPasswordHash: "", tailscaleAuthKey: "", secrets: {}, discordTokens: {} };
 
     if (interactive) {
       type Step =
         | { kind: "adminPassword" }
         | { kind: "tailscaleAuthKey" }
-        | { kind: "zAiApiKey" }
+        | { kind: "secret"; secretName: string }
         | { kind: "discordToken"; bot: string };
+
+      const requiredExtraSecrets = Array.from(requiredEnvSecretNames).sort();
 
       const allSteps: Step[] = [
         { kind: "adminPassword" },
         ...(requiresTailscaleAuthKey ? ([{ kind: "tailscaleAuthKey" }] as const) : []),
-        { kind: "zAiApiKey" },
+        ...requiredExtraSecrets.map((secretName) => ({ kind: "secret", secretName }) as const),
         ...bots.map((b) => ({ kind: "discordToken", bot: b }) as const),
       ];
 
@@ -266,8 +287,10 @@ export const secretsInit = defineCommand({
           });
         } else if (step.kind === "tailscaleAuthKey") {
           v = await p.password({ message: "Tailscale auth key (tailscale_auth_key) (required for non-interactive tailnet bootstrap)" });
-        } else if (step.kind === "zAiApiKey") {
-          v = await p.password({ message: "ZAI API key (z_ai_api_key) (optional)" });
+        } else if (step.kind === "secret") {
+          const envVars = envVarsBySecretName[step.secretName] || [];
+          const hint = envVars.length > 0 ? ` (env: ${envVars.join(", ")})` : "";
+          v = await p.password({ message: `Secret value (${step.secretName})${hint} (required by configured models)` });
         } else {
           v = await p.password({ message: `Discord token for ${step.bot} (discord_token_${step.bot}) (optional now, required to run)` });
         }
@@ -285,7 +308,7 @@ export const secretsInit = defineCommand({
         const s = String(v ?? "");
         if (step.kind === "adminPassword") values.adminPassword = s;
         else if (step.kind === "tailscaleAuthKey") values.tailscaleAuthKey = s;
-        else if (step.kind === "zAiApiKey") values.zAiApiKey = s;
+        else if (step.kind === "secret") values.secrets[step.secretName] = s;
         else values.discordTokens[step.bot] = s;
         i += 1;
       }
@@ -293,16 +316,19 @@ export const secretsInit = defineCommand({
       const input = readSecretsInitJson(String(fromJson));
       values.adminPasswordHash = input.adminPasswordHash;
       values.tailscaleAuthKey = input.tailscaleAuthKey || "";
-      values.zAiApiKey = input.zAiApiKey || "";
+      values.secrets = input.secrets || {};
       values.discordTokens = input.discordTokens || {};
     }
 
-    const requiredSecrets = [
+    const envSecretsToWrite = envPlan.secretNamesAll;
+    const requiredSecrets = Array.from(new Set([
       ...(requiresTailscaleAuthKey ? ["tailscale_auth_key"] : []),
       "admin_password_hash",
-      "z_ai_api_key",
+      ...envSecretsToWrite,
       ...bots.map((b) => `discord_token_${b}`),
-    ];
+    ]));
+
+    const isOptionalMarker = (v: string): boolean => String(v || "").trim() === "<OPTIONAL>";
 
     const resolvedValues: Record<string, string> = {};
     for (const secretName of requiredSecrets) {
@@ -326,11 +352,6 @@ export const secretsInit = defineCommand({
         continue;
       }
 
-      if (secretName === "z_ai_api_key") {
-        resolvedValues[secretName] = values.zAiApiKey.trim() ? values.zAiApiKey.trim() : existing ?? "<OPTIONAL>";
-        continue;
-      }
-
       if (secretName.startsWith("discord_token_")) {
         const bot = secretName.slice("discord_token_".length);
         const vv = values.discordTokens[bot]?.trim() || "";
@@ -341,7 +362,24 @@ export const secretsInit = defineCommand({
         continue;
       }
 
-      resolvedValues[secretName] = existing ?? "<FILL_ME>";
+      const vv = values.secrets?.[secretName]?.trim() || "";
+      const required = requiredEnvSecretNames.has(secretName);
+      if (vv && !(required && isOptionalMarker(vv))) {
+        resolvedValues[secretName] = vv;
+        continue;
+      }
+      if (existing && (!required || (!isPlaceholderSecretValue(existing) && !isOptionalMarker(existing) && existing.trim()))) {
+        resolvedValues[secretName] = existing;
+        continue;
+      }
+      if (required) {
+        const envVars = envVarsBySecretName[secretName] || [];
+        const envHint = envVars.length > 0 ? ` (env: ${envVars.join(", ")})` : "";
+        if (args.allowPlaceholders) resolvedValues[secretName] = "<FILL_ME>";
+        else throw new Error(`missing required secret: ${secretName}${envHint} (set it in --from-json.secrets or via interactive prompts)`);
+        continue;
+      }
+      resolvedValues[secretName] = "<OPTIONAL>";
     }
 
     if (!args.dryRun) {

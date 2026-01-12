@@ -92,11 +92,12 @@ describe("doctor", () => {
     await writeFile(operatorKey, "AGE-SECRET-KEY-TEST\n", "utf8");
 
     const clawdletsConfig = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       defaultHost: "clawdbot-fleet-host",
       baseFlake: "",
       fleet: {
         guildId: "",
+        envSecrets: { ZAI_API_KEY: "z_ai_api_key", Z_AI_API_KEY: "z_ai_api_key" },
         bots: ["alpha", "beta"],
         botOverrides: {},
         routingOverrides: {},
@@ -205,6 +206,7 @@ describe("doctor", () => {
     await writeFile(path.join(secretsDir, "admin_password_hash.yaml"), "admin_password_hash: y\nsops: {}\n", "utf8");
     await writeFile(path.join(secretsDir, "discord_token_alpha.yaml"), "discord_token_alpha: z\nsops: {}\n", "utf8");
     await writeFile(path.join(secretsDir, "discord_token_beta.yaml"), "discord_token_beta: z2\nsops: {}\n", "utf8");
+    await writeFile(path.join(secretsDir, "z_ai_api_key.yaml"), "z_ai_api_key: k\nsops: {}\n", "utf8");
 
     await writeFile(
       path.join(repoRoot, ".clawdlets", "extra-files", "clawdbot-fleet-host", "var", "lib", "sops-nix", "key.txt"),

@@ -5,6 +5,7 @@ import { defineCommand } from "citty";
 import YAML from "yaml";
 import { sopsDecryptYamlFile } from "@clawdbot/clawdlets-core/lib/sops";
 import { sanitizeOperatorId } from "@clawdbot/clawdlets-core/lib/identifiers";
+import { buildFleetEnvSecretsPlan } from "@clawdbot/clawdlets-core/lib/fleet-env-secrets";
 import { isPlaceholderSecretValue } from "@clawdbot/clawdlets-core/lib/secrets-init";
 import { getHostSecretsDir, getLocalOperatorAgeKeyPath } from "@clawdbot/clawdlets-core/repo-layout";
 import { loadHostContextOrExit } from "../../lib/context.js";
@@ -42,13 +43,17 @@ export const secretsVerify = defineCommand({
     const localDir = getHostSecretsDir(layout, hostName);
     const bots = config.fleet.bots;
 
+    const envPlan = buildFleetEnvSecretsPlan({ config, hostName });
+    const requiredEnvSecretNames = new Set<string>(envPlan.secretNamesRequired);
+
     const tailnetMode = String(hostCfg.tailnet?.mode || "none");
-    const requiredSecrets = [
+    const requiredSecrets = Array.from(new Set([
       ...(tailnetMode === "tailscale" ? ["tailscale_auth_key"] : []),
       "admin_password_hash",
       ...bots.map((b) => `discord_token_${b}`),
-    ];
-    const optionalSecrets = ["z_ai_api_key", "root_password_hash"];
+    ]));
+    const envSecrets = envPlan.secretNamesAll;
+    const optionalSecrets = ["root_password_hash"];
 
     type Result = { secret: string; status: "ok" | "missing" | "warn"; detail?: string };
     const results: Result[] = [];
@@ -57,7 +62,7 @@ export const secretsVerify = defineCommand({
       results.push({ secret: "SOPS_AGE_KEY_FILE", status: "missing", detail: operatorKeyPath });
     }
 
-    const verifyOne = async (secretName: string, optional: boolean) => {
+    const verifyOne = async (secretName: string, optional: boolean, allowOptionalMarker: boolean) => {
       const filePath = path.join(localDir, `${secretName}.yaml`);
       if (!fs.existsSync(filePath)) {
         results.push({ secret: secretName, status: optional ? "warn" : "missing", detail: `(missing: ${filePath})` });
@@ -73,6 +78,10 @@ export const secretsVerify = defineCommand({
         }
         const v = parsed[secretName];
         const value = typeof v === "string" ? v : v == null ? "" : String(v);
+        if (!allowOptionalMarker && value.trim() === "<OPTIONAL>") {
+          results.push({ secret: secretName, status: "missing", detail: "(placeholder: <OPTIONAL>)" });
+          return;
+        }
         if (!optional && isPlaceholderSecretValue(value)) {
           results.push({ secret: secretName, status: "missing", detail: `(placeholder: ${value.trim()})` });
           return;
@@ -94,8 +103,9 @@ export const secretsVerify = defineCommand({
     if (!fs.existsSync(localDir)) {
       results.push({ secret: "secrets.localDir", status: "missing", detail: localDir });
     } else {
-      for (const s of requiredSecrets) await verifyOne(s, false);
-      for (const s of optionalSecrets) await verifyOne(s, true);
+      for (const s of requiredSecrets) await verifyOne(s, false, false);
+      for (const s of envSecrets) await verifyOne(s, false, !requiredEnvSecretNames.has(s));
+      for (const s of optionalSecrets) await verifyOne(s, true, true);
     }
 
     if (args.json) {

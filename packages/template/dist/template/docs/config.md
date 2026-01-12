@@ -16,11 +16,12 @@ This file is **committed to git**. Secrets are not stored here (see `docs/secret
 
 Top-level:
 
-- `schemaVersion`: currently `3`
+- `schemaVersion`: currently `4`
 - `defaultHost` (optional): used when `--host` is omitted
 - `baseFlake` (optional): flake URI for remote builds (e.g. `github:<owner>/<repo>`)
   - if empty, CLI falls back to `git remote origin` (recommended)
 - `fleet.*`: bots + routing/skills overrides
+- `fleet.envSecrets`: env var -> sops secret name (used for LLM API keys + other secret env)
 - `hosts.<host>`: host entries keyed by host name
 
 Host entry (`hosts.<host>`):
@@ -40,11 +41,12 @@ Host entry (`hosts.<host>`):
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "defaultHost": "clawdbot-fleet-host",
   "baseFlake": "",
   "fleet": {
     "guildId": "",
+    "envSecrets": { "ZAI_API_KEY": "z_ai_api_key", "Z_AI_API_KEY": "z_ai_api_key" },
     "bots": ["maren", "sonja", "gunnar", "melinda"],
     "botOverrides": {},
     "routingOverrides": {},
@@ -67,4 +69,3 @@ Host entry (`hosts.<host>`):
   }
 }
 ```
-

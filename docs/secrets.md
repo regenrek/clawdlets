@@ -56,7 +56,10 @@ Fast fix: re-run `clawdlets secrets init` (it regenerates/upgrades `.sops.yaml`)
 
 - `tailscale_auth_key` (required when using Tailscale auto-join)
 - `discord_token_<bot>`
-- `z_ai_api_key` (Z.AI provider; mapped to ZAI_API_KEY/Z_AI_API_KEY env)
+- LLM API keys (configured via `fleet.envSecrets` in `infra/configs/clawdlets.json`):
+  - `z_ai_api_key` (Z.AI; env: `ZAI_API_KEY` + `Z_AI_API_KEY`)
+  - `anthropic_api_key` (Anthropic; env: `ANTHROPIC_API_KEY`)
+  - `openai_api_key` (OpenAI; env: `OPENAI_API_KEY` + `OPEN_AI_APIKEY`)
 
 Secret env vars are rendered into `/run/secrets/rendered/clawdbot-<bot>.env` and loaded
 via systemd `EnvironmentFile`.

@@ -3,15 +3,51 @@ import { z } from "zod";
 import { writeFileAtomic } from "./fs-safe.js";
 import type { RepoLayout } from "../repo-layout.js";
 import { getRepoLayout } from "../repo-layout.js";
-import { BotIdSchema, HostNameSchema, assertSafeHostName } from "./identifiers.js";
+import { BotIdSchema, EnvVarNameSchema, HostNameSchema, SecretNameSchema, assertSafeHostName } from "./identifiers.js";
 import { isValidTargetHost } from "./ssh-remote.js";
 
-export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 3 as const;
+export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 4 as const;
 
 const JsonObjectSchema: z.ZodType<Record<string, unknown>> = z.record(z.any());
 
+function validateEnvSecretsAtPath(params: { value: unknown; ctx: z.RefinementCtx; path: (string | number)[] }): void {
+  if (params.value == null) return;
+  if (typeof params.value !== "object" || Array.isArray(params.value)) {
+    params.ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: params.path,
+      message: "envSecrets must be an object mapping ENV_VAR -> secretName",
+    });
+    return;
+  }
+
+  for (const [rawK, rawV] of Object.entries(params.value as Record<string, unknown>)) {
+    const k = String(rawK ?? "").trim();
+    const v = typeof rawV === "string" ? rawV.trim() : rawV == null ? "" : String(rawV).trim();
+
+    const kOk = EnvVarNameSchema.safeParse(k);
+    if (!kOk.success) {
+      params.ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [...params.path, rawK],
+        message: kOk.error.issues[0]?.message || "invalid env var name",
+      });
+    }
+
+    const vOk = SecretNameSchema.safeParse(v);
+    if (!vOk.success) {
+      params.ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [...params.path, rawK],
+        message: vOk.error.issues[0]?.message || "invalid secret name",
+      });
+    }
+  }
+}
+
 const FleetSchema = z.object({
   guildId: z.string().trim().default(""),
+  envSecrets: z.record(EnvVarNameSchema, SecretNameSchema).default({}),
   bots: z
     .array(BotIdSchema)
     .default([])
@@ -100,6 +136,23 @@ export const ClawdletsConfigSchema = z.object({
       message: `defaultHost not found in hosts: ${cfg.defaultHost}`,
     });
   }
+
+  validateEnvSecretsAtPath({
+    value: (cfg as any).fleet?.envSecrets,
+    ctx,
+    path: ["fleet", "envSecrets"],
+  });
+
+  const botOverrides = (cfg as any).fleet?.botOverrides;
+  if (botOverrides && typeof botOverrides === "object" && !Array.isArray(botOverrides)) {
+    for (const [botId, overrides] of Object.entries(botOverrides as Record<string, unknown>)) {
+      validateEnvSecretsAtPath({
+        value: (overrides as any)?.envSecrets,
+        ctx,
+        path: ["fleet", "botOverrides", botId, "envSecrets"],
+      });
+    }
+  }
 });
 
 export type ClawdletsConfig = z.infer<typeof ClawdletsConfigSchema>;
@@ -117,6 +170,10 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
     baseFlake: "",
     fleet: {
       guildId: "",
+      envSecrets: {
+        ZAI_API_KEY: "z_ai_api_key",
+        Z_AI_API_KEY: "z_ai_api_key",
+      },
       bots,
       botOverrides: {},
       routingOverrides: {},

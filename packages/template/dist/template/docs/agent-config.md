@@ -71,10 +71,16 @@ Per-bot override:
 clawdlets config set --path fleet.botOverrides.melinda.passthrough.agents.defaults.modelPrimary --value zai/glm-4.7
 ```
 
-Provider API keys (via sops secret name):
+Provider API keys (env var -> sops secret name):
 
 ```bash
-clawdlets config set --path fleet.botOverrides.melinda.envSecrets.ZAI_API_KEY --value z_ai_api_key
+clawdlets config set --path fleet.envSecrets.ZAI_API_KEY --value z_ai_api_key
+clawdlets config set --path fleet.envSecrets.Z_AI_API_KEY --value z_ai_api_key
+
+clawdlets config set --path fleet.envSecrets.ANTHROPIC_API_KEY --value anthropic_api_key
+
+clawdlets config set --path fleet.envSecrets.OPENAI_API_KEY --value openai_api_key
+clawdlets config set --path fleet.envSecrets.OPEN_AI_APIKEY --value openai_api_key
 ```
 
 This renders into a per-bot env file and is loaded by systemd.
