@@ -14,23 +14,73 @@ type CreateSshKeyResponse = {
   ssh_key: HcloudSshKey;
 };
 
+export const HCLOUD_REQUEST_TIMEOUT_MS = 15_000;
+const HCLOUD_ERROR_BODY_LIMIT_BYTES = 64 * 1024;
+
+async function readResponseTextLimited(res: Response, limitBytes: number): Promise<string> {
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let out = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (!value || value.byteLength === 0) continue;
+    const nextTotal = total + value.byteLength;
+    if (nextTotal > limitBytes) {
+      const sliceLen = Math.max(0, limitBytes - total);
+      if (sliceLen > 0) {
+        out += decoder.decode(value.slice(0, sliceLen), { stream: true });
+      }
+      out += "...(truncated)";
+      await reader.cancel();
+      total = limitBytes;
+      break;
+    }
+    total = nextTotal;
+    out += decoder.decode(value, { stream: true });
+  }
+  out += decoder.decode();
+  return out;
+}
+
 async function hcloudRequest<T>(params: {
   token: string;
   method: "GET" | "POST";
   path: string;
   body?: unknown;
 }): Promise<{ ok: true; json: T } | { ok: false; status: number; bodyText: string }> {
-  const res = await fetch(`https://api.hetzner.cloud/v1${params.path}`, {
-    method: params.method,
-    headers: {
-      Authorization: `Bearer ${params.token}`,
-      "Content-Type": "application/json",
-    },
-    body: params.body ? JSON.stringify(params.body) : undefined,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, HCLOUD_REQUEST_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(`https://api.hetzner.cloud/v1${params.path}`, {
+      method: params.method,
+      headers: {
+        Authorization: `Bearer ${params.token}`,
+        "Content-Type": "application/json",
+      },
+      body: params.body ? JSON.stringify(params.body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    const bodyText = controller.signal.aborted
+      ? `request timed out after ${HCLOUD_REQUEST_TIMEOUT_MS}ms`
+      : err instanceof Error
+        ? err.message
+        : String(err);
+    return { ok: false, status: 0, bodyText };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
-    return { ok: false, status: res.status, bodyText: await res.text() };
+    const bodyText = await readResponseTextLimited(res, HCLOUD_ERROR_BODY_LIMIT_BYTES);
+    return { ok: false, status: res.status, bodyText };
   }
 
   return { ok: true, json: (await res.json()) as T };
