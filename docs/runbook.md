@@ -13,7 +13,7 @@ Protect `main` before first real deploy:
 If/when you want required status checks, re-run with explicit contexts:
 
 ```bash
-./scripts/gh-protect-main.sh --require-check "ci / node"
+./scripts/gh-protect-main.sh --require-check "ci / node" --require-check "trufflehog"
 ```
 
 ## Day 0 (bootstrap)
