@@ -57,7 +57,9 @@ export async function capture(
       env: opts.env,
       stdio: ["ignore", "pipe", "inherit"],
     });
-    child.stdout.on("data", (buf) => chunks.push(Buffer.from(buf)));
+    child.stdout.on("data", (buf) => {
+      chunks.push(Buffer.isBuffer(buf) ? buf : Buffer.from(buf));
+    });
     child.on("error", reject);
     child.on("exit", (code) => {
       if (code === 0) resolve(Buffer.concat(chunks).toString("utf8").trim());
@@ -81,7 +83,9 @@ export async function captureWithInput(
       env: opts.env,
       stdio: ["pipe", "pipe", "inherit"],
     });
-    child.stdout.on("data", (buf) => chunks.push(Buffer.from(buf)));
+    child.stdout.on("data", (buf) => {
+      chunks.push(Buffer.isBuffer(buf) ? buf : Buffer.from(buf));
+    });
     child.on("error", reject);
     child.stdin.write(input);
     child.stdin.end();
