@@ -2,6 +2,7 @@ import fs from "node:fs";
 import process from "node:process";
 import { defineCommand } from "citty";
 import { findRepoRoot } from "@clawdbot/clawdlets-core/lib/repo";
+import { looksLikeSshPrivateKey, parseSshPublicKeysFromText } from "@clawdbot/clawdlets-core/lib/ssh";
 import {
   assertSafeHostName,
   ClawdletsConfigSchema,
@@ -19,9 +20,19 @@ function parseBoolOrUndefined(v: unknown): boolean | undefined {
   throw new Error(`invalid boolean: ${String(v)} (use true/false)`);
 }
 
-function readFileTrimmed(filePath: string): string {
+function readSshPublicKeysFromFile(filePath: string): string[] {
+  const stat = fs.statSync(filePath);
+  if (!stat.isFile()) throw new Error(`not a file: ${filePath}`);
+  if (stat.size > 64 * 1024) throw new Error(`ssh key file too large (>64KB): ${filePath}`);
+
   const raw = fs.readFileSync(filePath, "utf8");
-  return raw.trim();
+  if (looksLikeSshPrivateKey(raw)) {
+    throw new Error(`refusing to read ssh private key (expected .pub): ${filePath}`);
+  }
+
+  const keys = parseSshPublicKeysFromText(raw);
+  if (keys.length === 0) throw new Error(`no ssh public keys found in file: ${filePath}`);
+  return keys;
 }
 
 function toStringArray(v: unknown): string[] {
@@ -105,13 +116,24 @@ const set = defineCommand({
     }
 
     if ((args as any)["clear-ssh-keys"]) next.sshAuthorizedKeys = [];
-    for (const file of toStringArray((args as any)["add-ssh-key-file"])) {
-      const v = readFileTrimmed(file);
-      if (v) next.sshAuthorizedKeys = Array.from(new Set([...next.sshAuthorizedKeys, v]));
-    }
-    for (const k of toStringArray((args as any)["add-ssh-key"])) {
-      const v = k.trim();
-      if (v) next.sshAuthorizedKeys = Array.from(new Set([...next.sshAuthorizedKeys, v]));
+    {
+      const keys = new Set<string>(next.sshAuthorizedKeys || []);
+
+      for (const file of toStringArray((args as any)["add-ssh-key-file"])) {
+        for (const k of readSshPublicKeysFromFile(file)) keys.add(k);
+      }
+
+      for (const raw of toStringArray((args as any)["add-ssh-key"])) {
+        if (!raw.trim()) continue;
+        if (looksLikeSshPrivateKey(raw)) {
+          throw new Error("refusing to add ssh private key (expected public key contents)");
+        }
+        const parsed = parseSshPublicKeysFromText(raw);
+        if (parsed.length === 0) throw new Error("invalid --add-ssh-key (expected ssh public key contents)");
+        for (const k of parsed) keys.add(k);
+      }
+
+      next.sshAuthorizedKeys = Array.from(keys);
     }
 
     const nextConfig = ClawdletsConfigSchema.parse({ ...config, hosts: { ...config.hosts, [hostName]: next } });

@@ -30,9 +30,10 @@ describe("tool helpers", () => {
       "<admin_password_hash>",
     );
 
-    expect(normalizeSshPublicKey("ssh-ed25519 AAAA test")).toBe("ssh-ed25519 AAAA");
+    const key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEaaaaaaaaaaaaaaaaaaaaaaa test";
+    expect(normalizeSshPublicKey(key)).toBe("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEaaaaaaaaaaaaaaaaaaaaaaa");
     expect(normalizeSshPublicKey("nope")).toBeNull();
-    expect(looksLikeSshKeyContents("ssh-ed25519 AAAA test")).toBe(true);
+    expect(looksLikeSshKeyContents(key)).toBe(true);
     expect(looksLikeSshKeyContents("/tmp/id_ed25519.pub")).toBe(false);
   });
 
