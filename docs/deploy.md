@@ -83,8 +83,11 @@ Pros:
 - Short-lived installation tokens (no manual PAT rotation).
 - Can scope to a single repo + Contents read-only.
 
-Why we’re not using it (yet):
-- Extra setup (App creation, install, key management, token minting).
+Where we use it today:
+- CI automation (dependency bump PRs) uses a GitHub App token so PR checks run normally (no `GITHUB_TOKEN` recursion trap).
+
+Where we’re *not* using it (yet):
+- Host-side rebuild automation (e.g. cron/comin pulling and switching) — we prefer pinned manual rebuilds for now.
 
 ### CI build + signed binary cache (Attic)
 

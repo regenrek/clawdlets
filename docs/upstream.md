@@ -4,7 +4,16 @@ We consume `nix-clawdbot` upstream; we do not re-implement its features here.
 
 ## Update procedure
 
-1) Bump the input:
+### Option A: automated weekly bump PR (recommended)
+
+This repo has a scheduled workflow that bumps `flake.lock` for `nix-clawdbot` and opens a PR.
+
+- Review the PR like any other change (CI + secret scan required).
+- If it breaks, close the PR (no impact) or revert the merge commit.
+
+### Option B: manual bump (one-off)
+
+1) Bump the input locally:
 
 ```bash
 nix flake lock --update-input nix-clawdbot

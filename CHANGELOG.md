@@ -5,6 +5,9 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 
 ## Unreleased
 
+### Changed
+- Workflow automation: `nix-clawdbot` bump PRs are created using a GitHub App token (so normal PR checks run) and are compatible with strict branch protection.
+
 ## [0.1.0] - 2026-01-11
 ### Added
 - Canonical config: `infra/configs/clawdlets.json` (single source of truth) + CLI subcommands (`config`, `host`, `fleet`).
