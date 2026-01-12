@@ -15,23 +15,23 @@ describe("stack", () => {
     execFileSync("git", ["remote", "add", "origin", "git@github.com:acme/origin-repo.git"], { cwd: repoRoot });
     await mkdir(path.join(repoRoot, ".clawdlets"), { recursive: true });
     await mkdir(path.join(repoRoot, ".clawdlets", "dist"), { recursive: true });
-    await writeFile(
-      path.join(repoRoot, ".clawdlets", "stack.json"),
-      JSON.stringify(
-        {
-          schemaVersion: 2,
-          base: { flake: "github:example/repo" },
-          envFile: ".env",
-          hosts: {
-            "clawdbot-fleet-host": {
-              flakeHost: "clawdbot-fleet-host",
-              targetHost: "admin@100.64.0.1",
-              hetzner: { serverType: "cx43" },
-              terraform: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
-              secrets: { localDir: "secrets/hosts/clawdbot-fleet-host", remoteDir: "/var/lib/clawdlets/secrets/hosts/clawdbot-fleet-host" },
-            },
-          },
-        },
+	    await writeFile(
+	      path.join(repoRoot, ".clawdlets", "stack.json"),
+	      JSON.stringify(
+	        {
+	          schemaVersion: 3,
+	          base: { flake: "github:example/repo" },
+	          envFile: ".env",
+	          hosts: {
+	            "clawdbot-fleet-host": {
+	              flakeHost: "clawdbot-fleet-host",
+	              targetHost: "admin@100.64.0.1",
+	              hetzner: { serverType: "cx43" },
+	              opentofu: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
+	              secrets: { localDir: "secrets/hosts/clawdbot-fleet-host", remoteDir: "/var/lib/clawdlets/secrets/hosts/clawdbot-fleet-host" },
+	            },
+	          },
+	        },
         null,
         2,
       ),
@@ -46,35 +46,35 @@ describe("stack", () => {
     } catch {}
   });
 
-  it("loads stack.json from default stack dir", async () => {
-    const { loadStack } = await import("../src/stack");
-    const { stack, layout } = loadStack({ cwd: repoRoot });
-    expect(layout.repoRoot).toBe(repoRoot);
-    expect(layout.stackFile.endsWith(path.join(".clawdlets", "stack.json"))).toBe(true);
-    expect(stack.schemaVersion).toBe(2);
-    expect(stack.base?.flake).toBe("github:example/repo");
-    expect(Object.keys(stack.hosts)).toEqual(["clawdbot-fleet-host"]);
-  });
+	  it("loads stack.json from default stack dir", async () => {
+	    const { loadStack } = await import("../src/stack");
+	    const { stack, layout } = loadStack({ cwd: repoRoot });
+	    expect(layout.repoRoot).toBe(repoRoot);
+	    expect(layout.stackFile.endsWith(path.join(".clawdlets", "stack.json"))).toBe(true);
+	    expect(stack.schemaVersion).toBe(3);
+	    expect(stack.base?.flake).toBe("github:example/repo");
+	    expect(Object.keys(stack.hosts)).toEqual(["clawdbot-fleet-host"]);
+	  });
 
   it("rejects unsafe host keys in stack.json", async () => {
     const stackPath = path.join(repoRoot, ".clawdlets", "stack.json");
     const original = await readFile(stackPath, "utf8");
-    await writeFile(
-      stackPath,
-      JSON.stringify(
-        {
-          schemaVersion: 2,
-          envFile: ".env",
-          hosts: {
-            "../pwn": {
-              flakeHost: "clawdbot-fleet-host",
-              targetHost: "admin@100.64.0.1",
-              hetzner: { serverType: "cx43" },
-              terraform: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
-              secrets: { localDir: "secrets/hosts/clawdbot-fleet-host", remoteDir: "/var/lib/clawdlets/secrets/hosts/clawdbot-fleet-host" },
-            },
-          },
-        },
+	    await writeFile(
+	      stackPath,
+	      JSON.stringify(
+	        {
+	          schemaVersion: 3,
+	          envFile: ".env",
+	          hosts: {
+	            "../pwn": {
+	              flakeHost: "clawdbot-fleet-host",
+	              targetHost: "admin@100.64.0.1",
+	              hetzner: { serverType: "cx43" },
+	              opentofu: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
+	              secrets: { localDir: "secrets/hosts/clawdbot-fleet-host", remoteDir: "/var/lib/clawdlets/secrets/hosts/clawdbot-fleet-host" },
+	            },
+	          },
+	        },
         null,
         2,
       ),
@@ -91,23 +91,23 @@ describe("stack", () => {
 
   it("loads env file relative to stack dir when stack.envFile is relative", async () => {
     const { loadStack, loadStackEnv } = await import("../src/stack");
-    await writeFile(
-      path.join(repoRoot, ".clawdlets", "stack.json"),
-      JSON.stringify(
-        {
-          schemaVersion: 2,
-          base: { flake: "github:example/repo" },
-          envFile: ".env",
-          hosts: {
-            "clawdbot-fleet-host": {
-              flakeHost: "clawdbot-fleet-host",
-              targetHost: "admin@100.64.0.1",
-              hetzner: { serverType: "cx43" },
-              terraform: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
-              secrets: { localDir: "secrets/hosts/clawdbot-fleet-host", remoteDir: "/var/lib/clawdlets/secrets/hosts/clawdbot-fleet-host" },
-            },
-          },
-        },
+	    await writeFile(
+	      path.join(repoRoot, ".clawdlets", "stack.json"),
+	      JSON.stringify(
+	        {
+	          schemaVersion: 3,
+	          base: { flake: "github:example/repo" },
+	          envFile: ".env",
+	          hosts: {
+	            "clawdbot-fleet-host": {
+	              flakeHost: "clawdbot-fleet-host",
+	              targetHost: "admin@100.64.0.1",
+	              hetzner: { serverType: "cx43" },
+	              opentofu: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
+	              secrets: { localDir: "secrets/hosts/clawdbot-fleet-host", remoteDir: "/var/lib/clawdlets/secrets/hosts/clawdbot-fleet-host" },
+	            },
+	          },
+	        },
         null,
         2,
       ),
@@ -122,22 +122,22 @@ describe("stack", () => {
   it("allows missing base.flake and can infer from git origin", async () => {
     const { loadStack, resolveStackBaseFlake } = await import("../src/stack");
     const stackPath = path.join(repoRoot, ".clawdlets", "stack.json");
-    await writeFile(
-      stackPath,
-      JSON.stringify(
-        {
-          schemaVersion: 2,
-          envFile: ".env",
-          hosts: {
-            "clawdbot-fleet-host": {
-              flakeHost: "clawdbot-fleet-host",
-              targetHost: "admin@100.64.0.1",
-              hetzner: { serverType: "cx43" },
-              terraform: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
-              secrets: { localDir: "secrets/hosts/clawdbot-fleet-host", remoteDir: "/var/lib/clawdlets/secrets/hosts/clawdbot-fleet-host" },
-            },
-          },
-        },
+	    await writeFile(
+	      stackPath,
+	      JSON.stringify(
+	        {
+	          schemaVersion: 3,
+	          envFile: ".env",
+	          hosts: {
+	            "clawdbot-fleet-host": {
+	              flakeHost: "clawdbot-fleet-host",
+	              targetHost: "admin@100.64.0.1",
+	              hetzner: { serverType: "cx43" },
+	              opentofu: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
+	              secrets: { localDir: "secrets/hosts/clawdbot-fleet-host", remoteDir: "/var/lib/clawdlets/secrets/hosts/clawdbot-fleet-host" },
+	            },
+	          },
+	        },
         null,
         2,
       ),

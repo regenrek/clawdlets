@@ -45,7 +45,7 @@ describe("doctor", () => {
     await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "docs"), { recursive: true });
     await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "infra", "configs"), { recursive: true });
     await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "infra", "nix", "hosts"), { recursive: true });
-    await mkdir(path.join(repoRoot, "infra", "terraform"), { recursive: true });
+    await mkdir(path.join(repoRoot, "infra", "opentofu"), { recursive: true });
     await mkdir(path.join(repoRoot, "infra", "configs"), { recursive: true });
     await mkdir(path.join(repoRoot, "infra", "nix", "hosts"), { recursive: true });
     await mkdir(path.join(repoRoot, ".clawdlets", "extra-files", "clawdbot-fleet-host", "var", "lib", "sops-nix"), { recursive: true });
@@ -105,18 +105,18 @@ describe("doctor", () => {
     await writeFile(
       path.join(repoRoot, ".clawdlets", "stack.json"),
       JSON.stringify(
-        {
-          schemaVersion: 2,
-          envFile: ".env",
-          hosts: {
-            "clawdbot-fleet-host": {
-              flakeHost: "clawdbot-fleet-host",
-              targetHost: "root@clawdbot-fleet-host",
-              hetzner: { serverType: "cx43" },
-              terraform: {
-                adminCidr: "203.0.113.10/32",
-                sshPubkeyFile: "id_ed25519.pub",
-              },
+	        {
+	          schemaVersion: 3,
+	          envFile: ".env",
+	          hosts: {
+	            "clawdbot-fleet-host": {
+	              flakeHost: "clawdbot-fleet-host",
+	              targetHost: "root@clawdbot-fleet-host",
+	              hetzner: { serverType: "cx43" },
+	              opentofu: {
+	                adminCidr: "203.0.113.10/32",
+	                sshPubkeyFile: "id_ed25519.pub",
+	              },
               secrets: {
                 localDir: "secrets/hosts/clawdbot-fleet-host",
                 remoteDir: "/var/lib/clawdlets/secrets/hosts/clawdbot-fleet-host",
@@ -342,24 +342,24 @@ describe("doctor", () => {
     await writeFile(hostPath, originalHost, "utf8");
   });
 
-  it("flags terraform ssh pubkey file contents as invalid", async () => {
-    const stackPath = path.join(repoRoot, ".clawdlets", "stack.json");
-    const originalStack = await readFile(stackPath, "utf8");
+	  it("flags opentofu ssh pubkey file contents as invalid", async () => {
+	    const stackPath = path.join(repoRoot, ".clawdlets", "stack.json");
+	    const originalStack = await readFile(stackPath, "utf8");
 
-    const raw = JSON.parse(originalStack) as any;
-    raw.hosts["clawdbot-fleet-host"].terraform.sshPubkeyFile = "ssh-ed25519 AAAATEST test";
-    await writeFile(stackPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+	    const raw = JSON.parse(originalStack) as any;
+	    raw.hosts["clawdbot-fleet-host"].opentofu.sshPubkeyFile = "ssh-ed25519 AAAATEST test";
+	    await writeFile(stackPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
 
     const { collectDoctorChecks } = await import("../src/doctor");
     const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host" });
-    expect(
-      checks.some(
-        (c) =>
-          c.label === "terraform ssh pubkey file" &&
-          c.status === "missing" &&
-          String(c.detail || "").includes("must be a path"),
-      ),
-    ).toBe(true);
+	    expect(
+	      checks.some(
+	        (c) =>
+	          c.label === "opentofu ssh pubkey file" &&
+	          c.status === "missing" &&
+	          String(c.detail || "").includes("must be a path"),
+	      ),
+	    ).toBe(true);
 
     await writeFile(stackPath, originalStack, "utf8");
   });

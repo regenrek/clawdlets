@@ -29,8 +29,8 @@ Canonical source: `clawdlets --help`.
 
 ## Infra ops
 
-- terraform apply: `clawdlets infra apply --public-ssh=true`
-- terraform lockdown: `clawdlets infra apply --public-ssh=false`
+- opentofu apply: `clawdlets infra apply --public-ssh=true`
+- opentofu lockdown: `clawdlets infra apply --public-ssh=false`
 
 ## Justfile shortcuts
 

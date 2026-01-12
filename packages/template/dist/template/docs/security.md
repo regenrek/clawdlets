@@ -10,7 +10,7 @@
 ## Boundaries
 
 **Public-safe repo**
-- Nix module + Terraform + docs + CLI
+- Nix module + OpenTofu + docs + CLI
 - No instance identifiers required
 
 **Local stack dir (gitignored)**

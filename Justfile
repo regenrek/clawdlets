@@ -30,7 +30,7 @@ bootstrap +args="":
 clawdlets-lockdown +args="":
   cd {{justfile_directory()}} && pnpm run clawdlets:lockdown -- {{args}}
 
-terraform-lockdown:
+tofu-lockdown:
   cd {{justfile_directory()}} && pnpm run clawdlets:infra -- apply --public-ssh=false
 
 stack-validate:

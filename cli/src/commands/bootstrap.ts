@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { defineCommand } from "citty";
-import { applyTerraformVars } from "@clawdbot/clawdlets-core/lib/terraform";
+import { applyOpenTofuVars } from "@clawdbot/clawdlets-core/lib/opentofu";
 import { resolveGitRev } from "@clawdbot/clawdlets-core/lib/git";
 import { capture, run } from "@clawdbot/clawdlets-core/lib/run";
 import { loadStack, loadStackEnv, resolveStackBaseFlake } from "@clawdbot/clawdlets-core/stack";
@@ -60,15 +60,15 @@ export const bootstrap = defineCommand({
     const githubToken = String(envLoaded.env.GITHUB_TOKEN || "").trim();
 
     const repoRoot = layout.repoRoot;
-    const terraformDir = path.join(repoRoot, "infra", "terraform");
+    const opentofuDir = path.join(repoRoot, "infra", "opentofu");
     const nixBin = envLoaded.env.NIX_BIN || "nix";
-    const sshPubkeyFile = expandPath(host.terraform.sshPubkeyFile);
+    const sshPubkeyFile = expandPath(host.opentofu.sshPubkeyFile);
 
-    await applyTerraformVars({
+    await applyOpenTofuVars({
       repoRoot,
       vars: {
         hcloudToken,
-        adminCidr: host.terraform.adminCidr,
+        adminCidr: host.opentofu.adminCidr,
         sshPubkeyFile,
         serverType: host.hetzner.serverType,
         publicSsh: true,
@@ -78,22 +78,21 @@ export const bootstrap = defineCommand({
       redact: [hcloudToken, githubToken].filter(Boolean) as string[],
     });
 
-    const terraformEnv: NodeJS.ProcessEnv = {
+    const tofuEnv: NodeJS.ProcessEnv = {
       ...process.env,
       HCLOUD_TOKEN: hcloudToken,
-      ADMIN_CIDR: host.terraform.adminCidr,
+      ADMIN_CIDR: host.opentofu.adminCidr,
       SSH_PUBKEY_FILE: sshPubkeyFile,
       SERVER_TYPE: host.hetzner.serverType,
-      NIXPKGS_ALLOW_UNFREE: "1",
     };
-    const terraformEnvWithFlakes = withFlakesEnv(terraformEnv);
+    const tofuEnvWithFlakes = withFlakesEnv(tofuEnv);
 
     const ipv4 = args.dryRun
-      ? "<terraform-output:ipv4>"
+      ? "<opentofu-output:ipv4>"
       : await capture(
           nixBin,
-          ["run", "--impure", "nixpkgs#terraform", "--", "output", "-raw", "ipv4"],
-          { cwd: terraformDir, env: terraformEnvWithFlakes, dryRun: args.dryRun },
+          ["run", "--impure", "nixpkgs#opentofu", "--", "output", "-raw", "ipv4"],
+          { cwd: opentofuDir, env: tofuEnvWithFlakes, dryRun: args.dryRun },
         );
 
     console.log(`Target IPv4: ${ipv4}`);
@@ -236,11 +235,11 @@ export const bootstrap = defineCommand({
     });
 
     if (!Boolean((args as any)["keep-public-ssh"])) {
-      await applyTerraformVars({
+      await applyOpenTofuVars({
         repoRoot,
         vars: {
           hcloudToken,
-          adminCidr: host.terraform.adminCidr,
+          adminCidr: host.opentofu.adminCidr,
           sshPubkeyFile,
           serverType: host.hetzner.serverType,
           publicSsh: false,

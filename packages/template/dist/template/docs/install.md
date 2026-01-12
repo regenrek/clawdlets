@@ -1,4 +1,4 @@
-# Install (Hetzner + nixos-anywhere + Terraform)
+# Install (Hetzner + nixos-anywhere + OpenTofu)
 
 ## Install clawdlets (CLI)
 
@@ -16,6 +16,7 @@ clawdlets --help
 - `.clawdlets/` (gitignored: stack + sops/age + tokens + extra-files)
 - `infra/disko/example.nix` (disk layout; device via `clawdlets.diskDevice`)
 - `infra/documents/*` (AGENTS/SOUL/TOOLS/IDENTITY seeded into workspaces)
+- `infra/opentofu/terraform.tfstate` (gitignored; keep single-operator policy)
 
 ## Hetzner Cloud specifics (non-negotiable)
 
@@ -155,8 +156,7 @@ just clawdlets-dev-install
 clawdlets --help
 ```
 
-Note: Terraform in nixpkgs is unfree (bsl11). `clawdlets bootstrap` automatically runs
-terraform with `NIXPKGS_ALLOW_UNFREE=1` + `--impure`.
+Note: clawdlets uses OpenTofu (`nixpkgs#opentofu`) for Hetzner provisioning.
 
 Hetzner SSH key: bootstrap ensures the SSH key exists in your Hetzner account and reuses
 it across re-provisions (no "SSH key not unique" failures).
@@ -269,11 +269,11 @@ If you have `just` installed:
 just install
 just doctor
 just bootstrap
-just terraform-lockdown
+just tofu-lockdown
 ```
 
-Terraform is modularized. Add a second host by instantiating another `bot_host`
-module in `infra/terraform/main.tf`.
+OpenTofu is modularized. Add a second host by instantiating another `bot_host`
+module in `infra/opentofu/main.tf`.
 
 ## Troubleshooting: SSH host key changed after reinstall
 
@@ -294,7 +294,7 @@ Note: `clawdlets bootstrap` clears these entries automatically after install.
 
 ## 2) Lock down to VPN-only
 
-After WireGuard works:
+After tailnet (Tailscale) works:
 
 1) Disable bootstrap SSH in canonical config:
 
@@ -308,7 +308,7 @@ clawdlets host set --public-ssh false
 clawdlets infra apply --public-ssh=false
 ```
 
-Optional: one-shot helper (rebuild over SSH + terraform apply):
+Optional: one-shot helper (rebuild over SSH + opentofu apply):
 
 ```bash
 clawdlets lockdown --target-host admin@10.44.0.1

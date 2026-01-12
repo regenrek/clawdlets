@@ -9,14 +9,14 @@ must
 
 rules
 - no destructive ops unless asked (rm/reset/clean/force-push)
-- no live infra unless asked (bootstrap/lockdown/terraform apply)
+- no live infra unless asked (bootstrap/lockdown/opentofu apply)
 
 never commit (secrets/instance)
 - .clawdlets/
 - .env files (local tokens)
 - age keys (operator or host)
 - sops config/keys
-- terraform state
+- opentofu state
 - ssh private keys
 - any discord tokens/guild ids/api keys
 
@@ -26,7 +26,7 @@ docs
 
 source of truth
 - cli/src and packages/core/src (not dist)
-- infra/nix and infra/terraform
+- infra/nix and infra/opentofu
 - docs/*.md and docs/docs.yaml
 
 generated (do not edit)

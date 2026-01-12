@@ -1,6 +1,6 @@
 import process from "node:process";
 import { defineCommand } from "citty";
-import { applyTerraformVars } from "@clawdbot/clawdlets-core/lib/terraform";
+import { applyOpenTofuVars } from "@clawdbot/clawdlets-core/lib/opentofu";
 import { resolveGitRev } from "@clawdbot/clawdlets-core/lib/git";
 import { expandPath } from "@clawdbot/clawdlets-core/lib/path-expand";
 import { loadStack, loadStackEnv, resolveStackBaseFlake } from "@clawdbot/clawdlets-core/stack";
@@ -43,7 +43,7 @@ export const lockdown = defineCommand({
     rev: { type: "string", description: "Git rev to pin (HEAD/sha/tag).", default: "HEAD" },
     ref: { type: "string", description: "Git ref to pin (branch or tag)." },
     skipRebuild: { type: "boolean", description: "Skip nixos-rebuild.", default: false },
-    skipTerraform: { type: "boolean", description: "Skip terraform apply.", default: false },
+    skipTofu: { type: "boolean", description: "Skip opentofu apply.", default: false },
     sshTty: { type: "boolean", description: "Allocate TTY for sudo prompts.", default: true },
     dryRun: { type: "boolean", description: "Print commands without executing.", default: false },
   },
@@ -103,14 +103,14 @@ export const lockdown = defineCommand({
       await sshRun(targetHost, remoteCmd, { tty: sudo && args.sshTty, dryRun: args.dryRun });
     }
 
-    if (!args.skipTerraform) {
+    if (!args.skipTofu) {
       if (!hcloudToken) throw new Error("missing HCLOUD_TOKEN (stack env)");
-      const sshPubkeyFile = expandPath(host.terraform.sshPubkeyFile);
-      await applyTerraformVars({
+      const sshPubkeyFile = expandPath(host.opentofu.sshPubkeyFile);
+      await applyOpenTofuVars({
         repoRoot: layout.repoRoot,
         vars: {
           hcloudToken,
-          adminCidr: host.terraform.adminCidr,
+          adminCidr: host.opentofu.adminCidr,
           sshPubkeyFile,
           serverType: host.hetzner.serverType,
           publicSsh: false,

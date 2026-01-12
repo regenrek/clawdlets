@@ -115,7 +115,7 @@ const stackInit = defineCommand({
       const githubToken = String(args.githubToken || process.env.GITHUB_TOKEN || "").trim();
 
       const stack = {
-        schemaVersion: 2,
+        schemaVersion: 3,
         ...(baseFlake ? { base: { flake: baseFlake } } : {}),
         envFile: ".env",
         hosts: {
@@ -123,7 +123,7 @@ const stackInit = defineCommand({
             flakeHost: host,
             ...(targetHostInput ? { targetHost: targetHostInput } : {}),
             hetzner: { serverType },
-            terraform: {
+            opentofu: {
               adminCidr,
               sshPubkeyFile,
             },
@@ -345,7 +345,7 @@ const stackInit = defineCommand({
     const baseFlake = String(answers.baseFlake || "").trim();
     const targetHostInput = String(answers.targetHost || "").trim();
     const stack = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       ...(baseFlake ? { base: { flake: baseFlake } } : {}),
       envFile: ".env",
       hosts: {
@@ -353,7 +353,7 @@ const stackInit = defineCommand({
           flakeHost: host,
           ...(targetHostInput ? { targetHost: targetHostInput } : {}),
           hetzner: { serverType: answers.serverType },
-          terraform: {
+          opentofu: {
             adminCidr: answers.adminCidr,
             sshPubkeyFile: answers.sshPubkeyFile,
           },
@@ -442,6 +442,95 @@ const stackSetTargetHost = defineCommand({
   },
 });
 
+const stackMigrate = defineCommand({
+  meta: {
+    name: "migrate",
+    description: "Upgrade legacy stack.json to the latest schema.",
+  },
+  args: {
+    stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
+    dryRun: { type: "boolean", description: "Print the migrated JSON without writing.", default: false },
+  },
+  async run({ args }) {
+    const layout = getStackLayout({ cwd: process.cwd(), stackDir: args.stackDir });
+    if (!fs.existsSync(layout.stackFile)) throw new Error(`missing stack file: ${layout.stackFile}`);
+
+    let rawParsed: any;
+    try {
+      rawParsed = JSON.parse(fs.readFileSync(layout.stackFile, "utf8"));
+    } catch {
+      throw new Error(`invalid JSON: ${layout.stackFile}`);
+    }
+
+    const schemaVersion = Number(rawParsed?.schemaVersion);
+    if (!Number.isFinite(schemaVersion)) throw new Error(`invalid stack.schemaVersion: ${String(rawParsed?.schemaVersion)}`);
+    if (schemaVersion === 3) {
+      console.log("ok: stack schemaVersion=3 (no changes)");
+      return;
+    }
+    if (schemaVersion !== 1 && schemaVersion !== 2) throw new Error(`unsupported stack.schemaVersion: ${String(rawParsed?.schemaVersion)}`);
+
+    const hosts = rawParsed?.hosts || {};
+    if (!hosts || typeof hosts !== "object" || Object.keys(hosts).length === 0) throw new Error("stack.hosts must not be empty");
+
+    const toDirSecrets = (secrets: any) => {
+      if (secrets?.localDir && secrets?.remoteDir) {
+        return { localDir: String(secrets.localDir), remoteDir: String(secrets.remoteDir) };
+      }
+      if (secrets?.localFile && secrets?.remoteFile) {
+        const localFile = String(secrets.localFile);
+        const remoteFile = String(secrets.remoteFile);
+        const localDir = localFile.replace(/\\.ya?ml$/i, "");
+        const remoteDir = remoteFile.replace(/\\.ya?ml$/i, "");
+        return { localDir, remoteDir };
+      }
+      throw new Error("invalid secrets config (expected localDir/remoteDir or localFile/remoteFile)");
+    };
+
+    const toOpenTofu = (h: any) => {
+      if (h?.opentofu?.adminCidr && h?.opentofu?.sshPubkeyFile) {
+        return {
+          adminCidr: String(h.opentofu.adminCidr),
+          sshPubkeyFile: String(h.opentofu.sshPubkeyFile),
+        };
+      }
+      if (h?.terraform?.adminCidr && h?.terraform?.sshPubkeyFile) {
+        return {
+          adminCidr: String(h.terraform.adminCidr),
+          sshPubkeyFile: String(h.terraform.sshPubkeyFile),
+        };
+      }
+      throw new Error("missing opentofu/terraform config (expected {adminCidr, sshPubkeyFile})");
+    };
+
+    const nextHosts = Object.fromEntries(
+      Object.entries(hosts).map(([hostName, h]) => {
+        const nextSecrets = toDirSecrets((h as any)?.secrets);
+        const nextOpentofu = toOpenTofu(h as any);
+        const { terraform: _terraform, opentofu: _opentofu, ...rest } = (h as any) || {};
+        return [hostName, { ...rest, opentofu: nextOpentofu, secrets: nextSecrets }];
+      }),
+    );
+
+    const { schemaVersion: _schemaVersion, ...restStack } = rawParsed || {};
+    const next = {
+      ...restStack,
+      schemaVersion: 3,
+      hosts: nextHosts,
+    };
+
+    StackSchema.parse(next);
+
+    if (args.dryRun) {
+      console.log(JSON.stringify(next, null, 2));
+      return;
+    }
+
+    await writeFileAtomic(layout.stackFile, `${JSON.stringify(next, null, 2)}\\n`);
+    console.log("ok: migrated stack.json to schemaVersion=3");
+  },
+});
+
 const stackValidate = defineCommand({
   meta: {
     name: "validate",
@@ -494,6 +583,7 @@ export const stack = defineCommand({
   },
   subCommands: {
     init: stackInit,
+    migrate: stackMigrate,
     "set-target-host": stackSetTargetHost,
     validate: stackValidate,
     print: stackPrint,

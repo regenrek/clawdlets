@@ -10,7 +10,7 @@ terraform {
 }
 
 # State migration: older versions of this repo managed the Hetzner SSH key as a
-# Terraform resource. That caused re-provisioning failures (409 uniqueness) and
+# OpenTofu/Terraform resource. That caused re-provisioning failures (409 uniqueness) and
 # could risk deleting a shared key on apply. We now pass `ssh_key_id` in.
 removed {
   from = hcloud_ssh_key.admin

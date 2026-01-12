@@ -169,24 +169,24 @@ export async function addDeployChecks(params: {
         params.push({ scope: "deploy", status: hostCfg.hetzner.serverType ? "ok" : "missing", label: "hetzner.serverType", detail: hostCfg.hetzner.serverType });
         params.push({
           scope: "deploy",
-          status: hostCfg.terraform.adminCidr ? "ok" : "missing",
-          label: "terraform.adminCidr",
-          detail: hostCfg.terraform.adminCidr,
+          status: hostCfg.opentofu.adminCidr ? "ok" : "missing",
+          label: "opentofu.adminCidr",
+          detail: hostCfg.opentofu.adminCidr,
         });
 
         {
-          const raw = hostCfg.terraform.sshPubkeyFile.trim();
+          const raw = hostCfg.opentofu.sshPubkeyFile.trim();
           if (looksLikeSshKeyContents(raw)) {
             params.push({
               scope: "deploy",
               status: "missing",
-              label: "terraform ssh pubkey file",
+              label: "opentofu ssh pubkey file",
               detail: "(must be a path, not key contents)",
             });
           } else {
             const expanded = expandPath(raw);
             const abs = path.isAbsolute(expanded) ? expanded : path.resolve(params.repoRoot, expanded);
-            params.push({ scope: "deploy", status: fs.existsSync(abs) ? "ok" : "missing", label: "terraform ssh pubkey file", detail: abs });
+            params.push({ scope: "deploy", status: fs.existsSync(abs) ? "ok" : "missing", label: "opentofu ssh pubkey file", detail: abs });
 
             const sshKey = fs.existsSync(abs) ? normalizeSshPublicKey(fs.readFileSync(abs, "utf8")) : null;
             if (sshKey && clawdletsHostCfg) {

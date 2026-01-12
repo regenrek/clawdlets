@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { defineCommand } from "citty";
-import { applyTerraformVars } from "@clawdbot/clawdlets-core/lib/terraform";
+import { applyOpenTofuVars } from "@clawdbot/clawdlets-core/lib/opentofu";
 import { expandPath } from "@clawdbot/clawdlets-core/lib/path-expand";
 import { loadStack, loadStackEnv } from "@clawdbot/clawdlets-core/stack";
 
@@ -15,7 +15,7 @@ function getHost(stackHosts: Record<string, unknown>, host: string): unknown {
 const infraApply = defineCommand({
   meta: {
     name: "apply",
-    description: "Apply Hetzner terraform for a host (public SSH toggle lives in server/lockdown).",
+    description: "Apply Hetzner OpenTofu for a host (public SSH toggle lives in server/lockdown).",
   },
   args: {
     stackDir: { type: "string", description: "Stack directory (default: .clawdlets)." },
@@ -36,14 +36,14 @@ const infraApply = defineCommand({
     const hcloudToken = String(envLoaded.env.HCLOUD_TOKEN || "").trim();
     if (!hcloudToken) throw new Error("missing HCLOUD_TOKEN (set it in stack env file)");
 
-    const sshPubkeyFile = expandPath(host.terraform.sshPubkeyFile);
+    const sshPubkeyFile = expandPath(host.opentofu.sshPubkeyFile);
     if (!fs.existsSync(sshPubkeyFile)) throw new Error(`ssh pubkey file not found: ${sshPubkeyFile}`);
 
-    await applyTerraformVars({
+    await applyOpenTofuVars({
       repoRoot: layout.repoRoot,
       vars: {
         hcloudToken,
-        adminCidr: host.terraform.adminCidr,
+        adminCidr: host.opentofu.adminCidr,
         sshPubkeyFile,
         serverType: host.hetzner.serverType,
         publicSsh: Boolean((args as any)["public-ssh"]),
@@ -53,15 +53,15 @@ const infraApply = defineCommand({
       redact: [hcloudToken, envLoaded.env.GITHUB_TOKEN].filter(Boolean) as string[],
     });
 
-    console.log(`ok: terraform applied for ${hostName}`);
-    console.log(`hint: outputs in ${path.join(layout.repoRoot, "infra", "terraform")}`);
+    console.log(`ok: opentofu applied for ${hostName}`);
+    console.log(`hint: outputs in ${path.join(layout.repoRoot, "infra", "opentofu")}`);
   },
 });
 
 export const infra = defineCommand({
   meta: {
     name: "infra",
-    description: "Infrastructure operations (Hetzner Terraform).",
+    description: "Infrastructure operations (Hetzner OpenTofu).",
   },
   subCommands: {
     apply: infraApply,

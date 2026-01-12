@@ -48,9 +48,9 @@ export async function addRepoChecks(params: {
 
   params.push({
     scope: "repo",
-    status: fs.existsSync(layout.terraformDir) ? "ok" : "missing",
-    label: "terraform dir",
-    detail: layout.terraformDir,
+    status: fs.existsSync(layout.opentofuDir) ? "ok" : "missing",
+    label: "opentofu dir",
+    detail: layout.opentofuDir,
   });
 
   const bundledSkills = loadKnownBundledSkills(repoRoot);

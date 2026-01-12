@@ -13,6 +13,6 @@
     pkgs.pnpm_10
     pkgs.ripgrep
     pkgs.sops
-    pkgs.terraform
+    pkgs.opentofu
   ];
 }

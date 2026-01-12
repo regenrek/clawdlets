@@ -12,6 +12,13 @@ Why:
 macOS note (Determinate Nix): if you see “restricted setting / not a trusted user” warnings during bootstrap,
 fix `trusted-users` once. See `docs/install.md`.
 
+## CI builds (Garnix)
+
+- `garnix.yaml` builds `.#packages.*` and `.#packages.x86_64-linux.default` (the default host system closure).
+- After merging to `main`, confirm the host build is green in Garnix before deploying.
+- On a host, verify caches:
+  - `nix show-config | rg 'substituters|trusted-public-keys'`
+
 ### 1) First install (provision + nixos-anywhere)
 
 Run:
@@ -46,7 +53,7 @@ clawdlets server rebuild --target-host admin@<tailscale-ip> --rev HEAD
 Notes:
 - `nixos-rebuild` runs on the host (your macOS machine doesn’t need it installed).
 - This keeps `GITHUB_TOKEN` off disk on the server (only in process env during the command).
-- Host Nix config includes the garnix cache (see `infra/nix/modules/clawdbot-fleet/impl.nix`), so updates should
+- Host Nix config includes the garnix cache (see `infra/nix/modules/clawdlets-host-baseline.nix`), so updates should
   substitute instead of rebuilding from source in normal cases.
 
 ### Bot egress control (recommended)

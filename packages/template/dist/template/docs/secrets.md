@@ -38,13 +38,14 @@ clawdlets secrets verify --host <host>
 If you previously used a single file per host (like `.clawdlets/secrets/hosts/clawdbot-fleet-host.yaml`) and/or your `.clawdlets/stack.json` is `schemaVersion: 1`:
 
 ```bash
+clawdlets stack migrate
 clawdlets secrets migrate --host <host>
 ```
 
 Notes:
 - Refuses to overwrite non-empty target dirs unless you pass `--yes`.
 - Renames legacy secrets files to `*.bak*` (no delete).
-- Upgrades `.clawdlets/stack.json` to `schemaVersion: 2` (and upgrades all hosts’ `secrets.*` fields).
+- Upgrades `.clawdlets/stack.json` to `schemaVersion: 3` (and upgrades all hosts’ `secrets.*` + `opentofu.*` fields).
 
 After migrating:
 

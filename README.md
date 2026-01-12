@@ -27,7 +27,7 @@ Goal: deploy a fresh Hetzner server with this repo (no leaked secrets).
 
 Constraints:
 - do not commit any instance data; keep everything in .clawdlets/ (gitignored)
-- do not run live actions unless I confirm (bootstrap/lockdown/terraform apply)
+- do not run live actions unless I confirm (bootstrap/lockdown/opentofu apply)
 - no shims/workarounds; fix root cause; single source of truth
 
 What I want:

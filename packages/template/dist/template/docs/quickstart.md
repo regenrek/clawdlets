@@ -25,8 +25,8 @@ If you’re developing inside this monorepo, use the pnpm wrappers (example): `p
 - `clawdlets doctor --scope deploy`: deploy preflight (fails on missing).
 - `clawdlets doctor --scope deploy --strict`: lockdown gate (fails on warn/missing).
 - `clawdlets secrets init`: generates age keys + `.clawdlets/extra-files/<host>/.../key.txt` + encrypts `.clawdlets/secrets/hosts/<host>/*.yaml`.
-- `clawdlets bootstrap`: runs Terraform + `nixos-anywhere` install (prints target IPv4; clears stale `known_hosts`).
-- `clawdlets infra apply`: terraform apply only (bootstrap SSH toggle).
+- `clawdlets bootstrap`: runs OpenTofu + `nixos-anywhere` install (prints target IPv4; clears stale `known_hosts`).
+- `clawdlets infra apply`: opentofu apply only (bootstrap SSH toggle).
 - `clawdlets lockdown`: rebuild over VPN/tailnet and remove public SSH from Hetzner firewall.
 - `clawdlets server <cmd>`: run server-side operations over SSH (`status`, `logs`, `restart`, `rebuild`).
 

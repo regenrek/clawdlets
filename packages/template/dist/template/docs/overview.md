@@ -7,13 +7,13 @@ Everything instance-specific (tokens/keys/IPs) lives in **`.clawdlets/`** (gitig
 ## What lives where
 
 **In git**
-- `infra/`: NixOS + Terraform + fleet module
+- `infra/`: NixOS + OpenTofu + fleet module
 - `docs/`: operating manual
 - `cli/`: `clawdlets` (single entrypoint)
 - `packages/core/`: shared logic (CLI + future UI)
 
 **Not in git (`.clawdlets/`)**
-- `stack.json`: instance config (hosts, flake base, terraform inputs)
+- `stack.json`: instance config (hosts, flake base, opentofu inputs)
 - `.env`: local tokens needed for provisioning (Hetzner, optional GitHub)
 - `secrets/`: sops/age keys + encrypted host secrets
 - `extra-files/`: files injected during `nixos-anywhere` (host age key + host secrets)
@@ -55,7 +55,7 @@ clawdlets secrets init
 clawdlets doctor --scope deploy
 ```
 
-5) **Provision + install (Terraform + nixos-anywhere)**
+5) **Provision + install (OpenTofu + nixos-anywhere)**
 ```bash
 clawdlets bootstrap
 ```

@@ -15,7 +15,7 @@ Fleet/host config in git lives in `infra/configs/clawdlets.json`.
 
 Top-level:
 
-- `schemaVersion`: currently `2`
+- `schemaVersion`: currently `3`
 - `base.flake` (optional): base flake URI (usually `github:<owner>/<repo>`). If unset, `clawdlets` tries to infer it from `git remote origin`.
 - `envFile`: relative to `.clawdlets/` (default `.env`)
 - `hosts.<name>`: host entries keyed by stack host name
@@ -25,8 +25,8 @@ Host entry (`hosts.<name>`):
 - `flakeHost`: nixosConfiguration name (often same as host key)
 - `targetHost` (optional): SSH target (e.g. `botsmj` or `admin@100.x`). You can skip this until after bootstrap.
 - `hetzner.serverType`: e.g. `cx43` (x86_64 only: use `CX*`/`CPX*`/`CCX*`, not `CAX*`). See https://www.hetzner.com/de/cloud/
-- `terraform.adminCidr`: CIDR allowed for bootstrap SSH rule (e.g. `203.0.113.10/32`)
-- `terraform.sshPubkeyFile`: local path to `.pub`
+- `opentofu.adminCidr`: CIDR allowed for bootstrap SSH rule (e.g. `203.0.113.10/32`)
+- `opentofu.sshPubkeyFile`: local path to `.pub`
 - `secrets.localDir`: relative to `.clawdlets/` (directory of encrypted sops YAML files)
 - `secrets.remoteDir`: absolute path on server (directory; used by sops-nix)
 
@@ -34,14 +34,14 @@ Host entry (`hosts.<name>`):
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "envFile": ".env",
   "hosts": {
     "clawdbot-fleet-host": {
       "flakeHost": "clawdbot-fleet-host",
       "targetHost": "botsmj",
       "hetzner": { "serverType": "cx43" },
-      "terraform": {
+      "opentofu": {
         "adminCidr": "203.0.113.10/32",
         "sshPubkeyFile": "~/.ssh/id_ed25519.pub"
       },

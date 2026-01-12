@@ -7,7 +7,7 @@ import { tryGetOriginFlake } from "./lib/git.js";
 import { findRepoRoot } from "./lib/repo.js";
 import { SafeHostNameSchema } from "./lib/clawdlets-config.js";
 
-export const STACK_SCHEMA_VERSION = 2 as const;
+export const STACK_SCHEMA_VERSION = 3 as const;
 
 const HetznerSchema = z.object({
   serverType: z.string().trim().min(1),
@@ -17,7 +17,7 @@ const HostSchema = z.object({
   flakeHost: z.string().trim().min(1),
   targetHost: z.string().trim().min(1).optional(),
   hetzner: HetznerSchema,
-  terraform: z.object({
+  opentofu: z.object({
     adminCidr: z.string().trim().min(1),
     sshPubkeyFile: z.string().trim().min(1),
   }),
@@ -125,8 +125,8 @@ export function loadStackEnv(params: { cwd: string; stackDir?: string; envFile?:
   };
 }
 
-export function resolveHostTerraformSshPubkeyFile(host: StackHost): string {
-  const raw = host.terraform.sshPubkeyFile.trim();
+export function resolveHostOpenTofuSshPubkeyFile(host: StackHost): string {
+  const raw = host.opentofu.sshPubkeyFile.trim();
   const expanded = expandPath(raw);
   return path.isAbsolute(expanded) ? expanded : path.resolve(process.cwd(), expanded);
 }

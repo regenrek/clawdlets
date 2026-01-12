@@ -4,11 +4,11 @@
 # local env vars
 .env
 
-# terraform
-infra/terraform/.terraform/
-infra/terraform/*.tfstate
-infra/terraform/*.tfstate.*
-infra/terraform/*.tfplan
+# opentofu
+infra/opentofu/.terraform/
+infra/opentofu/*.tfstate
+infra/opentofu/*.tfstate.*
+infra/opentofu/*.tfplan
 terraform.tfstate
 terraform.tfstate.*
 

@@ -5,14 +5,14 @@ import { run } from "./run.js";
 import type { LoadEnvResult } from "./env.js";
 import { withFlakesEnv } from "./nix-flakes.js";
 
-export type TerraformApplyParams = {
+export type OpenTofuApplyParams = {
   loaded: LoadEnvResult;
   serverType?: string;
   publicSsh: boolean;
   dryRun?: boolean;
 };
 
-export type TerraformApplyVars = {
+export type OpenTofuApplyVars = {
   hcloudToken: string;
   adminCidr: string;
   sshPubkeyFile: string;
@@ -20,15 +20,15 @@ export type TerraformApplyVars = {
   publicSsh: boolean;
 };
 
-export async function applyTerraformVars(params: {
+export async function applyOpenTofuVars(params: {
   repoRoot: string;
-  vars: TerraformApplyVars;
+  vars: OpenTofuApplyVars;
   nixBin?: string;
   dryRun?: boolean;
   redact?: string[];
 }): Promise<void> {
   const repoRoot = params.repoRoot;
-  const terraformDir = path.join(repoRoot, "infra", "terraform");
+  const opentofuDir = path.join(repoRoot, "infra", "opentofu");
 
   const resolvedServerType = params.vars.serverType?.trim() || "";
   const env: NodeJS.ProcessEnv = {
@@ -40,23 +40,22 @@ export async function applyTerraformVars(params: {
   };
 
   const nixBin = params.nixBin || "nix";
-  const terraformEnv = {
+  const tofuEnv = {
     ...env,
-    NIXPKGS_ALLOW_UNFREE: String(env.NIXPKGS_ALLOW_UNFREE || "").trim() || "1",
   };
-  const terraformEnvWithFlakes = withFlakesEnv(terraformEnv);
-  const terraformArgs = (tfArgs: string[]): string[] => [
+  const tofuEnvWithFlakes = withFlakesEnv(tofuEnv);
+  const tofuArgs = (tfArgs: string[]): string[] => [
     "run",
     "--impure",
-    "nixpkgs#terraform",
+    "nixpkgs#opentofu",
     "--",
     ...tfArgs,
   ];
   const redact = (params.redact || []).filter((value) => Boolean(value && value.trim()));
 
-  await run(nixBin, terraformArgs(["init", "-input=false"]), {
-    cwd: terraformDir,
-    env: terraformEnvWithFlakes,
+  await run(nixBin, tofuArgs(["init", "-input=false"]), {
+    cwd: opentofuDir,
+    env: tofuEnvWithFlakes,
     dryRun: params.dryRun,
     redact,
   });
@@ -85,17 +84,17 @@ export async function applyTerraformVars(params: {
   ];
   if (env.SERVER_TYPE) tfApplyArgs.push("-var", `server_type=${env.SERVER_TYPE}`);
 
-  await run(nixBin, terraformArgs(tfApplyArgs), {
-    cwd: terraformDir,
-    env: terraformEnvWithFlakes,
+  await run(nixBin, tofuArgs(tfApplyArgs), {
+    cwd: opentofuDir,
+    env: tofuEnvWithFlakes,
     dryRun: params.dryRun,
     redact,
   });
 }
 
-export async function applyTerraform(params: TerraformApplyParams): Promise<void> {
+export async function applyOpenTofu(params: OpenTofuApplyParams): Promise<void> {
   const resolvedServerType = params.serverType?.trim() || params.loaded.env.SERVER_TYPE || "";
-  const vars: TerraformApplyVars = {
+  const vars: OpenTofuApplyVars = {
     hcloudToken: params.loaded.env.HCLOUD_TOKEN,
     adminCidr: params.loaded.env.ADMIN_CIDR,
     sshPubkeyFile: params.loaded.env.SSH_PUBKEY_FILE,
@@ -105,7 +104,7 @@ export async function applyTerraform(params: TerraformApplyParams): Promise<void
   const redact = [params.loaded.env.HCLOUD_TOKEN, params.loaded.env.GITHUB_TOKEN].filter(
     (value): value is string => Boolean(value && value.trim()),
   );
-  await applyTerraformVars({
+  await applyOpenTofuVars({
     repoRoot: params.loaded.repoRoot,
     vars,
     nixBin: params.loaded.env.NIX_BIN || "nix",

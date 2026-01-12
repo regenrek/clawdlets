@@ -11,15 +11,13 @@ ssh-keygen -R "[<ipv4>]:22" || true
 
 `clawdlets bootstrap` also clears known_hosts entries.
 
-## Terraform unfree error (terraform is BSL)
+## OpenTofu troubleshooting
 
-If you run terraform via nix directly:
+Run OpenTofu via nix directly (example plan):
 
 ```bash
-NIXPKGS_ALLOW_UNFREE=1 nix run --impure nixpkgs#terraform -- -chdir=infra/terraform plan
+nix run --impure nixpkgs#opentofu -- -chdir=infra/opentofu plan
 ```
-
-`clawdlets infra apply` already sets allow-unfree.
 
 ## GitHub flake fetch 404
 

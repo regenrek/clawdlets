@@ -7,7 +7,7 @@ export type RepoLayout = {
   stackDir: string;
 
   infraDir: string;
-  terraformDir: string;
+  opentofuDir: string;
   configsDir: string;
   clawdletsConfigPath: string;
   fleetConfigPath: string;
@@ -26,7 +26,7 @@ export type RepoLayout = {
 export function getRepoLayout(repoRoot: string, stackDir?: string): RepoLayout {
   const resolvedStackDir = stackDir ?? path.join(repoRoot, ".clawdlets");
   const infraDir = path.join(repoRoot, "infra");
-  const terraformDir = path.join(infraDir, "terraform");
+  const opentofuDir = path.join(infraDir, "opentofu");
   const configsDir = path.join(infraDir, "configs");
   const clawdletsConfigPath = path.join(configsDir, "clawdlets.json");
   const fleetConfigPath = path.join(configsDir, "fleet.nix");
@@ -43,7 +43,7 @@ export function getRepoLayout(repoRoot: string, stackDir?: string): RepoLayout {
     repoRoot,
     stackDir: resolvedStackDir,
     infraDir,
-    terraformDir,
+    opentofuDir,
     configsDir,
     clawdletsConfigPath,
     fleetConfigPath,

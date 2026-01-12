@@ -44,7 +44,7 @@ export const secretsMigrate = defineCommand({
 
     const stackObj = stackRaw as { schemaVersion?: unknown; envFile?: unknown; hosts?: Record<string, any> };
     const schemaVersion = Number(stackObj.schemaVersion);
-    if (!Number.isFinite(schemaVersion) || (schemaVersion !== 1 && schemaVersion !== 2)) {
+    if (!Number.isFinite(schemaVersion) || (schemaVersion !== 1 && schemaVersion !== 2 && schemaVersion !== 3)) {
       throw new Error(`unsupported stack.schemaVersion: ${String(stackObj.schemaVersion)}`);
     }
     const hosts = stackObj.hosts || {};
@@ -74,14 +74,6 @@ export const secretsMigrate = defineCommand({
     const hostKeys = parseAgeKeyFile(fs.readFileSync(hostKeyPath, "utf8"));
     if (!hostKeys.publicKey) throw new Error(`host age key missing public key comment: ${hostKeyPath}`);
 
-    const oldLocalFile = (() => {
-      if (schemaVersion === 1) {
-        const localFile = host.secrets?.localFile;
-        if (localFile) return path.join(stackDir, String(localFile));
-      }
-      return path.join(stackDir, "secrets", "hosts", `${hostName}.yaml`);
-    })();
-
     const toDirSecrets = (secrets: any) => {
       if (secrets?.localDir && secrets?.remoteDir) {
         return { localDir: String(secrets.localDir), remoteDir: String(secrets.remoteDir) };
@@ -96,15 +88,30 @@ export const secretsMigrate = defineCommand({
       throw new Error("invalid secrets config (expected localDir/remoteDir or localFile/remoteFile)");
     };
 
-    const nextHosts =
-      schemaVersion === 2
-        ? hosts
-        : Object.fromEntries(
-            Object.entries(hosts).map(([name, h]) => {
-              const next = toDirSecrets(h?.secrets);
-              return [name, { ...(h as any), secrets: next }];
-            }),
-          );
+    const toOpenTofu = (name: string, h: any) => {
+      if (h?.opentofu?.adminCidr && h?.opentofu?.sshPubkeyFile) {
+        return {
+          adminCidr: String(h.opentofu.adminCidr),
+          sshPubkeyFile: String(h.opentofu.sshPubkeyFile),
+        };
+      }
+      if (h?.terraform?.adminCidr && h?.terraform?.sshPubkeyFile) {
+        return {
+          adminCidr: String(h.terraform.adminCidr),
+          sshPubkeyFile: String(h.terraform.sshPubkeyFile),
+        };
+      }
+      throw new Error(`host ${name} missing opentofu/terraform config (expected {adminCidr, sshPubkeyFile})`);
+    };
+
+    const nextHosts = Object.fromEntries(
+      Object.entries(hosts).map(([name, h]) => {
+        const nextSecrets = toDirSecrets((h as any)?.secrets);
+        const nextOpentofu = toOpenTofu(name, h as any);
+        const { terraform: _terraform, opentofu: _opentofu, ...rest } = (h as any) || {};
+        return [name, { ...rest, opentofu: nextOpentofu, secrets: nextSecrets }];
+      }),
+    );
 
     const nextHost = nextHosts[hostName];
     if (!nextHost) throw new Error(`unknown host after upgrade: ${hostName}`);
@@ -118,20 +125,32 @@ export const secretsMigrate = defineCommand({
 
     const nix = { nixBin: String(env.NIX_BIN || process.env.NIX_BIN || "nix").trim() || "nix", cwd: repoRoot, dryRun: Boolean(args.dryRun) } as const;
 
+    const legacyLocalFiles = (() => {
+      const candidates: string[] = [];
+      const configured = host?.secrets?.localFile ? path.join(stackDir, String(host.secrets.localFile)) : "";
+      if (configured) candidates.push(configured);
+      candidates.push(path.join(stackDir, "secrets", "hosts", `${hostName}.yaml`));
+      candidates.push(path.join(stackDir, "secrets", "hosts", `${hostName}.yml`));
+      return candidates.filter((v, i) => Boolean(v && v.trim()) && candidates.indexOf(v) === i);
+    })();
+    const legacyLocalFile = legacyLocalFiles.find((f) => fs.existsSync(f)) || legacyLocalFiles[0]!;
+
     const planned: string[] = [];
     planned.push(stackFile);
     planned.push(sopsConfigPath);
     planned.push(localSecretsDir);
     planned.push(extraFilesSecretsDir);
-    if (fs.existsSync(oldLocalFile)) planned.push(oldLocalFile);
+    if (fs.existsSync(legacyLocalFile)) planned.push(legacyLocalFile);
 
     const dirNonEmpty = (dir: string) => fs.existsSync(dir) && fs.readdirSync(dir).some((n) => n && n !== "." && n !== "..");
     if (dirNonEmpty(localSecretsDir) && !args.yes) throw new Error(`target secrets dir not empty (pass --yes): ${localSecretsDir}`);
     if (dirNonEmpty(extraFilesSecretsDir) && !args.yes) throw new Error(`target extra-files secrets dir not empty (pass --yes): ${extraFilesSecretsDir}`);
 
-    const haveOld = fs.existsSync(oldLocalFile);
+    const haveOld = fs.existsSync(legacyLocalFile);
     const haveNew = dirNonEmpty(localSecretsDir);
-    if (!haveOld && !haveNew) throw new Error(`no legacy secrets file found: ${oldLocalFile}`);
+    if (!haveOld && !haveNew) {
+      throw new Error(`no legacy secrets file found (checked: ${legacyLocalFiles.map((f) => path.relative(stackDir, f)).join(", ")})`);
+    }
 
     const nextSops1 = upsertSopsCreationRule({
       existingYaml: existingSops,
@@ -139,8 +158,7 @@ export const secretsMigrate = defineCommand({
       ageRecipients: [hostKeys.publicKey, operatorKeys.publicKey],
     });
     const nextSops1b = removeSopsCreationRule({ existingYaml: nextSops1, pathRegex: sopsPathRegexForPathSuffix(`secrets/hosts/${hostName}.yaml`) });
-    const nextSops1c = removeSopsCreationRule({ existingYaml: nextSops1b, pathRegex: sopsPathRegexForPathSuffix(`.clawdlets/secrets/hosts/${hostName}.yaml`) });
-    const nextSops2 = removeSopsCreationRule({ existingYaml: nextSops1c, pathRegex: sopsPathRegexForDirFiles(`.clawdlets/secrets/hosts/${hostName}`, "yaml") });
+    const nextSops2 = removeSopsCreationRule({ existingYaml: nextSops1b, pathRegex: sopsPathRegexForDirFiles(`.clawdlets/secrets/hosts/${hostName}`, "yaml") });
 
     if (args.dryRun) {
       console.log("planned:");
@@ -153,10 +171,10 @@ export const secretsMigrate = defineCommand({
     await ensureDir(extraFilesSecretsDir);
 
     if (haveOld) {
-      const decrypted = await sopsDecryptYamlFile({ filePath: oldLocalFile, ageKeyFile: operatorKeyPath, nix });
+      const decrypted = await sopsDecryptYamlFile({ filePath: legacyLocalFile, ageKeyFile: operatorKeyPath, nix });
       const parsed = (YAML.parse(decrypted) as Record<string, unknown>) || {};
       const entries = Object.entries(parsed).filter(([k]) => k !== "sops");
-      if (entries.length === 0) throw new Error(`no secrets found in ${oldLocalFile}`);
+      if (entries.length === 0) throw new Error(`no secrets found in ${legacyLocalFile}`);
 
       for (const [k, v] of entries) {
         if (!k) continue;
@@ -169,8 +187,8 @@ export const secretsMigrate = defineCommand({
         await writeFileAtomic(path.join(extraFilesSecretsDir, `${secretName}.yaml`), encrypted, { mode: 0o400 });
       }
 
-      const oldBackup = nextBackupPath(oldLocalFile);
-      fs.renameSync(oldLocalFile, oldBackup);
+      const oldBackup = nextBackupPath(legacyLocalFile);
+      fs.renameSync(legacyLocalFile, oldBackup);
 
       const oldExtraFile = path.join(stackDir, "extra-files", hostName, "var/lib/clawdlets/secrets/hosts", `${hostName}.yaml`);
       if (fs.existsSync(oldExtraFile)) fs.renameSync(oldExtraFile, nextBackupPath(oldExtraFile));
@@ -178,16 +196,14 @@ export const secretsMigrate = defineCommand({
 
     await writeFileAtomic(sopsConfigPath, nextSops2, { mode: 0o644 });
 
-    const nextStack =
-      schemaVersion === 2
-        ? stackRaw
-        : {
-            ...(stackRaw as any),
-            schemaVersion: 2,
-            hosts: {
-              ...(nextHosts as any),
-            },
-          };
+    const { schemaVersion: _schemaVersion, ...restStack } = (stackRaw as any) || {};
+    const nextStack = {
+      ...restStack,
+      schemaVersion: 3,
+      hosts: {
+        ...(nextHosts as any),
+      },
+    };
     await writeFileAtomic(stackFile, `${JSON.stringify(nextStack, null, 2)}\n`);
 
     console.log(`ok: migrated secrets to ${localSecretsDir}`);
