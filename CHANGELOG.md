@@ -5,8 +5,20 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 
 ## Unreleased
 
+### Added
+- Base flake resolution: `infra/configs/clawdlets.json.baseFlake` (fallback: `git remote origin`) used by deploy commands (`bootstrap`, `lockdown`, `server rebuild`).
+- Non-interactive secrets provisioning: `clawdlets secrets init --from-json <path|->`.
+- New docs: `docs/config.md` (canonical config + host knobs).
+
 ### Changed
 - Workflow automation: `nix-clawdbot` bump PRs are created using a GitHub App token (so normal PR checks run) and are compatible with strict branch protection.
+- Repo layout: runtime state is `.clawdlets/` (gitignored); repo-canonical secrets are sops-encrypted in `secrets/`.
+- Config schema bump: `infra/configs/clawdlets.json` schemaVersion `3` (host deploy knobs moved into canonical config).
+- CLI flag rename: `--stack-dir` → `--runtime-dir`.
+
+### Removed
+- Stack concept + `clawdlets stack` command.
+- `clawdlets secrets migrate` and stack docs.
 
 ## [0.1.0] - 2026-01-11
 ### Added
