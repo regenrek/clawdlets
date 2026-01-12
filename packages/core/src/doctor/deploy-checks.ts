@@ -10,6 +10,7 @@ import {
   getHostSecretsDir,
 } from "../repo-layout.js";
 import { sopsPathRegexForDirFiles } from "../lib/sops-config.js";
+import { relativePathForSopsRule } from "../lib/sops-path.js";
 import { validateHostSecretsYamlFiles } from "../lib/secrets-policy.js";
 import { capture } from "../lib/run.js";
 import { looksLikeSshKeyContents, normalizeSshPublicKey } from "../lib/ssh.js";
@@ -259,25 +260,38 @@ export async function addDeployChecks(params: {
 
     if (fs.existsSync(params.layout.sopsConfigPath)) {
       const sopsText = fs.readFileSync(params.layout.sopsConfigPath, "utf8");
+      let parsed: { creation_rules?: unknown } | null = null;
       try {
-        const parsed = (YAML.parse(sopsText) as { creation_rules?: unknown }) || {};
+        parsed = (YAML.parse(sopsText) as { creation_rules?: unknown }) || {};
+      } catch {
+        params.push({ scope: "deploy", status: "warn", label: "sops config parse", detail: "(invalid YAML)" });
+        parsed = null;
+      }
+
+      if (parsed) {
         const rules = Array.isArray((parsed as { creation_rules?: unknown }).creation_rules)
           ? ((parsed as { creation_rules: unknown[] }).creation_rules as Array<{ path_regex?: unknown }>)
           : [];
+
         const configDir = path.dirname(params.layout.sopsConfigPath);
-        const relSecretsDir = path
-          .relative(configDir, secretsLocalDir)
-          .replace(/\\/g, "/");
-        const expected = sopsPathRegexForDirFiles(relSecretsDir, "yaml");
-        const hasRule = rules.some((r) => String(r?.path_regex || "") === expected);
-        params.push({
-          scope: "deploy",
-          status: hasRule ? "ok" : "missing",
-          label: "sops creation rule",
-          detail: hasRule ? `(${relSecretsDir}/*.yaml)` : `(missing rule for ${relSecretsDir}/*.yaml)`,
-        });
-      } catch {
-        params.push({ scope: "deploy", status: "warn", label: "sops config parse", detail: "(invalid YAML)" });
+        let relSecretsDir: string;
+        try {
+          relSecretsDir = relativePathForSopsRule({ fromDir: configDir, toPath: secretsLocalDir, label: "host secrets dir" });
+        } catch (e) {
+          params.push({ scope: "deploy", status: "warn", label: "sops creation rule", detail: String((e as Error)?.message || e) });
+          relSecretsDir = "";
+        }
+
+        if (relSecretsDir) {
+          const expected = sopsPathRegexForDirFiles(relSecretsDir, "yaml");
+          const hasRule = rules.some((r) => String(r?.path_regex || "") === expected);
+          params.push({
+            scope: "deploy",
+            status: hasRule ? "ok" : "missing",
+            label: "sops creation rule",
+            detail: hasRule ? `(${relSecretsDir}/*.yaml)` : `(missing rule for ${relSecretsDir}/*.yaml)`,
+          });
+        }
       }
     }
   }
