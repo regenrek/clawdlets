@@ -1,7 +1,9 @@
-import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import { nixShellCapture, type NixToolOpts } from "./nix-tools.js";
+import {
+  nixShellCapture,
+  nixShellCaptureWithInput,
+  type NixToolOpts,
+} from "./nix-tools.js";
 import { run } from "./run.js";
 import { ensureDir, writeFileAtomic } from "./fs-safe.js";
 import { withFlakesEnv } from "./nix-flakes.js";
@@ -55,32 +57,29 @@ export async function sopsEncryptYamlToFile(params: {
     "yaml",
     "--filename-override",
     filenameOverride,
+    "/dev/stdin",
   ];
   if (params.nix.dryRun) {
-    await run(params.nix.nixBin, [...nixArgs, "--output", params.outPath, "<plaintext>"], { ...params.nix, env: withFlakesEnv(params.nix.env) });
+    await run(params.nix.nixBin, nixArgs, {
+      ...params.nix,
+      env: withFlakesEnv(params.nix.env),
+    });
     return;
   }
 
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "clawdlets-sops-"));
-  try {
-    const tmpPlain = path.join(tmpDir, "secrets.yaml");
-    const tmpEnc = path.join(tmpDir, "secrets.enc.yaml");
-    await writeFileAtomic(
-      tmpPlain,
-      params.plaintextYaml.endsWith("\n")
-        ? params.plaintextYaml
-        : `${params.plaintextYaml}\n`,
-    );
-
-    await run(params.nix.nixBin, [...nixArgs, "--output", tmpEnc, tmpPlain], { ...params.nix, env: withFlakesEnv(params.nix.env) });
-
-    const encrypted = await fs.readFile(tmpEnc, "utf8");
-    await writeFileAtomic(params.outPath, encrypted);
-  } finally {
-    try {
-      await fs.rm(tmpDir, { recursive: true, force: true });
-    } catch {
-      // best-effort cleanup
-    }
-  }
+  const plaintext = params.plaintextYaml.endsWith("\n")
+    ? params.plaintextYaml
+    : `${params.plaintextYaml}\n`;
+  const encrypted = await nixShellCaptureWithInput(
+    "sops",
+    "sops",
+    nixArgs.slice(4),
+    plaintext,
+    {
+      ...params.nix,
+      env: withFlakesEnv(params.nix.env),
+    },
+  );
+  const normalized = encrypted.endsWith("\n") ? encrypted : `${encrypted}\n`;
+  await writeFileAtomic(params.outPath, normalized, { mode: 0o600 });
 }

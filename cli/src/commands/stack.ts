@@ -6,6 +6,7 @@ import * as p from "@clack/prompts";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { tryGetOriginFlake } from "@clawdbot/clawdlets-core/lib/git";
 import { ensureDir, writeFileAtomic } from "@clawdbot/clawdlets-core/lib/fs-safe";
+import { validateTargetHost } from "@clawdbot/clawdlets-core/lib/ssh-remote";
 import { StackSchema, getStackLayout, loadStack, loadStackEnv, resolveStackBaseFlake } from "@clawdbot/clawdlets-core/stack";
 import { cancelFlow, navOnCancel, NAV_EXIT } from "../lib/wizard.js";
 
@@ -100,6 +101,7 @@ const stackInit = defineCommand({
     if (!interactive) {
       const baseFlake = String(args.flake || "").trim();
       const targetHostInput = String(args.targetHost || "").trim();
+      if (targetHostInput) validateTargetHost(targetHostInput);
       const serverType = String(args.serverType || "cx43").trim() || "cx43";
       if (/^cax/i.test(serverType)) throw new Error("ARM (CAX) not supported (this repo builds x86_64-linux; use CX/CPX/CCX)");
 
@@ -344,6 +346,7 @@ const stackInit = defineCommand({
 
     const baseFlake = String(answers.baseFlake || "").trim();
     const targetHostInput = String(answers.targetHost || "").trim();
+    if (targetHostInput) validateTargetHost(targetHostInput);
     const stack = {
       schemaVersion: 3,
       ...(baseFlake ? { base: { flake: baseFlake } } : {}),
@@ -429,6 +432,7 @@ const stackSetTargetHost = defineCommand({
     if (!h) throw new Error(`unknown host: ${hostName}`);
     const targetHost = String(args.targetHost || "").trim();
     if (!targetHost) throw new Error("missing --target-host");
+    validateTargetHost(targetHost);
 
     const next = {
       ...stack,

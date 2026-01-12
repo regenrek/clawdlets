@@ -1,4 +1,5 @@
 import type { Stack, StackHost } from "@clawdbot/clawdlets-core/stack";
+import { validateTargetHost } from "@clawdbot/clawdlets-core/lib/ssh-remote";
 
 export function needsSudo(targetHost: string): boolean {
   return !/^root@/i.test(targetHost.trim());
@@ -6,7 +7,7 @@ export function needsSudo(targetHost: string): boolean {
 
 export function requireTargetHost(targetHost: string, hostName: string): string {
   const v = targetHost.trim();
-  if (v) return v;
+  if (v) return validateTargetHost(v);
   throw new Error(
     [
       `missing target host for ${hostName}`,
@@ -21,4 +22,3 @@ export function requireHost(stack: Stack, host: string): StackHost {
   if (!h) throw new Error(`unknown host: ${host}`);
   return h;
 }
-

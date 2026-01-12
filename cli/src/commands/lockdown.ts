@@ -4,7 +4,7 @@ import { applyOpenTofuVars } from "@clawdbot/clawdlets-core/lib/opentofu";
 import { resolveGitRev } from "@clawdbot/clawdlets-core/lib/git";
 import { expandPath } from "@clawdbot/clawdlets-core/lib/path-expand";
 import { loadStack, loadStackEnv, resolveStackBaseFlake } from "@clawdbot/clawdlets-core/stack";
-import { shellQuote, sshRun } from "@clawdbot/clawdlets-core/lib/ssh-remote";
+import { shellQuote, sshRun, validateTargetHost } from "@clawdbot/clawdlets-core/lib/ssh-remote";
 import { requireDeployGate } from "../lib/deploy-gate.js";
 
 function needsSudo(targetHost: string): boolean {
@@ -13,7 +13,7 @@ function needsSudo(targetHost: string): boolean {
 
 function requireTargetHost(targetHost: string, hostName: string): string {
   const v = targetHost.trim();
-  if (v) return v;
+  if (v) return validateTargetHost(v);
   throw new Error(
     [
       `missing target host for ${hostName}`,

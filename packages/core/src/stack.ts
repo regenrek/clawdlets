@@ -6,6 +6,7 @@ import { expandPath } from "./lib/path-expand.js";
 import { tryGetOriginFlake } from "./lib/git.js";
 import { findRepoRoot } from "./lib/repo.js";
 import { SafeHostNameSchema } from "./lib/clawdlets-config.js";
+import { isValidTargetHost } from "./lib/ssh-remote.js";
 
 export const STACK_SCHEMA_VERSION = 3 as const;
 
@@ -15,7 +16,14 @@ const HetznerSchema = z.object({
 
 const HostSchema = z.object({
   flakeHost: z.string().trim().min(1),
-  targetHost: z.string().trim().min(1).optional(),
+  targetHost: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .refine((v) => (v ? isValidTargetHost(v) : true), {
+      message: "invalid targetHost (expected ssh alias or user@host)",
+    }),
   hetzner: HetznerSchema,
   opentofu: z.object({
     adminCidr: z.string().trim().min(1),

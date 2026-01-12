@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { validateTargetHost } from "@clawdbot/clawdlets-core/lib/ssh-remote";
 
 export function needsSudo(targetHost: string): boolean {
   return !/^root@/i.test(targetHost.trim());
@@ -7,7 +8,7 @@ export function needsSudo(targetHost: string): boolean {
 
 export function requireTargetHost(targetHost: string, hostName: string): string {
   const v = targetHost.trim();
-  if (v) return v;
+  if (v) return validateTargetHost(v);
   throw new Error(
     [
       `missing target host for ${hostName}`,
