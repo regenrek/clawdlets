@@ -39,15 +39,21 @@ Therefore:
 
 ## Egress policy (current)
 
-`infra/nix/nftables/egress-block.nft` is **anti-spam only**:
+Default is **anti-spam only**:
 
 - It drops outbound TCP ports `{ 25, 465, 587, 2525 }` (SMTP variants).
 - It does **not** restrict HTTPS/API egress, Discord, GitHub, model providers, etc.
 
-If you want “real egress control”, pick a concrete model first:
+## Egress policy (proxy allowlist, recommended)
 
-- **Proxy + domain allowlist** (most practical): force bot traffic through a local proxy; allowlist SNI/HTTP hostnames.
-- **IP allowlist** (least forgiving): allowlist IP/CIDRs per provider and keep it updated (breakage risk).
+Enable `clawdlets.egress.mode = "proxy-allowlist"` to:
+
+- start a local HTTP proxy on loopback
+- force bot services to talk only to localhost (systemd `IPAddressDeny=any` + allow loopback)
+- require all outbound HTTP(S) to go through the proxy
+- enforce a domain allowlist at the proxy layer
+
+This is “real egress control” for bots without maintaining brittle IP allowlists.
 
 ## Supply chain (CI)
 

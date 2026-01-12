@@ -15,6 +15,13 @@ let
   isTailscale = cfg.tailnet.mode == "tailscale";
   tailscaleCfg = cfg.tailnet.tailscale;
 
+  egress = cfg.egress;
+  proxyEnabled = egress.mode == "proxy-allowlist";
+  proxyPort = egress.proxy.port;
+  proxyAddr4 = "127.0.0.1";
+  proxyAddr6 = "::1";
+  proxyUrl = "http://${proxyAddr4}:${toString proxyPort}";
+
   sshListen = [
     # NixOS' OpenSSH module formats `ListenAddress` as `${addr}:${port}` when `port` is set.
     # For IPv6 this becomes `:::22` and sshd rejects it. Keep `port = null` and rely on `services.openssh.ports` (default: 22).
@@ -110,6 +117,40 @@ in
         };
       };
     };
+
+    egress = {
+      mode = lib.mkOption {
+        type = lib.types.enum [ "smtp-only" "proxy-allowlist" "none" ];
+        default = "smtp-only";
+        description = ''
+          Outbound network posture for bot services.
+
+          - smtp-only: blocks outbound SMTP ports (anti-spam only).
+          - proxy-allowlist: forces bot services to use a local HTTP proxy which enforces a destination domain allowlist.
+          - none: no additional outbound controls.
+        '';
+      };
+
+      proxy = {
+        port = lib.mkOption {
+          type = lib.types.int;
+          default = 3128;
+          description = "Local HTTP proxy port (loopback only).";
+        };
+
+        allowedDomains = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [];
+          description = ''
+            Destination domain allowlist for proxy-allowlist mode.
+
+            Squid-style domain ACL entries (examples):
+            - example.com
+            - .example.com (matches subdomains)
+          '';
+        };
+      };
+    };
   };
 
   config = {
@@ -170,7 +211,8 @@ in
     };
 
     networking.nftables.enable = true;
-    networking.nftables.ruleset = builtins.readFile ../nftables/egress-block.nft;
+    networking.nftables.ruleset =
+      lib.mkIf (egress.mode == "smtp-only" || egress.mode == "proxy-allowlist") (builtins.readFile ../nftables/egress-block.nft);
 
     sops = {
       age.keyFile = cfg.secrets.ageKeyFile;
@@ -203,6 +245,10 @@ in
           || ((cfg.operator.rebuild.flakeBase or null) != null && (cfg.operator.rebuild.flakeBase or "") != "");
         message = "clawdlets.operator.rebuild.flakeBase must be set when clawdlets.operator.rebuild.enable is true.";
       }
+      {
+        assertion = (!proxyEnabled) || egress.proxy.allowedDomains != [];
+        message = "clawdlets.egress.proxy.allowedDomains must be set when clawdlets.egress.mode is proxy-allowlist.";
+      }
     ];
 
     environment.etc."clawdlets/bin/rebuild-host" = {
@@ -216,6 +262,96 @@ in
         CLAWDLETS_REBUILD_FLAKE_BASE=${cfg.operator.rebuild.flakeBase}
         CLAWDLETS_REBUILD_HOST=${config.clawdlets.hostName}
       '';
+    };
+
+    systemd.tmpfiles.rules = lib.mkIf proxyEnabled [
+      "d /var/lib/clawdlets/proxy 0750 clawdlets-proxy clawdlets-proxy - -"
+      "d /var/lib/clawdlets/proxy/cache 0750 clawdlets-proxy clawdlets-proxy - -"
+      "d /var/lib/clawdlets/proxy/run 0750 clawdlets-proxy clawdlets-proxy - -"
+    ];
+
+    users.users.clawdlets-proxy = lib.mkIf proxyEnabled {
+      isSystemUser = true;
+      group = "clawdlets-proxy";
+      home = "/var/lib/clawdlets/proxy";
+      createHome = false;
+      shell = pkgs.bashInteractive;
+    };
+    users.groups.clawdlets-proxy = lib.mkIf proxyEnabled { };
+
+    environment.etc."clawdlets/proxy/squid.conf" = lib.mkIf proxyEnabled {
+      mode = "0444";
+      text =
+        let
+          allowed = lib.concatStringsSep " " egress.proxy.allowedDomains;
+        in ''
+          http_port ${proxyAddr4}:${toString proxyPort}
+          http_port [${proxyAddr6}]:${toString proxyPort}
+
+          pid_filename /var/lib/clawdlets/proxy/run/squid.pid
+
+          # Minimal cache; keep squid happy but avoid pretending this is a CDN.
+          cache_mem 0 MB
+          maximum_object_size 0 KB
+          cache_dir ufs /var/lib/clawdlets/proxy/cache 64 16 256
+
+          # No privacy surprises: do not forward Proxy-Authorization etc (none expected).
+          forwarded_for delete
+          request_header_access Proxy-Authorization deny all
+          request_header_access Proxy-Connection deny all
+
+          # Only accept connections from localhost.
+          acl localhost src 127.0.0.1/32 ::1
+
+          # Safe ports / CONNECT.
+          acl SSL_ports port 443
+          acl Safe_ports port 80 443
+          acl CONNECT method CONNECT
+
+          # Domain allowlist (for HTTP Host and CONNECT host).
+          acl allowed_sites dstdomain ${allowed}
+
+          http_access deny !localhost
+          http_access deny !Safe_ports
+          http_access deny CONNECT !SSL_ports
+          http_access deny localhost !allowed_sites
+          http_access allow localhost allowed_sites
+          http_access deny all
+
+          # Logging: keep it simple; journald still has systemd logs.
+          access_log stdio:/dev/stdout
+          cache_log stdio:/dev/stderr
+        '';
+    };
+
+    systemd.services.clawdlets-egress-proxy = lib.mkIf proxyEnabled {
+      description = "Clawdlets egress proxy (domain allowlist)";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      serviceConfig = {
+        Type = "simple";
+        User = "clawdlets-proxy";
+        Group = "clawdlets-proxy";
+        WorkingDirectory = "/var/lib/clawdlets/proxy";
+        ExecStart = "${pkgs.squid}/bin/squid -N -f /etc/clawdlets/proxy/squid.conf";
+        Restart = "always";
+        RestartSec = "2";
+
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        ReadWritePaths = [ "/var/lib/clawdlets/proxy" ];
+        UMask = "0077";
+
+        CapabilityBoundingSet = "";
+        AmbientCapabilities = "";
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_NETLINK" "AF_UNIX" ];
+        SystemCallArchitectures = "native";
+      };
     };
   };
 }

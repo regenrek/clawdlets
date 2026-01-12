@@ -44,4 +44,4 @@ Default breakglass path:
 
 ## Egress posture (honesty)
 
-The built-in nftables ruleset only blocks outbound SMTP ports. Treat it as anti-spam, not egress control.
+Default posture blocks outbound SMTP ports only (anti-spam). For real bot egress control, enable `clawdlets.egress.mode = "proxy-allowlist"`.

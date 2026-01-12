@@ -119,6 +119,15 @@ let
         if (botResources.ioWeight or null) != null
         then botResources.ioWeight
         else cfg.resources.ioWeight;
+
+      egressMode =
+        if (config ? clawdlets) && (config.clawdlets ? egress) then config.clawdlets.egress.mode else "smtp-only";
+      proxyEnabled = egressMode == "proxy-allowlist";
+      proxyPort =
+        if proxyEnabled && (config.clawdlets.egress.proxy.port or null) != null
+        then config.clawdlets.egress.proxy.port
+        else 3128;
+      proxyUrl = "http://127.0.0.1:${toString proxyPort}";
       gh = profile.github or {};
       ghEnabled =
         (gh.appId or null) != null
@@ -135,8 +144,14 @@ let
         value = {
           description = "Clawdbot Discord gateway (${b})";
           wantedBy = [ "multi-user.target" ];
-          after = [ "network-online.target" "sops-nix.service" ] ++ lib.optional ghEnabled "clawdbot-gh-token-${b}.service";
-          wants = [ "network-online.target" "sops-nix.service" ] ++ lib.optional ghEnabled "clawdbot-gh-token-${b}.service";
+          after =
+            [ "network-online.target" "sops-nix.service" ]
+            ++ lib.optional ghEnabled "clawdbot-gh-token-${b}.service"
+            ++ lib.optional proxyEnabled "clawdlets-egress-proxy.service";
+          wants =
+            [ "network-online.target" "sops-nix.service" ]
+            ++ lib.optional ghEnabled "clawdbot-gh-token-${b}.service"
+            ++ lib.optional proxyEnabled "clawdlets-egress-proxy.service";
 
           environment =
             if envDupes != []
@@ -153,6 +168,16 @@ let
               CLAWDLETS_WORKSPACE_DIR = workspace;
               CLAWDLETS_SEED_DIR = toString seedDir;
               CLAWDLETS_TOOLS_MD = "/etc/clawdlets/tools.md";
+            }
+            // lib.optionalAttrs proxyEnabled {
+              HTTP_PROXY = proxyUrl;
+              HTTPS_PROXY = proxyUrl;
+              ALL_PROXY = proxyUrl;
+              http_proxy = proxyUrl;
+              https_proxy = proxyUrl;
+              all_proxy = proxyUrl;
+              NO_PROXY = "localhost,127.0.0.1,::1";
+              no_proxy = "localhost,127.0.0.1,::1";
             }
             // env;
 
@@ -190,7 +215,11 @@ let
           // lib.optionalAttrs (memoryMax != null) { MemoryMax = memoryMax; }
           // lib.optionalAttrs (cpuQuota != null) { CPUQuota = cpuQuota; }
           // lib.optionalAttrs (tasksMax != null) { TasksMax = tasksMax; }
-          // lib.optionalAttrs (ioWeight != null) { IOWeight = ioWeight; };
+          // lib.optionalAttrs (ioWeight != null) { IOWeight = ioWeight; }
+          // lib.optionalAttrs proxyEnabled {
+            IPAddressDeny = "any";
+            IPAddressAllow = [ "127.0.0.1" "::1" ];
+          };
         };
       };
 

@@ -49,6 +49,13 @@ Notes:
 - Host Nix config includes the garnix cache (see `infra/nix/modules/clawdbot-fleet/impl.nix`), so updates should
   substitute instead of rebuilding from source in normal cases.
 
+### Bot egress control (recommended)
+
+If you want “real egress control” for bot services, enable proxy allowlist mode:
+
+- Set `clawdlets.egress.mode = "proxy-allowlist"`.
+- Set `clawdlets.egress.proxy.allowedDomains` to the smallest set of domains your bots need.
+
 ## Other options (and tradeoffs)
 
 ### Private base repo + PAT
