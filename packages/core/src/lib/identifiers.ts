@@ -4,6 +4,7 @@ const SAFE_HOSTNAME_RE = /^[a-z][a-z0-9-]*$/;
 const SAFE_BOT_ID_RE = /^[a-z][a-z0-9_-]*$/;
 const SAFE_SECRET_NAME_RE = /^[a-z][a-z0-9_-]*$/;
 const SAFE_OPERATOR_ID_RE = /^[a-zA-Z0-9._-]+$/;
+const SAFE_ENV_VAR_NAME_RE = /^[A-Z_][A-Z0-9_]*$/;
 
 export const HostNameSchema = z
   .string()
@@ -23,6 +24,12 @@ export const SecretNameSchema = z
   .min(1)
   .refine((v) => SAFE_SECRET_NAME_RE.test(v), { message: "invalid secret name (use [a-z][a-z0-9_-]*)" });
 
+export const EnvVarNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((v) => SAFE_ENV_VAR_NAME_RE.test(v), { message: "invalid env var name (use [A-Z_][A-Z0-9_]*)" });
+
 export const OperatorIdSchema = z
   .string()
   .trim()
@@ -38,6 +45,10 @@ export function assertSafeSecretName(secretName: string): void {
   void SecretNameSchema.parse(secretName);
 }
 
+export function assertSafeOperatorId(operatorId: string): void {
+  void OperatorIdSchema.parse(operatorId);
+}
+
 export function sanitizeOperatorId(raw: string): string {
   const cleaned =
     String(raw || "operator")
@@ -46,4 +57,3 @@ export function sanitizeOperatorId(raw: string): string {
   if (cleaned === "." || cleaned === "..") return "operator";
   return cleaned;
 }
-

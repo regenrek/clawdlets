@@ -3,6 +3,7 @@ import process from "node:process";
 import { defineCommand } from "citty";
 import { findRepoRoot } from "@clawdbot/clawdlets-core/lib/repo";
 import { looksLikeSshPrivateKey, parseSshPublicKeysFromText } from "@clawdbot/clawdlets-core/lib/ssh";
+import { validateTargetHost } from "@clawdbot/clawdlets-core/lib/ssh-remote";
 import {
   assertSafeHostName,
   ClawdletsConfigSchema,
@@ -59,6 +60,10 @@ const add = defineCommand({
       enable: false,
       diskDevice: "/dev/disk/by-id/CHANGE_ME",
       sshAuthorizedKeys: [],
+      flakeHost: "",
+      targetHost: undefined,
+      hetzner: { serverType: "cx43" },
+      opentofu: { adminCidr: "", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
       publicSsh: { enable: false },
       provisioning: { enable: false },
       tailnet: { mode: "tailscale" },
@@ -108,6 +113,11 @@ const set = defineCommand({
     "disk-device": { type: "string", description: "Disk device (e.g. /dev/disk/by-id/...).", },
     "agent-model-primary": { type: "string", description: "Primary agent model (e.g. zai/glm-4.7)." },
     tailnet: { type: "string", description: "Tailnet mode: none|tailscale." },
+    "flake-host": { type: "string", description: "Flake output host name override (default: same as host name)." },
+    "target-host": { type: "string", description: "SSH target (ssh config alias or user@host)." },
+    "server-type": { type: "string", description: "Hetzner server type (e.g. cx43)." },
+    "admin-cidr": { type: "string", description: "ADMIN_CIDR (e.g. 1.2.3.4/32)." },
+    "ssh-pubkey-file": { type: "string", description: "SSH_PUBKEY_FILE path (e.g. ~/.ssh/id_ed25519.pub)." },
     "clear-ssh-keys": { type: "boolean", description: "Clear sshAuthorizedKeys.", default: false },
     "add-ssh-key": { type: "string", description: "Add SSH public key contents (repeatable).", array: true },
     "add-ssh-key-file": { type: "string", description: "Add SSH public key from file (repeatable).", array: true },
@@ -146,6 +156,17 @@ const set = defineCommand({
 
     if ((args as any)["disk-device"] !== undefined) next.diskDevice = String((args as any)["disk-device"]).trim();
     if ((args as any)["agent-model-primary"] !== undefined) next.agentModelPrimary = String((args as any)["agent-model-primary"]).trim();
+
+    if ((args as any)["flake-host"] !== undefined) next.flakeHost = String((args as any)["flake-host"]).trim();
+
+    if ((args as any)["target-host"] !== undefined) {
+      const v = String((args as any)["target-host"]).trim();
+      next.targetHost = v ? validateTargetHost(v) : undefined;
+    }
+
+    if ((args as any)["server-type"] !== undefined) next.hetzner.serverType = String((args as any)["server-type"]).trim();
+    if ((args as any)["admin-cidr"] !== undefined) next.opentofu.adminCidr = String((args as any)["admin-cidr"]).trim();
+    if ((args as any)["ssh-pubkey-file"] !== undefined) next.opentofu.sshPubkeyFile = String((args as any)["ssh-pubkey-file"]).trim();
 
     if (args.tailnet !== undefined) {
       const mode = String(args.tailnet).trim();

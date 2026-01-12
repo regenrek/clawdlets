@@ -19,7 +19,7 @@ clawdlets server rebuild --target-host admin@<ipv4> --rev HEAD
 
 ## Rotate tokens/secrets
 
-1) Edit files under `.clawdlets/secrets/hosts/clawdbot-fleet-host/` (example: `discord_token_maren.yaml`)
+1) Edit files under `secrets/hosts/clawdbot-fleet-host/` (example: `discord_token_maren.yaml`)
 2) Re-encrypt (or use `clawdlets secrets init` to regenerate)
 3) `clawdlets secrets sync`
 4) `clawdlets secrets verify`
@@ -36,7 +36,7 @@ clawdlets server rebuild --target-host admin@<ipv4> --rev HEAD
 clawdlets bot add --bot <id>
 ```
 
-2) Add secret `.clawdlets/secrets/hosts/<host>/discord_token_<id>.yaml` (use `clawdlets secrets init`), then:
+2) Add secret `secrets/hosts/<host>/discord_token_<id>.yaml` (use `clawdlets secrets init`), then:
 ```bash
 clawdlets secrets sync
 clawdlets server rebuild --target-host admin@<target> --rev HEAD
@@ -49,7 +49,7 @@ clawdlets server rebuild --target-host admin@<target> --rev HEAD
 ```bash
 clawdlets config set --path fleet.botOverrides.maren.skills.allowBundled --value-json '["github","brave-search"]'
 ```
-3) If it needs secrets: add `.clawdlets/secrets/hosts/<host>/<secret>.yaml` and reference in `fleet.botOverrides.<bot>.skills.entries."<skill>".*Secret/envSecrets`
+3) If it needs secrets: add `secrets/hosts/<host>/<secret>.yaml` and reference in `fleet.botOverrides.<bot>.skills.entries."<skill>".*Secret/envSecrets`
 4) Sync + rebuild:
 ```bash
 clawdlets secrets sync
@@ -149,7 +149,7 @@ Enable via CLI:
 clawdlets fleet set --restic-enable true --restic-repository "s3:s3.amazonaws.com/<bucket>/clawdbot"
 ```
 
-Add secrets under `.clawdlets/secrets/hosts/clawdbot-fleet-host/` (example: `restic_password.yaml`), sync, then rebuild.
+Add secrets under `secrets/hosts/clawdbot-fleet-host/` (example: `restic_password.yaml`), sync, then rebuild.
 
 Restore (example, run as root on the host):
 

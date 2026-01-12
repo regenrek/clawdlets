@@ -174,14 +174,17 @@ const projectInit = defineCommand({
       }
     }
 
-    const next = [
-      "next:",
-      `- cd ${destDir}`,
-      "- create a git repo + set origin (recommended; enables blank base flake)",
-      "- clawdlets stack init",
-      "- clawdlets secrets init",
-      "- clawdlets doctor",
-    ].join("\n");
+	    const next = [
+	      "next:",
+	      `- cd ${destDir}`,
+	      "- create a git repo + set origin (recommended; enables blank base flake)",
+	      `- clawdlets host set --host ${host} --admin-cidr <your-ip>/32 --disk-device /dev/sda --add-ssh-key-file $HOME/.ssh/id_ed25519.pub`,
+	      `- clawdlets secrets init --host ${host}`,
+	      `- clawdlets doctor --host ${host}`,
+	      `- clawdlets bootstrap --host ${host}`,
+	      `- clawdlets host set --host ${host} --target-host <ssh-alias|user@host>`,
+	      `- clawdlets lockdown --host ${host}`,
+	    ].join("\n");
     if (interactive) p.outro(next);
     else console.log(next);
   },

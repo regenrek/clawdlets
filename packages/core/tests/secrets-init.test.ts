@@ -35,7 +35,7 @@ describe("secrets-init JSON + non-interactive validation", () => {
     const input = {
       adminPasswordHash: "<REPLACE_WITH_YESCRYPT_HASH>",
       tailscaleAuthKey: "<REPLACE_WITH_TSKEY_AUTH>",
-      zAiApiKey: "<OPTIONAL>",
+      secrets: { z_ai_api_key: "<OPTIONAL>", openai_api_key: "<REPLACE_WITH_OPENAI_KEY>" },
       discordTokens: { maren: "<REPLACE_WITH_DISCORD_TOKEN>", sonja: "tok<ok>" },
     };
     expect(
@@ -44,7 +44,7 @@ describe("secrets-init JSON + non-interactive validation", () => {
         bots: ["maren", "sonja"],
         requiresTailscaleAuthKey: true,
       }),
-    ).toEqual(["adminPasswordHash", "discordTokens.maren", "tailscaleAuthKey"]);
+    ).toEqual(["adminPasswordHash", "discordTokens.maren", "secrets.openai_api_key", "tailscaleAuthKey"]);
   });
 
   it("parseSecretsInitJson rejects invalid JSON without leaking content", async () => {
@@ -72,13 +72,13 @@ describe("secrets-init JSON + non-interactive validation", () => {
       JSON.stringify({
         adminPasswordHash: "  hash  ",
         tailscaleAuthKey: "  ts  ",
-        zAiApiKey: "  zai  ",
+        secrets: { z_ai_api_key: "  zai  ", empty: " " },
         discordTokens: { maren: "  tok  ", sonja: " " },
       }),
     );
     expect(out.adminPasswordHash).toBe("hash");
     expect(out.tailscaleAuthKey).toBe("ts");
-    expect(out.zAiApiKey).toBe("zai");
+    expect(out.secrets).toEqual({ z_ai_api_key: "zai" });
     expect(out.discordTokens).toEqual({ maren: "tok" });
   });
 

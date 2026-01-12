@@ -10,12 +10,11 @@ import { lockdown } from "./commands/lockdown.js";
 import { project } from "./commands/project.js";
 import { secrets } from "./commands/secrets.js";
 import { server } from "./commands/server.js";
-import { stack } from "./commands/stack.js";
 
 const main = defineCommand({
   meta: {
     name: "clawdlets",
-    description: "Clawdbot fleet helper (CLI-first; instance state in .clawdlets/).",
+    description: "Clawdbot fleet helper (CLI-first; runtime state in .clawdlets/; secrets in /secrets).",
   },
   subCommands: {
     bot,
@@ -29,7 +28,6 @@ const main = defineCommand({
     project,
     secrets,
     server,
-    stack,
   },
 });
 

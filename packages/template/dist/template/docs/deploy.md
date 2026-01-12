@@ -1,11 +1,11 @@
 # Deploy / Updates (options)
 
-Goal: keep the **repo public-safe** and keep instance-specific data in `.clawdlets/` (gitignored).
+Goal: keep the **repo public-safe** (no plaintext secrets) and keep local operator private keys in `.clawdlets/` (gitignored).
 
-## Recommended: stack-based deploy (public repo + private `.clawdlets/`)
+## Recommended: CLI-first deploy (config in git + encrypted secrets)
 
 Why:
-- No instance keys/tokens in git.
+- No plaintext secrets in git (secrets are sops-encrypted under `secrets/`).
 - No long-lived GitHub creds on servers (only needed if your base flake repo is private).
 - One source of truth for CLI + future UI.
 
@@ -24,8 +24,6 @@ fix `trusted-users` once. See `docs/install.md`.
 Run:
 
 ```bash
-export CLAWDLETS_INTERACTIVE=1
-clawdlets stack init
 clawdlets secrets init
 clawdlets doctor --scope deploy
 clawdlets bootstrap
@@ -67,7 +65,7 @@ If you want “real egress control” for bot services, enable proxy allowlist m
 
 ### Private base repo + PAT
 
-If your base flake repo is private, put `GITHUB_TOKEN` into `.clawdlets/.env` (fine-grained PAT; Contents: read).
+If your base flake repo is private, set `GITHUB_TOKEN` in your environment (fine-grained PAT; Contents: read).
 
 ### Private repo + store PAT on server
 

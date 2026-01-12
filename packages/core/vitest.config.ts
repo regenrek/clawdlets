@@ -13,7 +13,6 @@ export default defineConfig({
         "src/doctor/deploy-checks.ts",
         "src/doctor/repo-checks.ts",
         "src/repo-layout.ts",
-        "src/stack.ts",
         "src/lib/age.ts",
         "src/lib/age-keygen.ts",
         "src/lib/clawdlets-config.ts",

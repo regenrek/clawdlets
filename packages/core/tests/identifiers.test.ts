@@ -27,5 +27,10 @@ describe("identifiers", () => {
     expect(sanitizeOperatorId(".")).toBe("operator");
     expect(sanitizeOperatorId("..")).toBe("operator");
   });
-});
 
+  it("EnvVarNameSchema accepts uppercase env var names", async () => {
+    const { EnvVarNameSchema } = await import("../src/lib/identifiers");
+    expect(() => EnvVarNameSchema.parse("OPENAI_API_KEY")).not.toThrow();
+    expect(() => EnvVarNameSchema.parse("bad-key")).toThrow(/invalid env var name/i);
+  });
+});

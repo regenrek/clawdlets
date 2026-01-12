@@ -3,16 +3,11 @@ let
   cfg = builtins.fromJSON (builtins.readFile ./clawdlets.json);
   fleetCfg = cfg.fleet or { };
 
-  zaiEnv = {
-    ZAI_API_KEY = "z_ai_api_key";
-    Z_AI_API_KEY = "z_ai_api_key";
-  };
-
   # Single source of truth for bot instances.
   bots = fleetCfg.bots or [ "maren" "sonja" "gunnar" "melinda" ];
 
   baseBot = {
-    envSecrets = zaiEnv;
+    envSecrets = fleetCfg.envSecrets or { };
     skills = {
       # Explicit allowlist required on servers. Avoid null (typically means “allow all bundled skills”).
       allowBundled = [ ];

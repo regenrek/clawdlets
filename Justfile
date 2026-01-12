@@ -18,9 +18,6 @@ typecheck:
 clawdlets-build:
   cd {{justfile_directory()}} && pnpm run clawdlets:build
 
-clawdlets-setup:
-  cd {{justfile_directory()}} && pnpm run clawdlets:stack -- init
-
 doctor:
   cd {{justfile_directory()}} && pnpm run clawdlets:doctor
 
@@ -33,11 +30,11 @@ clawdlets-lockdown +args="":
 tofu-lockdown:
   cd {{justfile_directory()}} && pnpm run clawdlets:infra -- apply --public-ssh=false
 
-stack-validate:
-  cd {{justfile_directory()}} && pnpm run clawdlets:stack -- validate
+config-validate:
+  cd {{justfile_directory()}} && node cli/dist/main.js config validate
 
-stack-print:
-  cd {{justfile_directory()}} && pnpm run clawdlets:stack -- print
+config-show:
+  cd {{justfile_directory()}} && node cli/dist/main.js config show
 
 secrets-init host="clawdbot-fleet-host":
   cd {{justfile_directory()}} && pnpm run clawdlets:secrets -- init --host {{host}}

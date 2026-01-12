@@ -7,7 +7,6 @@
     ".": "./dist/index.js",
     "./doctor": "./dist/doctor.js",
     "./repo-layout": "./dist/repo-layout.js",
-    "./stack": "./dist/stack.js",
     "./lib/*": "./dist/lib/*.js"
   },
   "types": "./dist/index.d.ts",

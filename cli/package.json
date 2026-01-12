@@ -21,7 +21,6 @@
     "doctor": "node dist/main.js doctor",
     "lockdown": "node dist/main.js lockdown",
     "server": "node dist/main.js server",
-    "stack": "node dist/main.js stack",
     "secrets": "node dist/main.js secrets",
     "infra": "node dist/main.js infra"
   },

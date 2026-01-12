@@ -2,14 +2,14 @@ import process from "node:process";
 import { collectDoctorChecks } from "@clawdbot/clawdlets-core/doctor";
 
 export async function requireDeployGate(params: {
-  stackDir?: string;
+  runtimeDir?: string;
   host: string;
   scope: "deploy" | "repo";
   strict: boolean;
 }): Promise<void> {
   const checks = await collectDoctorChecks({
     cwd: process.cwd(),
-    stackDir: params.stackDir,
+    runtimeDir: params.runtimeDir,
     host: params.host,
     scope: params.scope,
   });

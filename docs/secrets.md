@@ -2,11 +2,10 @@
 
 Files:
 
-- `.clawdlets/secrets/.sops.yaml` (recipients + rules)
-- `.clawdlets/secrets/hosts/<host>/` (encrypted secrets payload; one secret per file)
-- `.clawdlets/secrets/hosts/*.age.pub` (public)
-- `.clawdlets/secrets/hosts/*.agekey` (private; never commit)
-- `.clawdlets/secrets/operators/*.agekey` (private; never commit)
+- `secrets/.sops.yaml` (recipients + rules; committed)
+- `secrets/hosts/<host>/` (encrypted secrets payload; committed)
+- `secrets/keys/hosts/<host>.agekey.yaml` (encrypted host age key; committed; operator recipients only)
+- `.clawdlets/keys/operators/<operator>.agekey` (operator private key; local only; never commit)
 
 ## Recommended: use the CLI
 
@@ -15,11 +14,11 @@ clawdlets secrets init
 ```
 
 This generates:
-- host + operator age keys
-- `.clawdlets/secrets/.sops.yaml`
-- `.clawdlets/extra-files/<host>/var/lib/sops-nix/key.txt`
-- `.clawdlets/extra-files/<host>/var/lib/clawdlets/secrets/hosts/<host>/`
-- encrypts `.clawdlets/secrets/hosts/<host>/*.yaml`
+- local operator age keypair in `.clawdlets/keys/operators/`
+- encrypted host age key at `secrets/keys/hosts/<host>.agekey.yaml`
+- `secrets/.sops.yaml` rules for host secrets + host key file
+- encrypts `secrets/hosts/<host>/*.yaml`
+- generates `.clawdlets/extra-files/<host>/...` (host key + encrypted host secrets) for first install
 
 Then sync to the host (used by sops-nix on the server):
 
@@ -33,53 +32,13 @@ Verify (recommended before rebuild):
 clawdlets secrets verify
 ```
 
-## Migration (legacy stacks)
-
-If you previously used a single file per host (like `.clawdlets/secrets/hosts/clawdbot-fleet-host.yaml`) and/or your `.clawdlets/stack.json` is `schemaVersion: 1`:
-
-```bash
-clawdlets stack migrate
-clawdlets secrets migrate
-```
-
-Notes:
-- Refuses to overwrite non-empty target dirs unless you pass `--yes`.
-- Renames legacy secrets files to `*.bak*` (no delete).
-- Upgrades `.clawdlets/stack.json` to `schemaVersion: 3` (and upgrades all hosts’ `secrets.*` + `opentofu.*` fields).
-
-After migrating:
-
-```bash
-clawdlets secrets sync
-```
-
 ## Manual steps (if needed)
 
-### 1) Generate host age key
+Edit a secret (example):
 
 ```bash
-mkdir -p .clawdlets/secrets/hosts
-age-keygen -o .clawdlets/secrets/hosts/clawdbot-fleet-host.agekey
-age-keygen -y .clawdlets/secrets/hosts/clawdbot-fleet-host.agekey > .clawdlets/secrets/hosts/clawdbot-fleet-host.age.pub
-```
-
-Update `.clawdlets/secrets/.sops.yaml` with the `clawdbot-fleet-host.age.pub` recipient.
-
-### 2) Edit secrets and encrypt
-
-Edit files under `.clawdlets/secrets/hosts/clawdbot-fleet-host/`, then:
-
-```bash
-sops -e -i .clawdlets/secrets/hosts/clawdbot-fleet-host/discord_token_maren.yaml
-```
-
-### 3) nixos-anywhere extra files
-
-Key for first boot:
-
-```bash
-mkdir -p .clawdlets/extra-files/clawdbot-fleet-host/var/lib/sops-nix
-cp .clawdlets/secrets/hosts/clawdbot-fleet-host.agekey .clawdlets/extra-files/clawdbot-fleet-host/var/lib/sops-nix/key.txt
+SOPS_AGE_KEY_FILE=.clawdlets/keys/operators/<you>.agekey \
+  sops edit secrets/hosts/<host>/admin_password_hash.yaml
 ```
 
 ## Troubleshooting
@@ -90,14 +49,17 @@ If you see:
 error loading config: no matching creation rules found
 ```
 
-Your `.clawdlets/secrets/.sops.yaml` rule did not match the file path you are encrypting.
+Your `secrets/.sops.yaml` rule did not match the file path you are encrypting.
 Fast fix: re-run `clawdlets secrets init` (it regenerates/upgrades `.sops.yaml`).
 
 ## Common keys
 
 - `tailscale_auth_key` (required when using Tailscale auto-join)
 - `discord_token_<bot>`
-- `z_ai_api_key` (Z.AI provider; mapped to ZAI_API_KEY/Z_AI_API_KEY env)
+- LLM API keys (configured via `fleet.envSecrets` in `infra/configs/clawdlets.json`):
+  - `z_ai_api_key` (Z.AI; env: `ZAI_API_KEY` + `Z_AI_API_KEY`)
+  - `anthropic_api_key` (Anthropic; env: `ANTHROPIC_API_KEY`)
+  - `openai_api_key` (OpenAI; env: `OPENAI_API_KEY` + `OPEN_AI_APIKEY`)
 
 Secret env vars are rendered into `/run/secrets/rendered/clawdbot-<bot>.env` and loaded
 via systemd `EnvironmentFile`.

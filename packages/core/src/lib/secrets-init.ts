@@ -1,7 +1,7 @@
 export type SecretsInitJson = {
   adminPasswordHash: string;
   tailscaleAuthKey?: string;
-  zAiApiKey?: string;
+  secrets?: Record<string, string>;
   discordTokens: Record<string, string>;
 };
 
@@ -25,7 +25,12 @@ export function listSecretsInitPlaceholders(params: {
     out.add("tailscaleAuthKey");
   }
 
-  if (params.input.zAiApiKey && isPlaceholderSecretValue(params.input.zAiApiKey)) out.add("zAiApiKey");
+  if (params.input.secrets && typeof params.input.secrets === "object") {
+    for (const [k, v] of Object.entries(params.input.secrets)) {
+      if (typeof v !== "string") continue;
+      if (v && isPlaceholderSecretValue(v)) out.add(`secrets.${k}`);
+    }
+  }
 
   const bots = Array.from(new Set(params.bots.map((b) => String(b).trim()).filter(Boolean)));
   for (const b of bots) {
@@ -39,13 +44,16 @@ export function listSecretsInitPlaceholders(params: {
 export function buildSecretsInitTemplate(params: {
   bots: string[];
   requiresTailscaleAuthKey: boolean;
+  secrets?: Record<string, string>;
 }): SecretsInitJson {
   const bots = Array.from(new Set(params.bots.map((b) => String(b).trim()).filter(Boolean)));
+  const secrets = params.secrets && typeof params.secrets === "object" ? params.secrets : undefined;
+  const hasSecrets = secrets && Object.keys(secrets).length > 0;
   return {
     adminPasswordHash: "<REPLACE_WITH_YESCRYPT_HASH>",
     ...(params.requiresTailscaleAuthKey ? { tailscaleAuthKey: "<REPLACE_WITH_TSKEY_AUTH>" } : {}),
-    zAiApiKey: "<OPTIONAL>",
     discordTokens: Object.fromEntries(bots.map((b) => [b, "<REPLACE_WITH_DISCORD_TOKEN>"])),
+    ...(hasSecrets ? { secrets } : {}),
   };
 }
 
@@ -74,9 +82,18 @@ export function parseSecretsInitJson(raw: string): SecretsInitJson {
   }
 
   const tailscaleAuthKey = typeof obj.tailscaleAuthKey === "string" ? obj.tailscaleAuthKey.trim() : undefined;
-  const zAiApiKey = typeof obj.zAiApiKey === "string" ? obj.zAiApiKey.trim() : undefined;
 
-  return { adminPasswordHash, tailscaleAuthKey, zAiApiKey, discordTokens };
+  const secrets: Record<string, string> = {};
+  if (obj.secrets && typeof obj.secrets === "object" && !Array.isArray(obj.secrets)) {
+    for (const [k, v] of Object.entries(obj.secrets)) {
+      if (typeof v !== "string") continue;
+      const token = v.trim();
+      if (!token) continue;
+      secrets[String(k)] = token;
+    }
+  }
+
+  return { adminPasswordHash, tailscaleAuthKey, discordTokens, ...(Object.keys(secrets).length > 0 ? { secrets } : {}) };
 }
 
 export function validateSecretsInitNonInteractive(params: {

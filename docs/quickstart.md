@@ -1,6 +1,6 @@
 # Quickstart (CLI-first)
 
-Goal: provision a Hetzner VM + install NixOS + bring up Discord bots, with instance data living in `.clawdlets/` (gitignored).
+Goal: provision a Hetzner VM + install NixOS + bring up Discord bots, with secrets in `secrets/` (sops-encrypted) and runtime state in `.clawdlets/` (gitignored).
 
 ## Prereqs (local)
 
@@ -19,12 +19,11 @@ npm install -g clawdlets
 clawdlets --help
 ```
 
-If you’re developing inside this monorepo, use the pnpm wrappers (example): `pnpm run clawdlets:stack -- init` == `clawdlets stack init`.
+If you’re developing inside this monorepo, use the pnpm wrappers (example): `pnpm run clawdlets:secrets -- init` == `clawdlets secrets init`.
 
-- `clawdlets stack init`: create `.clawdlets/stack.json` + `.clawdlets/.env` (use `--interactive` or set `CLAWDLETS_INTERACTIVE=1` for prompts).
 - `clawdlets doctor --scope deploy`: deploy preflight (fails on missing).
 - `clawdlets doctor --scope deploy --strict`: lockdown gate (fails on warn/missing).
-- `clawdlets secrets init`: generates age keys + `.clawdlets/extra-files/<host>/.../key.txt` + encrypts `.clawdlets/secrets/hosts/<host>/*.yaml`.
+- `clawdlets secrets init`: generates operator keys + host key, writes encrypted secrets under `secrets/hosts/<host>/`, and generates `.clawdlets/extra-files/<host>/...` for first install.
 - `clawdlets bootstrap`: runs OpenTofu + `nixos-anywhere` install (prints target IPv4; clears stale `known_hosts`).
 - `clawdlets infra apply`: opentofu apply only (bootstrap SSH toggle).
 - `clawdlets lockdown`: rebuild over VPN/tailnet and remove public SSH from Hetzner firewall.
@@ -52,15 +51,15 @@ Note: `project init` already includes `infra/configs/clawdlets.json`. Don’t ru
 
 Canonical config lives in `infra/configs/clawdlets.json` (don’t edit Nix files directly).
 
-2) Create stack + secrets:
+2) Create secrets + preflight:
 ```bash
-export CLAWDLETS_INTERACTIVE=1
-clawdlets stack init
 clawdlets secrets init
 clawdlets doctor --scope deploy
 ```
 
 Non-interactive: keep inputs in `.clawdlets/secrets.json` and run `clawdlets secrets init --from-json .clawdlets/secrets.json` (if the file is missing, `secrets init` will write a template and exit).
+
+LLM API keys are provided via `secrets.<secretName>` in that JSON (e.g. `secrets.z_ai_api_key`) and wired to env via `fleet.envSecrets` in `infra/configs/clawdlets.json`.
 
 3) Provision + install:
 ```bash
@@ -75,7 +74,8 @@ clawdlets bootstrap
 - ensure `publicSsh.enable=false`: `clawdlets host set --public-ssh false`
 - then:
 ```bash
-clawdlets lockdown --target-host admin@<tailscale-ip>
+clawdlets host set --target-host admin@<tailscale-ip>
+clawdlets lockdown
 ```
 
 6) Rebuild (pinned to a full commit SHA):
@@ -94,11 +94,11 @@ clawdlets server logs --target-host admin@<ipv4> --unit clawdbot-maren.service -
 
 ## Common follow-ups
 
-- Change tokens/passwords: edit `.clawdlets/secrets/hosts/<host>/*.yaml` with sops, sync, rebuild.
+- Change tokens/passwords: edit `secrets/hosts/<host>/*.yaml` with sops, sync, rebuild.
 - Add a bot: `clawdlets bot add --bot <id>` → re-run `clawdlets secrets init` → rebuild.
 - Add/enable a skill:
   - add it to `infra/configs/bundled-skills.json` (if bundled)
   - allow it per-bot via canonical config:
     - `clawdlets config set --path fleet.botOverrides.<bot>.skills.allowBundled --value-json '["github","brave-search"]'`
-  - if it needs secrets: add `.clawdlets/secrets/hosts/<host>/<secret>.yaml`, then `clawdlets secrets sync` → rebuild
-- Add another operator machine: add their age public key to `.clawdlets/secrets/.sops.yaml` recipients for that host and re-encrypt.
+  - if it needs secrets: add `secrets/hosts/<host>/<secret>.yaml`, then `clawdlets secrets sync` → rebuild
+- Add another operator machine: add their age public key to `secrets/.sops.yaml` recipients for that host and re-encrypt.

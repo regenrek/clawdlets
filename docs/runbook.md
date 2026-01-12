@@ -19,15 +19,16 @@ If/when you want required status checks, re-run with explicit contexts:
 ## Day 0 (bootstrap)
 
 1) Enter deterministic toolchain (optional): `devenv shell`
-2) `export CLAWDLETS_INTERACTIVE=1`
-3) `clawdlets stack init`
-4) `clawdlets secrets init`
-5) `clawdlets doctor --scope deploy`
-6) `clawdlets infra apply --public-ssh=true`
-7) `clawdlets bootstrap`
-8) Verify tailnet, then: `clawdlets doctor --scope deploy --strict`
-9) Switch admin access to VPN + close public SSH: `clawdlets lockdown --target-host admin@<vpn-ip>`
-10) `clawdlets server audit --target-host admin@<vpn-ip>`
+2) `export CLAWDLETS_INTERACTIVE=1` (optional; forces prompts)
+3) `clawdlets secrets init`
+4) `clawdlets doctor --scope deploy`
+5) `clawdlets infra apply --public-ssh=true`
+6) `clawdlets bootstrap`
+7) Verify tailnet, then: `clawdlets doctor --scope deploy --strict`
+8) Switch admin access to VPN + close public SSH:
+   - `clawdlets host set --target-host admin@<vpn-ip>`
+   - `clawdlets lockdown`
+9) `clawdlets server audit --target-host admin@<vpn-ip>`
 
 ## Day 2 (routine ops)
 
@@ -37,7 +38,7 @@ Pinned rebuilds:
 
 Secrets rotation:
 
-- edit `.clawdlets/secrets/hosts/<host>/*.yaml` → `clawdlets secrets sync` → rebuild pinned
+- edit `secrets/hosts/<host>/*.yaml` → `clawdlets secrets sync` → rebuild pinned
 
 ## Rollback (must exist before prod)
 
