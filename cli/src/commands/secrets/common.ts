@@ -1,22 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { validateTargetHost } from "@clawdbot/clawdlets-core/lib/ssh-remote";
+import { needsSudo, requireTargetHost } from "../ssh-target.js";
 
-export function needsSudo(targetHost: string): boolean {
-  return !/^root@/i.test(targetHost.trim());
-}
-
-export function requireTargetHost(targetHost: string, hostName: string): string {
-  const v = targetHost.trim();
-  if (v) return validateTargetHost(v);
-  throw new Error(
-    [
-      `missing target host for ${hostName}`,
-      "set it in .clawdlets/stack.json (hosts.<host>.targetHost) or pass --target-host",
-      "recommended: use an SSH config alias (e.g. botsmj)",
-    ].join("; "),
-  );
-}
+export { needsSudo, requireTargetHost };
 
 function quoteYamlString(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
