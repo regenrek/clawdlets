@@ -11,7 +11,7 @@ import { mkpasswdYescryptHash } from "@clawdbot/clawdlets-core/lib/mkpasswd";
 import { sopsPathRegexForDirFiles, upsertSopsCreationRule } from "@clawdbot/clawdlets-core/lib/sops-config";
 import { sopsDecryptYamlFile, sopsEncryptYamlToFile } from "@clawdbot/clawdlets-core/lib/sops";
 import { sanitizeOperatorId } from "@clawdbot/clawdlets-core/lib/identifiers";
-import { parseSecretsInitJson, validateSecretsInitNonInteractive, type SecretsInitJson } from "@clawdbot/clawdlets-core/lib/secrets-init";
+import { buildSecretsInitTemplate, parseSecretsInitJson, validateSecretsInitNonInteractive, type SecretsInitJson } from "@clawdbot/clawdlets-core/lib/secrets-init";
 import { loadStack, loadStackEnv } from "@clawdbot/clawdlets-core/stack";
 import { assertSafeHostName, loadClawdletsConfig } from "@clawdbot/clawdlets-core/lib/clawdlets-config";
 import { readYamlScalarFromMapping } from "@clawdbot/clawdlets-core/lib/yaml-scalar";
@@ -110,12 +110,7 @@ export const secretsInit = defineCommand({
           }
         }
       } else {
-        const template: SecretsInitJson = {
-          adminPasswordHash: "<REPLACE_WITH_YESCRYPT_HASH>",
-          ...(requiresTailscaleAuthKey ? { tailscaleAuthKey: "<REPLACE_WITH_TSKEY_AUTH>" } : {}),
-          zAiApiKey: "<OPTIONAL>",
-          discordTokens: Object.fromEntries(bots.map((b) => [b, "<REPLACE_WITH_DISCORD_TOKEN>"])),
-        };
+        const template = buildSecretsInitTemplate({ bots, requiresTailscaleAuthKey });
 
         if (!args.dryRun) {
           await ensureDir(path.dirname(defaultSecretsJsonPath));
@@ -320,7 +315,7 @@ export const secretsInit = defineCommand({
       for (const secretName of requiredSecrets) {
         const outPath = path.join(localSecretsDir, `${secretName}.yaml`);
         const plaintextYaml = upsertYamlScalarLine({ text: "\n", key: secretName, value: resolvedValues[secretName] ?? "" });
-        await sopsEncryptYamlToFile({ plaintextYaml, outPath, nix });
+        await sopsEncryptYamlToFile({ plaintextYaml, outPath, configPath: sopsConfigPath, nix });
         const encrypted = fs.readFileSync(outPath, "utf8");
         await writeFileAtomic(path.join(extraFilesSecretsDir, `${secretName}.yaml`), encrypted, { mode: 0o400 });
       }

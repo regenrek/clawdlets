@@ -65,6 +65,21 @@ describe("sops args", () => {
     expect(args[args.length - 1]).toBe("/tmp/hosts/clawdbot-fleet-host.yaml");
   });
 
+  it("decrypt includes --config when set", async () => {
+    const { sopsDecryptYamlFile } = await import("../src/lib/sops");
+    await sopsDecryptYamlFile({
+      filePath: "/tmp/hosts/clawdbot-fleet-host.yaml",
+      configPath: "/tmp/.sops.yaml",
+      nix: { nixBin: "nix", dryRun: true },
+    });
+
+    expect(nixToolsState.lastShellArgs).not.toBeNull();
+    const args = nixToolsState.lastShellArgs!;
+    expect(args[0]).toBe("--config");
+    expect(args[1]).toBe("/tmp/.sops.yaml");
+    expect(args[2]).toBe("decrypt");
+  });
+
   it("decrypt omits filename-override when not set", async () => {
     const { sopsDecryptYamlFile } = await import("../src/lib/sops");
     await sopsDecryptYamlFile({
@@ -93,6 +108,22 @@ describe("sops args", () => {
     const idxOverride = args.indexOf("--filename-override");
     expect(idxOverride).toBeGreaterThanOrEqual(0);
     expect(args[idxOverride + 1]).toBe("/tmp/hosts/clawdbot-fleet-host.yaml");
+  });
+
+  it("encrypt includes --config when set", async () => {
+    const { sopsEncryptYamlToFile } = await import("../src/lib/sops");
+    await sopsEncryptYamlToFile({
+      plaintextYaml: "hello: world\n",
+      outPath: "/tmp/hosts/clawdbot-fleet-host.yaml",
+      configPath: "/tmp/.sops.yaml",
+      nix: { nixBin: "nix", dryRun: true },
+    });
+
+    expect(runState.lastArgs).not.toBeNull();
+    const args = runState.lastArgs!;
+    const idxConfig = args.indexOf("--config");
+    expect(idxConfig).toBeGreaterThanOrEqual(0);
+    expect(args[idxConfig + 1]).toBe("/tmp/.sops.yaml");
   });
 
   it("encrypt passes plaintext via stdin", async () => {

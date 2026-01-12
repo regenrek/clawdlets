@@ -196,7 +196,7 @@ export const secretsMigrate = defineCommand({
           secretName,
         });
         const plaintextYaml = YAML.stringify({ [secretName]: value });
-        await sopsEncryptYamlToFile({ plaintextYaml, outPath: localPath, nix });
+        await sopsEncryptYamlToFile({ plaintextYaml, outPath: localPath, configPath: sopsConfigPath, nix });
         const encrypted = fs.readFileSync(localPath, "utf8");
         await writeFileAtomic(extraPath, encrypted, { mode: 0o400 });
       }

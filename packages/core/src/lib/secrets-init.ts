@@ -5,6 +5,19 @@ export type SecretsInitJson = {
   discordTokens: Record<string, string>;
 };
 
+export function buildSecretsInitTemplate(params: {
+  bots: string[];
+  requiresTailscaleAuthKey: boolean;
+}): SecretsInitJson {
+  const bots = Array.from(new Set(params.bots.map((b) => String(b).trim()).filter(Boolean)));
+  return {
+    adminPasswordHash: "<REPLACE_WITH_YESCRYPT_HASH>",
+    ...(params.requiresTailscaleAuthKey ? { tailscaleAuthKey: "<REPLACE_WITH_TSKEY_AUTH>" } : {}),
+    zAiApiKey: "<OPTIONAL>",
+    discordTokens: Object.fromEntries(bots.map((b) => [b, "<REPLACE_WITH_DISCORD_TOKEN>"])),
+  };
+}
+
 export function parseSecretsInitJson(raw: string): SecretsInitJson {
   let parsed: unknown;
   try {

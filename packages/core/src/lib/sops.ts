@@ -11,6 +11,7 @@ import { withFlakesEnv } from "./nix-flakes.js";
 export async function sopsDecryptYamlFile(params: {
   filePath: string;
   filenameOverride?: string;
+  configPath?: string;
   ageKeyFile?: string;
   nix: NixToolOpts;
 }): Promise<string> {
@@ -19,6 +20,7 @@ export async function sopsDecryptYamlFile(params: {
     ...(params.ageKeyFile ? { SOPS_AGE_KEY_FILE: params.ageKeyFile } : {}),
   };
   const args = [
+    ...(params.configPath ? (["--config", params.configPath] as const) : []),
     "decrypt",
     "--input-type",
     "yaml",
@@ -39,6 +41,7 @@ export async function sopsEncryptYamlToFile(params: {
   plaintextYaml: string;
   outPath: string;
   filenameOverride?: string;
+  configPath?: string;
   nix: NixToolOpts;
 }): Promise<void> {
   const outDir = path.dirname(params.outPath);
@@ -50,6 +53,7 @@ export async function sopsEncryptYamlToFile(params: {
     "nixpkgs#sops",
     "-c",
     "sops",
+    ...(params.configPath ? (["--config", params.configPath] as const) : []),
     "encrypt",
     "--input-type",
     "yaml",
