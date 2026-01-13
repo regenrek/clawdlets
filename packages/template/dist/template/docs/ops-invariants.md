@@ -42,6 +42,17 @@ Default breakglass path:
 - Default: `admin` cannot run `nixos-rebuild` (breakglass required).
 - Optional: enable `clawdlets.operator.rebuild` to allow `admin` to run a constrained pinned rebuild command.
 
+Example (in your base flake host module):
+
+```nix
+{
+  clawdlets.operator.rebuild = {
+    enable = true;
+    flakeBase = "github:OWNER/REPO"; # must be public
+  };
+}
+```
+
 ## Egress posture (honesty)
 
 Default posture blocks outbound SMTP ports only (anti-spam). For real bot egress control, enable `clawdlets.egress.mode = "proxy-allowlist"`.

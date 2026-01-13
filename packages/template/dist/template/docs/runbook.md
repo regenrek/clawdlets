@@ -35,6 +35,7 @@ If/when you want required status checks, re-run with explicit contexts:
 Pinned rebuilds:
 
 - `clawdlets server rebuild --target-host admin@<vpn-ip> --rev HEAD`
+  - requires `clawdlets.operator.rebuild` enabled (otherwise console breakglass)
 
 Secrets rotation:
 

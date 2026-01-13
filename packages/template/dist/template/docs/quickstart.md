@@ -85,6 +85,8 @@ clawdlets server rebuild --target-host admin@<ipv4> --rev HEAD
 
 `--rev HEAD` resolves to the full SHA locally before the remote build.
 
+Note: `admin@...` rebuild requires `clawdlets.operator.rebuild` enabled on-host (see `docs/ops-invariants.md`). Otherwise, use console breakglass or rebuild from a trusted workstation.
+
 ## Server checks
 
 ```bash

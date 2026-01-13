@@ -42,6 +42,8 @@ clawdlets secrets sync
 clawdlets server rebuild --target-host admin@<target> --rev HEAD
 ```
 
+Note: `admin@...` rebuild requires `clawdlets.operator.rebuild` enabled on-host (see `docs/ops-invariants.md`).
+
 ## Add/enable a skill
 
 1) If bundled: add id to `infra/configs/bundled-skills.json`
