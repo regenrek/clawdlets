@@ -77,9 +77,6 @@ function main() {
 
   copyTree(path.join(repoRoot, "docs"), path.join(outDir, "docs"));
   copyTree(path.join(repoRoot, "infra"), path.join(outDir, "infra"));
-  if (fs.existsSync(path.join(repoRoot, "skills"))) {
-    copyTree(path.join(repoRoot, "skills"), path.join(outDir, "skills"));
-  }
   if (fs.existsSync(path.join(repoRoot, "agent-playbooks"))) {
     copyTree(path.join(repoRoot, "agent-playbooks"), path.join(outDir, "agent-playbooks"));
   }
