@@ -12,6 +12,7 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 - New docs: `docs/config.md` (canonical config + host knobs).
 - Doctor check: `discord routing` now verifies `fleet.guildId` and per-bot `fleet.routingOverrides.<bot>.channels` to prevent “silent” bots.
 - `clawdlets bootstrap --force` skips doctor preflight gate (advanced usage).
+- Destroy command: `clawdlets infra destroy` (with `--force` for non-interactive automation).
 
 ### Changed
 - Workflow automation: `nix-clawdbot` bump PRs are created using a GitHub App token (so normal PR checks run) and are compatible with strict branch protection.
