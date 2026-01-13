@@ -120,4 +120,48 @@ describe("secrets-init JSON + non-interactive validation", () => {
       }),
     ).not.toThrow();
   });
+
+  it("resolveSecretsInitFromJsonArg accepts explicit value", async () => {
+    const { resolveSecretsInitFromJsonArg } = await import("../src/lib/secrets-init");
+    expect(
+      resolveSecretsInitFromJsonArg({
+        fromJsonRaw: " ./secrets.json ",
+        argv: [],
+        stdinIsTTY: true,
+      }),
+    ).toBe("./secrets.json");
+  });
+
+  it("resolveSecretsInitFromJsonArg accepts --from-json - only when explicitly present in argv", async () => {
+    const { resolveSecretsInitFromJsonArg } = await import("../src/lib/secrets-init");
+    expect(
+      resolveSecretsInitFromJsonArg({
+        fromJsonRaw: true,
+        argv: ["node", "cli.js", "secrets", "init", "--from-json", "-", "--yes"],
+        stdinIsTTY: false,
+      }),
+    ).toBe("-");
+  });
+
+  it("resolveSecretsInitFromJsonArg rejects missing value when parsed as boolean flag", async () => {
+    const { resolveSecretsInitFromJsonArg } = await import("../src/lib/secrets-init");
+    expect(() =>
+      resolveSecretsInitFromJsonArg({
+        fromJsonRaw: true,
+        argv: ["node", "cli.js", "secrets", "init", "--from-json", "--yes"],
+        stdinIsTTY: false,
+      }),
+    ).toThrow(/missing --from-json value/i);
+  });
+
+  it("resolveSecretsInitFromJsonArg rejects TTY stdin for --from-json -", async () => {
+    const { resolveSecretsInitFromJsonArg } = await import("../src/lib/secrets-init");
+    expect(() =>
+      resolveSecretsInitFromJsonArg({
+        fromJsonRaw: "-",
+        argv: ["node", "cli.js", "secrets", "init", "--from-json", "-"],
+        stdinIsTTY: true,
+      }),
+    ).toThrow(/tty/i);
+  });
 });

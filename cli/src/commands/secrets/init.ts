@@ -13,7 +13,7 @@ import { getHostAgeKeySopsCreationRulePathRegex, getHostSecretsSopsCreationRuleP
 import { sanitizeOperatorId } from "@clawdbot/clawdlets-core/lib/identifiers";
 import { buildFleetEnvSecretsPlan } from "@clawdbot/clawdlets-core/lib/fleet-env-secrets";
 import { getRecommendedSecretNameForEnvVar } from "@clawdbot/clawdlets-core/lib/llm-provider-env";
-import { buildSecretsInitTemplate, isPlaceholderSecretValue, listSecretsInitPlaceholders, parseSecretsInitJson, validateSecretsInitNonInteractive, type SecretsInitJson } from "@clawdbot/clawdlets-core/lib/secrets-init";
+import { buildSecretsInitTemplate, isPlaceholderSecretValue, listSecretsInitPlaceholders, parseSecretsInitJson, resolveSecretsInitFromJsonArg, validateSecretsInitNonInteractive, type SecretsInitJson } from "@clawdbot/clawdlets-core/lib/secrets-init";
 import { readYamlScalarFromMapping } from "@clawdbot/clawdlets-core/lib/yaml-scalar";
 import { getHostEncryptedAgeKeyFile, getHostExtraFilesKeyPath, getHostExtraFilesSecretsDir, getHostSecretsDir, getLocalOperatorAgeKeyPath } from "@clawdbot/clawdlets-core/repo-layout";
 import { cancelFlow, navOnCancel, NAV_EXIT } from "../../lib/wizard.js";
@@ -108,14 +108,11 @@ export const secretsInit = defineCommand({
     const defaultSecretsJsonPath = path.join(layout.runtimeDir, "secrets.json");
     const defaultSecretsJsonDisplay = path.relative(process.cwd(), defaultSecretsJsonPath) || defaultSecretsJsonPath;
 
-    let fromJson: string | undefined;
-    if ((args as any).fromJson === true) {
-      // citty parses `--from-json -` as a boolean flag; accept stdin only when piped/heredoc.
-      if (hasTty) throw new Error("missing --from-json value (use --from-json <path|-> or --from-json=-)");
-      fromJson = "-";
-    } else if (typeof (args as any).fromJson === "string" && String((args as any).fromJson).trim()) {
-      fromJson = String((args as any).fromJson).trim();
-    }
+    let fromJson = resolveSecretsInitFromJsonArg({
+      fromJsonRaw: (args as any).fromJson,
+      argv: process.argv,
+      stdinIsTTY: Boolean(process.stdin.isTTY),
+    });
     if (!interactive && !fromJson) {
       if (fs.existsSync(defaultSecretsJsonPath)) {
         fromJson = defaultSecretsJsonPath;

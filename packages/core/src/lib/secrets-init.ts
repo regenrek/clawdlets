@@ -5,6 +5,65 @@ export type SecretsInitJson = {
   discordTokens: Record<string, string>;
 };
 
+function getCliFlagValue(argv: string[], flagNames: string[]): string | undefined {
+  let found: string | undefined;
+
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i] ?? "";
+
+    for (const flag of flagNames) {
+      if (a === flag) {
+        found = argv[i + 1];
+        break;
+      }
+
+      const prefix = `${flag}=`;
+      if (a.startsWith(prefix)) {
+        found = a.slice(prefix.length);
+        break;
+      }
+    }
+  }
+
+  return found;
+}
+
+export function resolveSecretsInitFromJsonArg(params: {
+  fromJsonRaw: unknown;
+  argv: string[];
+  stdinIsTTY: boolean;
+}): string | undefined {
+  const raw = params.fromJsonRaw;
+
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return undefined;
+    if (trimmed.startsWith("-") && trimmed !== "-") {
+      throw new Error("missing --from-json value (use --from-json <path|->, --from-json=<path|->)");
+    }
+    if (trimmed === "-" && params.stdinIsTTY) {
+      throw new Error("refusing to read --from-json - from a TTY (pipe JSON or pass --from-json <file>)");
+    }
+    return trimmed;
+  }
+
+  if (raw === undefined || raw === null || raw === false) return undefined;
+
+  if (raw !== true) throw new Error("invalid --from-json value");
+
+  const cliValue = getCliFlagValue(params.argv, ["--from-json", "--fromJson"]);
+  const trimmed = String(cliValue || "").trim();
+  if (!trimmed || (trimmed.startsWith("-") && trimmed !== "-")) {
+    throw new Error("missing --from-json value (use --from-json <path|->, --from-json=<path|->)");
+  }
+
+  if (trimmed === "-" && params.stdinIsTTY) {
+    throw new Error("refusing to read --from-json - from a TTY (pipe JSON or pass --from-json <file>)");
+  }
+
+  return trimmed;
+}
+
 export function isPlaceholderSecretValue(value: string): boolean {
   const s = value.trim();
   if (!s) return false;
