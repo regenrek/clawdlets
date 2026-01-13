@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { defineCommand } from "citty";
-import { applyOpenTofuVars } from "@clawdbot/clawdlets-core/lib/opentofu";
+import * as p from "@clack/prompts";
+import { applyOpenTofuVars, destroyOpenTofuVars } from "@clawdbot/clawdlets-core/lib/opentofu";
 import { expandPath } from "@clawdbot/clawdlets-core/lib/path-expand";
 import { findRepoRoot } from "@clawdbot/clawdlets-core/lib/repo";
 import { loadClawdletsConfig } from "@clawdbot/clawdlets-core/lib/clawdlets-config";
@@ -65,6 +66,74 @@ const infraApply = defineCommand({
   },
 });
 
+const infraDestroy = defineCommand({
+  meta: {
+    name: "destroy",
+    description: "Destroy Hetzner OpenTofu resources for a host (DANGEROUS).",
+  },
+  args: {
+    runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
+    host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
+    force: { type: "boolean", description: "Skip confirmation prompt (non-interactive).", default: false },
+    dryRun: { type: "boolean", description: "Print commands without executing.", default: false },
+  },
+  async run({ args }) {
+    const cwd = process.cwd();
+    const repoRoot = findRepoRoot(cwd);
+    const hostName = resolveHostNameOrExit({ cwd, runtimeDir: (args as any).runtimeDir, hostArg: args.host });
+    if (!hostName) return;
+    const { layout, config: clawdletsConfig } = loadClawdletsConfig({ repoRoot, runtimeDir: (args as any).runtimeDir });
+    const hostCfg = clawdletsConfig.hosts[hostName];
+    if (!hostCfg) throw new Error(`missing host in infra/configs/clawdlets.json: ${hostName}`);
+
+    const hcloudToken = String(process.env.HCLOUD_TOKEN || "").trim();
+    if (!hcloudToken) throw new Error("missing HCLOUD_TOKEN (set env var)");
+
+    const adminCidr = String(hostCfg.opentofu.adminCidr || "").trim();
+    if (!adminCidr) throw new Error(`missing opentofu.adminCidr for ${hostName} (set via: clawdlets host set --admin-cidr ...)`);
+
+    const sshPubkeyFileRaw = String(hostCfg.opentofu.sshPubkeyFile || "").trim();
+    if (!sshPubkeyFileRaw) throw new Error(`missing opentofu.sshPubkeyFile for ${hostName} (set via: clawdlets host set --ssh-pubkey-file ...)`);
+    const sshPubkeyFileExpanded = expandPath(sshPubkeyFileRaw);
+    const sshPubkeyFile = path.isAbsolute(sshPubkeyFileExpanded)
+      ? sshPubkeyFileExpanded
+      : path.resolve(repoRoot, sshPubkeyFileExpanded);
+    if (!fs.existsSync(sshPubkeyFile)) throw new Error(`ssh pubkey file not found: ${sshPubkeyFile}`);
+
+    const force = Boolean((args as any).force);
+    const interactive = process.stdin.isTTY && process.stdout.isTTY;
+    if (!force) {
+      if (!interactive) throw new Error("refusing to destroy without --force (no TTY)");
+      p.intro("clawdlets infra destroy");
+      const ok = await p.confirm({
+        message: `Destroy Hetzner resources for host ${hostName}?`,
+        initialValue: false,
+      });
+      if (p.isCancel(ok) || !ok) {
+        p.cancel("canceled");
+        return;
+      }
+    }
+
+    await destroyOpenTofuVars({
+      repoRoot: layout.repoRoot,
+      vars: {
+        hcloudToken,
+        adminCidr,
+        sshPubkeyFile,
+        serverType: hostCfg.hetzner.serverType,
+        publicSsh: false,
+      },
+      nixBin: String(process.env.NIX_BIN || "nix").trim() || "nix",
+      dryRun: args.dryRun,
+      redact: [hcloudToken, process.env.GITHUB_TOKEN].filter(Boolean) as string[],
+    });
+
+    console.log(`ok: opentofu destroyed for ${hostName}`);
+    console.log(`hint: state in ${layout.opentofuDir}`);
+  },
+});
+
 export const infra = defineCommand({
   meta: {
     name: "infra",
@@ -72,5 +141,6 @@ export const infra = defineCommand({
   },
   subCommands: {
     apply: infraApply,
+    destroy: infraDestroy,
   },
 });
