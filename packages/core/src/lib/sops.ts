@@ -42,7 +42,6 @@ async function hasSopsBinary(opts: NixToolOpts): Promise<boolean> {
   }
   return cachedHasSops;
 }
-
 export async function sopsDecryptYamlFile(params: {
   filePath: string;
   filenameOverride?: string;
