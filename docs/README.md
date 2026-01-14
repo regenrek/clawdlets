@@ -17,3 +17,8 @@
 - `docs/troubleshooting.md`: common failure modes
 - `docs/publicing.md`: OSS-safe publishing checklist
 - `docs/upstream.md`: nix-clawdbot tracking notes
+
+## Template docs sync
+
+`packages/template/dist/template/docs` is generated from `docs/`.
+After updating docs, run `pnpm -C packages/template build` and commit the dist changes.
