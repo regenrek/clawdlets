@@ -19,7 +19,7 @@ clawdlets server rebuild --target-host admin@<ipv4> --rev HEAD
 
 ## Rotate tokens/secrets
 
-1) Edit files under `secrets/hosts/clawdlets-fleet-mj-2/` (example: `discord_token_maren.yaml`)
+1) Edit files under `secrets/hosts/clawdbot-fleet-host/` (example: `discord_token_maren.yaml`)
 2) Re-encrypt (or use `clawdlets secrets init` to regenerate)
 3) `clawdlets secrets sync`
 4) `clawdlets secrets verify`
@@ -149,7 +149,7 @@ Enable via CLI:
 clawdlets fleet set --restic-enable true --restic-repository "s3:s3.amazonaws.com/<bucket>/clawdbot"
 ```
 
-Add secrets under `secrets/hosts/clawdlets-fleet-mj-2/` (example: `restic_password.yaml`), sync, then rebuild.
+Add secrets under `secrets/hosts/clawdbot-fleet-host/` (example: `restic_password.yaml`), sync, then rebuild.
 
 Restore (example, run as root on the host):
 

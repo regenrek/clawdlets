@@ -38,6 +38,16 @@ On every bot service start:
 - always: sync a managed allowlist (AGENTS/SOUL/IDENTITY/TOOLS/USER/HEARTBEAT) into the workspace
 - always: sync `skills/` into the workspace (custom/local skills)
 
+### Custom/local skills
+
+Put skill definitions under:
+
+- shared: `fleet/workspaces/common/skills/<skill>/SKILL.md`
+- per-bot: `fleet/workspaces/bots/<bot>/skills/<skill>/SKILL.md`
+
+The bot config always includes `skills.load.extraDirs = ["<workspace>/skills"]`, so skills in that folder are discoverable without extra per-bot config.
+
+
 ## Identity (optional)
 
 Set a shared agent identity:
