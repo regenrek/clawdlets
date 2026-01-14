@@ -12,7 +12,7 @@ vi.mock("../src/lib/run.js", () => ({
     if (args.includes("--version")) return "nix (mock) 2.0";
     if (args[0] === "eval" || args.includes("eval")) {
       const joined = args.join(" ");
-      const isTemplate = joined.includes("packages/template/dist/template/fleet/fleet.nix");
+      const isTemplate = joined.includes("packages/template/dist/template/infra/configs/fleet.nix");
       return JSON.stringify(isTemplate ? mockFleetTemplate : mockFleetMain);
     }
     return "";
@@ -46,9 +46,11 @@ describe("doctor", () => {
     await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "docs"), { recursive: true });
     await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "fleet"), { recursive: true });
     await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "fleet", "workspaces", "common"), { recursive: true });
+    await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "infra", "configs"), { recursive: true });
     await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "infra", "nix", "hosts"), { recursive: true });
     await mkdir(path.join(repoRoot, "infra", "opentofu"), { recursive: true });
     await mkdir(path.join(repoRoot, "fleet"), { recursive: true });
+    await mkdir(path.join(repoRoot, "infra", "configs"), { recursive: true });
     await mkdir(path.join(repoRoot, "infra", "nix", "hosts"), { recursive: true });
     await mkdir(path.join(repoRoot, ".clawdlets", "extra-files", "clawdbot-fleet-host", "var", "lib", "sops-nix"), { recursive: true });
 
@@ -146,11 +148,11 @@ describe("doctor", () => {
     );
 
     await writeFile(
-      path.join(repoRoot, "fleet", "fleet.nix"),
+      path.join(repoRoot, "infra", "configs", "fleet.nix"),
       [
         "{ lib }:",
         "let",
-        "  cfg = builtins.fromJSON (builtins.readFile ./clawdlets.json);",
+        "  cfg = builtins.fromJSON (builtins.readFile ../../fleet/clawdlets.json);",
         "  fleetCfg = cfg.fleet or { };",
         "in {",
         "  bots = fleetCfg.bots or [ \"alpha\" \"beta\" ];",
@@ -165,11 +167,11 @@ describe("doctor", () => {
     );
 
     await writeFile(
-      path.join(repoRoot, "packages", "template", "dist", "template", "fleet", "fleet.nix"),
+      path.join(repoRoot, "packages", "template", "dist", "template", "infra", "configs", "fleet.nix"),
       [
         "{ lib }:",
         "let",
-        "  cfg = builtins.fromJSON (builtins.readFile ./clawdlets.json);",
+        "  cfg = builtins.fromJSON (builtins.readFile ../../fleet/clawdlets.json);",
         "  fleetCfg = cfg.fleet or { };",
         "in {",
         "  bots = fleetCfg.bots or [ \"alpha\" \"beta\" ];",
@@ -286,6 +288,19 @@ describe("doctor", () => {
     const { collectDoctorChecks } = await import("../src/doctor");
     const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host" });
     expect(checks.filter((c) => c.status === "missing")).toEqual([]);
+  });
+
+  it("warns when clawdlets config fails to load", async () => {
+    const configPath = path.join(repoRoot, "fleet", "clawdlets.json");
+    const original = await readFile(configPath, "utf8");
+    await writeFile(configPath, "{", "utf8");
+
+    const { collectDoctorChecks } = await import("../src/doctor");
+    const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host", scope: "deploy" });
+    const check = checks.find((c) => c.label === "clawdlets config");
+    expect(check?.status).toBe("warn");
+
+    await writeFile(configPath, original, "utf8");
   });
 
   it("requires discord routing config (guildId + channels)", async () => {
@@ -454,5 +469,19 @@ describe("doctor", () => {
     const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host" });
     const check = checks.find((c) => c.label === "GITHUB_TOKEN");
     expect(check?.status).toBe("warn");
+  });
+
+  it("skips GitHub token checks when requested", async () => {
+    const git = await import("../src/lib/git");
+    const github = await import("../src/lib/github");
+    vi.mocked(git.tryGetOriginFlake).mockResolvedValue("github:acme/private-repo");
+    vi.mocked(github.checkGithubRepoVisibility).mockResolvedValue({ ok: true, status: "private-or-missing" });
+
+    const { collectDoctorChecks } = await import("../src/doctor");
+    const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host", skipGithubTokenCheck: true });
+    const check = checks.find((c) => c.label === "GITHUB_TOKEN");
+    expect(check?.status).toBe("ok");
+    expect(String(check?.detail || "")).toContain("skipped");
+    expect(vi.mocked(github.checkGithubRepoVisibility)).not.toHaveBeenCalled();
   });
 });

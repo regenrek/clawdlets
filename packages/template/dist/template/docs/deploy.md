@@ -1,104 +1,78 @@
-# Deploy / Updates (options)
+# Deploy / Updates (cache-only)
 
 Goal: keep the **repo public-safe** (no plaintext secrets) and keep local operator private keys in `.clawdlets/` (gitignored).
 
-## Recommended: CLI-first deploy (config in git + encrypted secrets)
+## Recommended: CI build + cache-only deploy
 
-Why:
-- No plaintext secrets in git (secrets are sops-encrypted under `secrets/`).
-- No long-lived GitHub creds on servers (only needed if your base flake repo is private).
-- One source of truth for CLI + future UI.
+**Principle:** the host never evaluates a flake from GitHub. It only:
 
-macOS note (Determinate Nix): if you see “restricted setting / not a trusted user” warnings during bootstrap,
-fix `trusted-users` once. See `docs/install.md`.
+- downloads signed store paths from trusted caches (Garnix, optionally Attic)
+- installs encrypted secrets to `/var/lib/clawdlets/secrets/hosts/<host>`
+- switches to a prebuilt NixOS system closure by store path
 
-## CI builds (Garnix)
+### CI build
 
-- `garnix.yaml` builds `.#packages.*` and `.#packages.x86_64-linux.default` (the default host system closure).
-- After merging to `main`, confirm the host build is green in Garnix before deploying.
-- On a host, verify caches:
-  - `nix show-config | rg 'substituters|trusted-public-keys'`
-
-### 1) First install (provision + nixos-anywhere)
-
-Run:
+Build the host toplevel (per host):
 
 ```bash
-clawdlets env init
-clawdlets secrets init
-clawdlets doctor --scope deploy
-clawdlets bootstrap
+nix build .#nixosConfigurations.<host>.config.system.build.toplevel
 ```
 
-If bootstrap OOMs (exit 137), temporarily disable `"coding-agent"` / Codex (via `clawdlets config set ...`) or use a bigger
-builder. Details: `docs/install.md`.
+Record a deploy manifest (example):
 
-### 2) Updates (rebuild)
+```json
+{
+  "rev": "<40-hex-sha>",
+  "host": "clawdbot-fleet-host",
+  "toplevel": "/nix/store/<hash>-nixos-system-<host>-<version>",
+  "secretsDigest": "<sha256>"
+}
+```
 
-Preferred: rebuild on the host over VPN (WireGuard/Tailscale), but pass GitHub auth only for the command.
-
-CLI (pinned, resolves full SHA locally):
+### Deploy (switch by store path)
 
 ```bash
-just server-rebuild-rev admin@<ipv4> HEAD
+clawdlets server deploy --target-host admin@<tailscale-ip> \
+  --toplevel /nix/store/<hash>-nixos-system-<host>-<version> \
+  --rev <sha>
 ```
 
-Example (WireGuard / Tailscale):
+Or, if you have a manifest:
 
 ```bash
-clawdlets server rebuild --target-host admin@<tailscale-ip> --rev HEAD
+clawdlets server deploy --target-host admin@<tailscale-ip> --manifest ./deploy.json
 ```
 
-Notes:
-- `nixos-rebuild` runs on the host (your macOS machine doesn’t need it installed).
-- This keeps `GITHUB_TOKEN` off disk on the server (only in process env during the command; set it via `.clawdlets/env` or a normal env var).
-- Host Nix config includes the garnix cache (see `infra/nix/modules/clawdlets-host-baseline.nix`), so updates should
-  substitute instead of rebuilding from source in normal cases.
+`server deploy` always installs secrets and then switches the system profile.
 
-### Bot egress control (recommended)
+### Secrets only (optional)
 
-If you want “real egress control” for bot services, enable proxy allowlist mode:
+If you want to update secrets without switching:
 
-- Set `clawdlets.egress.mode = "proxy-allowlist"`.
-- Set `clawdlets.egress.proxy.allowedDomains` to the smallest set of domains your bots need.
+```bash
+clawdlets secrets sync --rev <sha|HEAD>
+```
 
-## Other options (and tradeoffs)
+## Cache configuration (host)
 
-### Private base repo + PAT
+Public cache only (default): just add substituters + trusted keys.
 
-If your base flake repo is private, set `GITHUB_TOKEN` (recommended: `.clawdlets/env`; fine-grained PAT; Contents: read).
+Private Garnix cache:
 
-### Private repo + store PAT on server
+- enable `clawdlets.cache.garnix.private.enable = true`
+- provide `/etc/nix/netrc` via sops secret (`clawdlets.cache.garnix.private.netrcSecret`)
+- keep `narinfo-cache-positive-ttl` at 3600 (required for presigned URLs)
 
-Pros:
-- Simple automation (timer/cron can rebuild).
+See `infra/nix/modules/clawdlets-host-baseline.nix` for the module options.
 
-Why we’re against it:
-- Long-lived GitHub credential at rest on a server (harder rotation, bigger blast radius).
+## Other options (tradeoffs)
 
-### GitHub App (automation without PATs)
+### Local build (workstation)
 
-Pros:
-- Short-lived installation tokens (no manual PAT rotation).
-- Can scope to a single repo + Contents read-only.
+If you have a Linux builder, `clawdlets server deploy` can build the toplevel locally
+when `--toplevel` is omitted. macOS builders are not supported for NixOS system builds.
 
-Where we use it today:
-- CI automation (dependency bump PRs) uses a GitHub App token so PR checks run normally (no `GITHUB_TOKEN` recursion trap).
+### Private base repo + PAT (bootstrap/lockdown)
 
-Where we’re *not* using it (yet):
-- Host-side rebuild automation (e.g. cron/comin pulling and switching) — we prefer pinned manual rebuilds for now.
-
-### CI build + signed binary cache (Attic)
-
-Pros:
-- Best long-term ops: servers pull signed substitutes from your cache.
-- Can avoid GitHub auth on servers entirely (depending on deploy approach).
-
-Why we’re not using it (yet):
-- Need to run/secure an Attic server + signing key, plus CI wiring.
-
-### “Build locally then copy store paths to server”
-
-Why it’s usually a dead end here:
-- macOS can’t directly build `x86_64-linux` NixOS closures without a Linux builder.
-- Pushing unsigned local store paths to a restricted Nix store hits the signature/trust wall again unless you redesign trust/signing.
+`bootstrap`/`lockdown` may still need `GITHUB_TOKEN` if your base flake is private.
+Deploys do not require GitHub access on the host.

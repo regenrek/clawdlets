@@ -260,7 +260,16 @@ export async function addRepoChecks(params: {
       }
 
       {
-        const templateFleetPath = path.join(repoRoot, "packages", "template", "dist", "template", "fleet", "fleet.nix");
+        const templateFleetPath = path.join(
+          repoRoot,
+          "packages",
+          "template",
+          "dist",
+          "template",
+          "infra",
+          "configs",
+          "fleet.nix",
+        );
         if (!fs.existsSync(templateFleetPath)) {
           params.push({ scope: "repo", status: "missing", label: "template fleet config", detail: templateFleetPath });
         } else {

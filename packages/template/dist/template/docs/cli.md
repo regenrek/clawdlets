@@ -10,8 +10,6 @@ Canonical source: `clawdlets --help`.
 - add bots: `clawdlets bot add --bot <id>`
 - set host basics: `clawdlets host set --add-ssh-key-file ~/.ssh/id_ed25519.pub --disk-device /dev/disk/by-id/... --enable true`
 - init secrets: `clawdlets secrets init` (TTY defaults to interactive; non-interactive uses `--from-json .clawdlets/secrets.json`)
-- init deploy creds (local): `clawdlets env init` (writes `.clawdlets/env`)
-- debug deploy creds: `clawdlets env show`
 - preflight: `clawdlets doctor --scope deploy`
 - lockdown gate: `clawdlets doctor --scope deploy --strict`
 - bootstrap: `clawdlets bootstrap`
@@ -23,7 +21,7 @@ Canonical source: `clawdlets --help`.
 - status: `clawdlets server status --target-host <host>`
 - logs: `clawdlets server logs --target-host <host> --unit clawdbot-melinda.service --since 10m --follow`
 - restart: `clawdlets server restart --target-host <host> --unit clawdbot-melinda.service`
-- rebuild pinned: `clawdlets server rebuild --target-host <host> --rev HEAD`
+- deploy pinned: `clawdlets server deploy --target-host <host> --toplevel /nix/store/... --rev <sha|HEAD>`
 - GitHub sync timers: `clawdlets server github-sync status --target-host <host>`
 - GitHub sync run: `clawdlets server github-sync run --target-host <host> --bot melinda`
 - GitHub sync logs: `clawdlets server github-sync logs --target-host <host> --bot melinda --follow`

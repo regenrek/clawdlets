@@ -7,7 +7,6 @@ Goal: prove clawdlets can provision + operate a single Hetzner host end-to-end w
 ### Provision + install
 
 - `fleet/clawdlets.json` exists (schemaVersion 4) and is the single source of truth for fleet + hosts.
-- `clawdlets env init` created `.clawdlets/env` and `HCLOUD_TOKEN` is set (local-only; never committed).
 - `CLAWDLETS_INTERACTIVE=1 clawdlets secrets init` created/updated:
   - `secrets/.sops.yaml`
   - `secrets/keys/hosts/<host>.agekey.yaml` (encrypted host age key)
@@ -33,19 +32,19 @@ Goal: prove clawdlets can provision + operate a single Hetzner host end-to-end w
 
 - Tailnet works (WireGuard or Tailscale).
 - `clawdlets doctor --scope deploy --strict` passes.
-- `clawdlets host set --target-host admin@<tail-ip>` then `clawdlets lockdown` succeeds.
+- `clawdlets host set --target-host admin@<tail-ip>` then `clawdlets lockdown --skip-rebuild` succeeds.
 - Public SSH closed:
   - Hetzner firewall removes TCP/22 from internet
   - NixOS only allows SSH via `tailscale0` when `publicSsh.enable=false`
 
 ### Day-2 ops
 
-- Rebuild pinned: `clawdlets server rebuild --target-host <host> --rev HEAD` works.
+- Deploy pinned: `clawdlets server deploy --target-host <host> --toplevel /nix/store/... --rev HEAD` works.
 - Rotate a Discord token:
   - edit `secrets/hosts/<host>/discord_token_<bot>.yaml` with `sops`
   - `clawdlets secrets sync`
-  - rebuild pinned; bot uses new token
-- Roll back by rebuilding an older commit SHA (pinned) and confirm bot still runs.
+  - deploy pinned; bot uses new token
+- Roll back by deploying an older commit SHA (pinned) and confirm bot still runs.
 
 ## Non-goals
 

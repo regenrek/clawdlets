@@ -5,7 +5,7 @@ let
   hostCfg = (cfg.hosts.${config.clawdlets.hostName} or { });
   tailnet = (hostCfg.tailnet or { });
   tailnetMode = tailnet.mode or "none";
-  fleet = import ../../../fleet/fleet.nix { inherit lib; };
+  fleet = import ../../configs/fleet.nix { inherit lib; };
   enableRootPassword = false;
 in {
   imports = [
@@ -80,13 +80,17 @@ in {
 
   security.sudo.extraConfig =
     let
-      rebuildSudo =
-        lib.optionalString config.clawdlets.operator.rebuild.enable ''
-          Cmnd_Alias CLAWDLETS_REBUILD = /etc/clawdlets/bin/rebuild-host --rev *
+      deploySudo =
+        lib.optionalString config.clawdlets.operator.deploy.enable ''
+          Cmnd_Alias CLAWDLETS_DEPLOY = \
+            /etc/clawdlets/bin/install-secrets --host * --tar * --rev *, \
+            /etc/clawdlets/bin/install-secrets --host * --tar * --rev * --digest *, \
+            /etc/clawdlets/bin/switch-system --toplevel * --rev *, \
+            /etc/clawdlets/bin/switch-system --toplevel * --rev * --dry-run
         '';
-      rebuildAlias =
-        if config.clawdlets.operator.rebuild.enable
-        then ", CLAWDLETS_REBUILD"
+      deployAlias =
+        if config.clawdlets.operator.deploy.enable
+        then ", CLAWDLETS_DEPLOY"
         else "";
     in ''
     Cmnd_Alias CLAWDBOT_SYSTEMCTL = \
@@ -124,8 +128,8 @@ in {
       /run/current-system/sw/bin/journalctl -u clawdbot-* -n * --since * -f --no-pager
     Cmnd_Alias CLAWDBOT_SS = /run/current-system/sw/bin/ss -ltnp
     Cmnd_Alias CLAWDBOT_GH_SYNC_READ = /etc/clawdlets/bin/gh-sync-read *
-    ${rebuildSudo}
-    admin ALL=(root) NOPASSWD: CLAWDBOT_SYSTEMCTL, CLAWDBOT_JOURNAL, CLAWDBOT_SS, CLAWDBOT_GH_SYNC_READ${rebuildAlias}
+    ${deploySudo}
+    admin ALL=(root) NOPASSWD: CLAWDBOT_SYSTEMCTL, CLAWDBOT_JOURNAL, CLAWDBOT_SS, CLAWDBOT_GH_SYNC_READ${deployAlias}
   '';
 
   services.clawdbotFleet = {

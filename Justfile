@@ -57,14 +57,8 @@ server-logs target_host args="":
 server-restart target_host args="":
   cd {{justfile_directory()}} && pnpm run clawdlets:server -- restart --target-host {{target_host}} {{args}}
 
-server-rebuild target_host args="":
-  cd {{justfile_directory()}} && pnpm run clawdlets:server -- rebuild --target-host {{target_host}} {{args}}
-
-server-rebuild-rev target_host rev="HEAD":
-  cd {{justfile_directory()}} && pnpm run clawdlets:server -- rebuild --target-host {{target_host}} --rev {{rev}}
-
-server-rebuild-ref target_host ref="main":
-  cd {{justfile_directory()}} && pnpm run clawdlets:server -- rebuild --target-host {{target_host}} --ref {{ref}}
+server-deploy target_host args="":
+  cd {{justfile_directory()}} && pnpm run clawdlets:server -- deploy --target-host {{target_host}} {{args}}
 
 nix-daemon-restart:
   ps -axo pid,command | rg 'nix-daemon' || true

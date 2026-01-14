@@ -98,22 +98,41 @@ in
     };
 
     operator = {
-      rebuild = {
+      deploy = {
         enable = lib.mkOption {
           type = lib.types.bool;
           default = false;
-          description = "Allow admin to trigger a constrained pinned rebuild via sudo (see clawdlets-host.nix).";
+          description = "Allow admin to deploy via switch-system/install-secrets (sudo allowlist).";
         };
+      };
+    };
 
-        flakeBase = lib.mkOption {
-          type = lib.types.nullOr lib.types.str;
-          default = null;
-          description = ''
-            Flake base used by /etc/clawdlets/bin/rebuild-host (must be github:owner/repo).
+    cache = {
+      garnix = {
+        private = {
+          enable = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = "Enable private Garnix cache access (netrc + TTL).";
+          };
 
-            NOTE: this is intended for public repos; private repo rebuilds should be done from a trusted workstation
-            that can inject GitHub access tokens.
-          '';
+          netrcSecret = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = "garnix_netrc";
+            description = "Sops secret name containing the netrc for private Garnix cache access.";
+          };
+
+          netrcPath = lib.mkOption {
+            type = lib.types.str;
+            default = "/etc/nix/netrc";
+            description = "Filesystem path for the Garnix netrc file (root-owned, 0400).";
+          };
+
+          narinfoCachePositiveTtl = lib.mkOption {
+            type = lib.types.int;
+            default = 3600;
+            description = "narinfo-cache-positive-ttl for private Garnix cache (seconds).";
+          };
         };
       };
     };
@@ -177,6 +196,9 @@ in
         "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
         "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
       ];
+    } // lib.optionalAttrs cfg.cache.garnix.private.enable {
+      netrc-file = cfg.cache.garnix.private.netrcPath;
+      narinfo-cache-positive-ttl = cfg.cache.garnix.private.narinfoCachePositiveTtl;
     };
 
     boot.loader.grub = {
@@ -222,9 +244,20 @@ in
       age.keyFile = cfg.secrets.ageKeyFile;
       validateSopsFiles = false;
 
-      secrets = lib.optionalAttrs (isTailscale && tailscaleCfg.authKeySecret != null && tailscaleCfg.authKeySecret != "") {
-        "${tailscaleCfg.authKeySecret}" = mkSopsSecret tailscaleCfg.authKeySecret;
-      };
+      secrets = lib.mkMerge [
+        (lib.optionalAttrs (isTailscale && tailscaleCfg.authKeySecret != null && tailscaleCfg.authKeySecret != "") {
+          "${tailscaleCfg.authKeySecret}" = mkSopsSecret tailscaleCfg.authKeySecret;
+        })
+        (lib.optionalAttrs (cfg.cache.garnix.private.enable && cfg.cache.garnix.private.netrcSecret != null && cfg.cache.garnix.private.netrcSecret != "") {
+          "${cfg.cache.garnix.private.netrcSecret}" = {
+            owner = "root";
+            group = "root";
+            mode = "0400";
+            path = cfg.cache.garnix.private.netrcPath;
+            sopsFile = "${hostSecretsDir}/${cfg.cache.garnix.private.netrcSecret}.yaml";
+          };
+        })
+      ];
     };
 
     services.tailscale = lib.mkIf isTailscale {
@@ -245,9 +278,9 @@ in
       }
       {
         assertion =
-          (!cfg.operator.rebuild.enable)
-          || ((cfg.operator.rebuild.flakeBase or null) != null && (cfg.operator.rebuild.flakeBase or "") != "");
-        message = "clawdlets.operator.rebuild.flakeBase must be set when clawdlets.operator.rebuild.enable is true.";
+          (!cfg.cache.garnix.private.enable)
+          || ((cfg.cache.garnix.private.netrcSecret or null) != null && (cfg.cache.garnix.private.netrcSecret or "") != "");
+        message = "clawdlets.cache.garnix.private.netrcSecret must be set when private Garnix cache is enabled.";
       }
       {
         assertion = (!proxyEnabled) || egress.proxy.allowedDomains != [];
@@ -255,17 +288,14 @@ in
       }
     ];
 
-    environment.etc."clawdlets/bin/rebuild-host" = {
-      source = ../../../scripts/rebuild-host.sh;
+    environment.etc."clawdlets/bin/install-secrets" = {
+      source = ../../../scripts/install-secrets.sh;
       mode = "0755";
     };
 
-    environment.etc."clawdlets/rebuild.env" = lib.mkIf cfg.operator.rebuild.enable {
-      mode = "0444";
-      text = ''
-        CLAWDLETS_REBUILD_FLAKE_BASE=${cfg.operator.rebuild.flakeBase}
-        CLAWDLETS_REBUILD_HOST=${config.clawdlets.hostName}
-      '';
+    environment.etc."clawdlets/bin/switch-system" = {
+      source = ../../../scripts/switch-system.sh;
+      mode = "0755";
     };
 
     systemd.tmpfiles.rules = lib.mkIf proxyEnabled [

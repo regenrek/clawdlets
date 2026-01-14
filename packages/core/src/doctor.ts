@@ -13,6 +13,7 @@ export async function collectDoctorChecks(params: {
   envFile?: string;
   host: string;
   scope?: "repo" | "deploy" | "all";
+  skipGithubTokenCheck?: boolean;
 }): Promise<DoctorCheck[]> {
   const deployCreds = loadDeployCreds({ cwd: params.cwd, runtimeDir: params.runtimeDir, envFile: params.envFile });
 
@@ -61,6 +62,7 @@ export async function collectDoctorChecks(params: {
       githubToken: GITHUB_TOKEN,
       fleetBots: repoResult.fleetBots,
       push,
+      skipGithubTokenCheck: params.skipGithubTokenCheck,
     });
   }
 

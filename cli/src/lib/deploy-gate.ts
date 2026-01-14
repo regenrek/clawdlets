@@ -8,6 +8,7 @@ export async function requireDeployGate(params: {
   host: string;
   scope: "deploy" | "repo";
   strict: boolean;
+  skipGithubTokenCheck?: boolean;
 }): Promise<void> {
   const checks = await collectDoctorChecks({
     cwd: process.cwd(),
@@ -15,6 +16,7 @@ export async function requireDeployGate(params: {
     envFile: params.envFile,
     host: params.host,
     scope: params.scope,
+    skipGithubTokenCheck: params.skipGithubTokenCheck,
   });
 
   const missing = checks.filter((c) => c.status === "missing");

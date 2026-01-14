@@ -43,7 +43,7 @@ export function getRepoLayout(repoRoot: string, runtimeDir?: string): RepoLayout
   const opentofuDir = path.join(infraDir, "opentofu");
   const fleetDir = path.join(repoRoot, "fleet");
   const clawdletsConfigPath = path.join(fleetDir, "clawdlets.json");
-  const fleetConfigPath = path.join(fleetDir, "fleet.nix");
+  const fleetConfigPath = path.join(infraDir, "configs", "fleet.nix");
   const bundledSkillsPath = path.join(fleetDir, "bundled-skills.json");
   const nixDir = path.join(infraDir, "nix");
   const nixHostsDir = path.join(nixDir, "hosts");

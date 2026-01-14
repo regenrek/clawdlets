@@ -1,49 +1,51 @@
 # AGENT-BOOTSTRAP-SERVER
 
-Goal: non-interactive day-0 bringup for a clawdlets fleet repo (Hetzner + Tailscale + Discord), using the existing `clawdlets` CLI.
+Goal: non-interactive day-0 bringup for a clawdlets fleet repo (Hetzner + Tailscale + Discord), using the `clawdlets` CLI.
 
 Start point
 - Repo already created from `@clawdlets/template`
 - CWD is repo root (has `fleet/clawdlets.json`)
 
 Canonical inputs
+- Config (committed): `fleet/clawdlets.json`
+- Runtime secrets (committed, encrypted): `secrets/**` (sops+age)
 - Deploy creds (local-only): `.clawdlets/env`
   - `HCLOUD_TOKEN` required (Hetzner API)
   - `GITHUB_TOKEN` optional (private base flake)
   - `NIX_BIN`, `SOPS_AGE_KEY_FILE` optional
-- Config (committed): `fleet/clawdlets.json`
-- Runtime secrets (committed, encrypted): `secrets/**` (sops+age)
-- Day0 input (local-only, plaintext): `.clawdlets/day0.json` (0600; never commit)
+- Non-interactive secrets input (local-only, plaintext): `.clawdlets/secrets.json` (0600; never commit)
 
 ## Fast path
 
-1) Scaffold (optional)
-- `clawdlets project init --dir <project-dir> --host <host>`
-- `cd <project-dir>`
-
-2) Generate local-only inputs (no secrets in git)
-- `clawdlets env init`
-- `node scripts/agent-bootstrap-server.mjs init`
-
-3) STOP: user fills secrets, then confirms
-- edit `.clawdlets/env` and set `HCLOUD_TOKEN=...`
-- edit `.clawdlets/day0.json` and fill:
+1) Config + host
+- edit `fleet/clawdlets.json`:
   - `fleet.guildId`
-  - `secretsInit.adminPasswordHash` (YESCRYPT hash)
-  - `secretsInit.tailscaleAuthKey` (if tailnet=tailscale)
-  - `secretsInit.discordTokens.<bot>` for each bot
-  - `secretsInit.secrets.<secretName>` for LLM API keys referenced by `fleet.envSecrets`
-- ask user: reply `done` when finished editing (do not proceed before `done`)
+  - `fleet.bots`
+  - `fleet.envSecrets`
+  - `hosts.<host>` (diskDevice, serverType, adminCidr, sshPubkeyFile, etc.)
 
-4) Apply (idempotent)
-- `node scripts/agent-bootstrap-server.mjs apply`
+2) Deploy creds
+- `clawdlets env init`
+- edit `.clawdlets/env` and set `HCLOUD_TOKEN=...`
+
+3) Secrets (non-interactive)
+- `clawdlets secrets init --host <host>`
+- edit `.clawdlets/secrets.json`:
+  - `adminPasswordHash` (YESCRYPT hash)
+  - `tailscaleAuthKey` (if tailnet=tailscale)
+  - `discordTokens.<bot>` for each bot
+  - `secrets.<secretName>` for LLM API keys referenced by `fleet.envSecrets`
+- `clawdlets secrets init --host <host> --from-json .clawdlets/secrets.json --yes`
+
+4) Apply
+- `clawdlets doctor --host <host> --scope deploy`
+- `clawdlets bootstrap --host <host>`
 
 5) After bootstrap
 - join tailnet, then set:
-  - `clawdlets host set --target-host admin@<tailscale-ip>`
+  - `clawdlets host set --host <host> --target-host admin@<tailscale-ip>`
 - then:
   - `clawdlets lockdown --host <host>`
 
 ## Notes
-- `day0.json` contains plaintext secrets. Keep it out of git (lives under `.clawdlets/`).
-- The script pipes JSON to `clawdlets secrets init --from-json - --yes` (no heredocs / no `yes | ...`).
+- `.clawdlets/secrets.json` is plaintext. Keep it out of git.

@@ -26,7 +26,7 @@ Then sync to the host (used by sops-nix on the server):
 clawdlets secrets sync
 ```
 
-Verify (recommended before rebuild):
+Verify (recommended before deploy):
 
 ```bash
 clawdlets secrets verify

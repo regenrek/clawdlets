@@ -14,7 +14,7 @@ import { validateHostSecretsYamlFiles } from "../lib/secrets-policy.js";
 import { buildFleetEnvSecretsPlan } from "../lib/fleet-env-secrets.js";
 import { capture } from "../lib/run.js";
 import { looksLikeSshKeyContents, normalizeSshPublicKey } from "../lib/ssh.js";
-import { loadClawdletsConfig } from "../lib/clawdlets-config.js";
+import { loadClawdletsConfig, type ClawdletsConfig, type ClawdletsHostConfig } from "../lib/clawdlets-config.js";
 import { isPlaceholderSecretValue } from "../lib/secrets-init.js";
 import { getRecommendedSecretNameForEnvVar } from "../lib/llm-provider-env.js";
 import { checkGithubRepoVisibility, tryParseGithubFlakeUri } from "../lib/github.js";
@@ -44,6 +44,7 @@ export async function addDeployChecks(params: {
   githubToken?: string;
   fleetBots: string[] | null;
   push: DoctorPush;
+  skipGithubTokenCheck?: boolean;
 }): Promise<void> {
   const host = params.host.trim() || "clawdbot-fleet-host";
 
@@ -109,17 +110,29 @@ export async function addDeployChecks(params: {
     detail: params.layout.sopsConfigPath,
   });
 
-  let clawdletsCfg: any = null;
-  let clawdletsHostCfg: any = null;
+  let clawdletsCfg: ClawdletsConfig | null = null;
+  let clawdletsHostCfg: ClawdletsHostConfig | null = null;
+  let clawdletsConfigError: string | null = null;
   try {
     const loaded = loadClawdletsConfig({ repoRoot: params.repoRoot });
-    clawdletsCfg = loaded.config as any;
-    clawdletsHostCfg = (loaded.config.hosts as any)?.[host] ?? null;
-  } catch {}
+    clawdletsCfg = loaded.config;
+    clawdletsHostCfg = loaded.config.hosts?.[host] ?? null;
+  } catch (err) {
+    clawdletsConfigError = String((err as Error)?.message || err);
+  }
 
-  if (!clawdletsHostCfg) {
+  if (clawdletsConfigError) {
+    params.push({
+      scope: "deploy",
+      status: "warn",
+      label: "clawdlets config",
+      detail: clawdletsConfigError,
+    });
+  }
+
+  if (!clawdletsConfigError && !clawdletsHostCfg) {
     params.push({ scope: "deploy", status: "warn", label: "host config", detail: `(missing host in fleet/clawdlets.json: ${host})` });
-  } else {
+  } else if (clawdletsHostCfg) {
     params.push({
       scope: "deploy",
       status: clawdletsHostCfg.enable ? "ok" : "warn",
@@ -423,6 +436,16 @@ export async function addDeployChecks(params: {
         }
       }
     }
+  }
+
+  if (params.skipGithubTokenCheck) {
+    params.push({
+      scope: "deploy",
+      status: "ok",
+      label: "GITHUB_TOKEN",
+      detail: "(skipped; cache-only deploy)",
+    });
+    return;
   }
 
   const flakeResolved = clawdletsCfg ? (await resolveBaseFlake({ repoRoot: params.repoRoot, config: clawdletsCfg })).flake : null;

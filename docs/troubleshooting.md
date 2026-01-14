@@ -21,7 +21,7 @@ nix run --impure nixpkgs#opentofu -- -chdir=infra/opentofu plan
 
 ## GitHub flake fetch 404
 
-If your base flake repo is private, set `GITHUB_TOKEN` (recommended: `.clawdlets/env`; fine-grained PAT, Contents read).
+If your base flake repo is private, set `GITHUB_TOKEN` in your environment (fine-grained PAT, Contents read).
 
 ## `journalctl --since 5m` parse error
 

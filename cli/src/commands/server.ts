@@ -1,11 +1,9 @@
 import process from "node:process";
 import { defineCommand } from "citty";
-import { resolveGitRev } from "@clawdbot/clawdlets-core/lib/git";
 import { shellQuote, sshCapture, sshRun } from "@clawdbot/clawdlets-core/lib/ssh-remote";
-import { resolveBaseFlake } from "@clawdbot/clawdlets-core/lib/base-flake";
-import { loadDeployCreds } from "@clawdbot/clawdlets-core/lib/deploy-creds";
 import { requireTargetHost, needsSudo } from "./server/common.js";
 import { serverGithubSync } from "./server/github-sync.js";
+import { serverDeploy } from "./server/deploy.js";
 import { loadHostContextOrExit } from "../lib/context.js";
 
 function normalizeSince(value: string): string {
@@ -40,13 +38,6 @@ function parseSystemctlShow(output: string): Record<string, string> {
     out[key] = line.slice(idx + 1);
   }
   return out;
-}
-
-function resolveHostFromFlake(flakeBase: string): string | null {
-  const hashIndex = flakeBase.indexOf("#");
-  if (hashIndex === -1) return null;
-  const host = flakeBase.slice(hashIndex + 1).trim();
-  return host.length > 0 ? host : null;
 }
 
 type AuditCheck = { status: "ok" | "warn" | "missing"; label: string; detail?: string };
@@ -232,91 +223,6 @@ const serverLogs = defineCommand({
   },
 });
 
-const serverRebuild = defineCommand({
-  meta: {
-    name: "rebuild",
-    description: "Run nixos-rebuild switch on the host using a pinned git rev/ref.",
-  },
-  args: {
-    runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
-    envFile: { type: "string", description: "Env file for deploy creds (default: <runtimeDir>/env)." },
-    host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
-    targetHost: { type: "string", description: "SSH target override (default: from clawdlets.json)." },
-    flake: { type: "string", description: "Flake base override (default: clawdlets.json baseFlake or git origin)." },
-    rev: { type: "string", description: "Git rev to pin (HEAD/sha/tag).", default: "HEAD" },
-    ref: { type: "string", description: "Git ref to pin (branch or tag)." },
-    sshTty: { type: "boolean", description: "Allocate TTY for sudo prompts.", default: true },
-  },
-  async run({ args }) {
-    const cwd = process.cwd();
-    const ctx = loadHostContextOrExit({ cwd, runtimeDir: (args as any).runtimeDir, hostArg: args.host });
-    if (!ctx) return;
-    const { layout, repoRoot, config, hostName, hostCfg } = ctx;
-    const targetHost = requireTargetHost(String(args.targetHost || hostCfg.targetHost || ""), hostName);
-
-    const deployCreds = loadDeployCreds({ cwd, runtimeDir: (args as any).runtimeDir, envFile: (args as any).envFile });
-    if (deployCreds.envFile?.status === "invalid") throw new Error(`deploy env file rejected: ${deployCreds.envFile.path} (${deployCreds.envFile.error || "invalid"})`);
-    if (deployCreds.envFile?.status === "missing") throw new Error(`missing deploy env file: ${deployCreds.envFile.path}`);
-
-    const githubToken = String(deployCreds.values.GITHUB_TOKEN || "").trim();
-
-    const rev = String(args.rev || "").trim();
-    const ref = String(args.ref || "").trim();
-    if (rev && ref) throw new Error("use either --rev or --ref (not both)");
-
-    const sudo = needsSudo(targetHost);
-    if (sudo) {
-      if (ref) throw new Error("ref rebuild is not supported over constrained sudo; use --rev <sha|HEAD>");
-      if (String(args.flake || "").trim()) throw new Error("flake override is not supported over constrained sudo; set clawdlets.operator.rebuild.flakeBase instead");
-      if (githubToken) throw new Error("GITHUB_TOKEN rebuild is not supported over constrained sudo; use a trusted workstation rebuild for private repos");
-
-      const resolved = await resolveGitRev(layout.repoRoot, rev || "HEAD");
-      if (!resolved) throw new Error(`unable to resolve git rev: ${rev || "HEAD"}`);
-      const remoteCmd = ["sudo", "/etc/clawdlets/bin/rebuild-host", "--rev", resolved].map(shellQuote).join(" ");
-      await sshRun(targetHost, remoteCmd, { tty: sudo && args.sshTty });
-      return;
-    }
-
-    const baseResolved = await resolveBaseFlake({ repoRoot, config });
-    const flakeBase = String(args.flake || baseResolved.flake || "").trim();
-    if (!flakeBase) throw new Error("missing base flake (set baseFlake in fleet/clawdlets.json, set git origin, or pass --flake)");
-
-    const requestedHost = String(hostCfg.flakeHost || hostName).trim() || hostName;
-    const hostFromFlake = resolveHostFromFlake(flakeBase);
-    if (hostFromFlake && hostFromFlake !== requestedHost) {
-      throw new Error(`flake host mismatch: ${hostFromFlake} vs ${requestedHost}`);
-    }
-    const flakeWithHost = flakeBase.includes("#") ? flakeBase : `${flakeBase}#${requestedHost}`;
-
-    const hashIndex = flakeWithHost.indexOf("#");
-    const flakeBasePath = hashIndex === -1 ? flakeWithHost : flakeWithHost.slice(0, hashIndex);
-    const flakeFragment = hashIndex === -1 ? "" : flakeWithHost.slice(hashIndex);
-    if ((rev || ref) && /(^|[?&])(rev|ref)=/.test(flakeBasePath)) {
-      throw new Error("flake already includes ?rev/?ref; drop --rev/--ref");
-    }
-
-    let flake = flakeWithHost;
-    if (rev) {
-      const resolved = await resolveGitRev(layout.repoRoot, rev);
-      if (!resolved) throw new Error(`unable to resolve git rev: ${rev}`);
-      const sep = flakeBasePath.includes("?") ? "&" : "?";
-      flake = `${flakeBasePath}${sep}rev=${resolved}${flakeFragment}`;
-    } else if (ref) {
-      const sep = flakeBasePath.includes("?") ? "&" : "?";
-      flake = `${flakeBasePath}${sep}ref=${ref}${flakeFragment}`;
-    }
-
-    const remoteArgs: string[] = ["env"];
-    if (githubToken) {
-      remoteArgs.push(`NIX_CONFIG=access-tokens = github.com=${githubToken}`);
-    }
-    remoteArgs.push("nixos-rebuild", "switch", "--flake", flake);
-
-    const remoteCmd = remoteArgs.map(shellQuote).join(" ");
-    await sshRun(targetHost, remoteCmd, { tty: false });
-  },
-});
-
 const serverRestart = defineCommand({
   meta: {
     name: "restart",
@@ -351,14 +257,14 @@ const serverRestart = defineCommand({
 export const server = defineCommand({
   meta: {
     name: "server",
-    description: "Server operations via SSH (rebuild/logs/status).",
+    description: "Server operations via SSH (deploy/logs/status).",
   },
   subCommands: {
     audit: serverAudit,
+    deploy: serverDeploy,
     status: serverStatus,
     logs: serverLogs,
     "github-sync": serverGithubSync,
     restart: serverRestart,
-    rebuild: serverRebuild,
   },
 });

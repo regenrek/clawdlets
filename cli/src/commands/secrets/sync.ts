@@ -1,23 +1,24 @@
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import process from "node:process";
 import { defineCommand } from "citty";
 import { run } from "@clawdbot/clawdlets-core/lib/run";
 import { shellQuote, sshRun } from "@clawdbot/clawdlets-core/lib/ssh-remote";
 import { getHostRemoteSecretsDir, getHostSecretsDir } from "@clawdbot/clawdlets-core/repo-layout";
+import { resolveGitRev } from "@clawdbot/clawdlets-core/lib/git";
+import { createSecretsTar } from "../../lib/secrets-tar.js";
 import { needsSudo, requireTargetHost } from "./common.js";
 import { loadHostContextOrExit } from "../../lib/context.js";
 
 export const secretsSync = defineCommand({
   meta: {
     name: "sync",
-    description: "Copy local secrets file to the server filesystem path.",
+    description: "Copy local secrets to the server via the install-secrets allowlist.",
   },
   args: {
     runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
     host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
     targetHost: { type: "string", description: "SSH target override (default: from clawdlets.json)." },
+    rev: { type: "string", description: "Git rev for secrets metadata (HEAD/sha/tag).", default: "HEAD" },
     sshTty: { type: "boolean", description: "Allocate TTY for sudo prompts.", default: true },
   },
   async run({ args }) {
@@ -29,14 +30,15 @@ export const secretsSync = defineCommand({
     const targetHost = requireTargetHost(String(args.targetHost || hostCfg.targetHost || ""), hostName);
 
     const localDir = getHostSecretsDir(layout, hostName);
-    if (!fs.existsSync(localDir)) throw new Error(`missing local secrets dir: ${localDir}`);
-
     const remoteDir = getHostRemoteSecretsDir(hostName);
-    const tarLocal = path.join(os.tmpdir(), `clawdlets-secrets.${hostName}.${process.pid}.tgz`);
+    const revRaw = String(args.rev || "").trim() || "HEAD";
+    const resolved = await resolveGitRev(layout.repoRoot, revRaw);
+    if (!resolved) throw new Error(`unable to resolve git rev: ${revRaw}`);
+
+    const { tarPath: tarLocal, digest } = await createSecretsTar({ hostName, localDir });
     const tarRemote = `/tmp/clawdlets-secrets.${hostName}.${process.pid}.tgz`;
 
     try {
-      await run("tar", ["-C", localDir, "-czf", tarLocal, "."], { redact: [] });
       await run("scp", [tarLocal, `${targetHost}:${tarRemote}`], { redact: [] });
     } finally {
       try {
@@ -49,19 +51,16 @@ export const secretsSync = defineCommand({
     const sudo = needsSudo(targetHost);
     const installCmd = [
       ...(sudo ? ["sudo"] : []),
-      "sh",
-      "-lc",
-      [
-        `mkdir -p ${shellQuote(remoteDir)}`,
-        `tmpdir="/tmp/clawdlets-secrets.${hostName}.${process.pid}.d"`,
-        `mkdir -p "$tmpdir"`,
-        `tar -xzf ${shellQuote(tarRemote)} -C "$tmpdir"`,
-        `if find "$tmpdir" -type f ! -name '*.yaml' | head -n 1 | grep -q .; then echo "refusing to install non-yaml secrets" >&2; exit 1; fi`,
-        `find "$tmpdir" -maxdepth 1 -type f -name '*.yaml' -print0 | while IFS= read -r -d '' f; do bn="$(basename "$f")"; install -m 0400 -o root -g root "$f" ${shellQuote(remoteDir)}/"$bn"; done`,
-        `rm -f ${shellQuote(tarRemote)}`,
-        `rm -rf "$tmpdir"`,
-      ].join(" && "),
-    ].join(" ");
+      "/etc/clawdlets/bin/install-secrets",
+      "--host",
+      hostName,
+      "--tar",
+      tarRemote,
+      "--rev",
+      resolved,
+      "--digest",
+      digest,
+    ].map(shellQuote).join(" ");
     await sshRun(targetHost, installCmd, { tty: sudo && args.sshTty });
 
     console.log(`ok: synced secrets to ${remoteDir}`);

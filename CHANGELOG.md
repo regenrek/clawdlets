@@ -6,7 +6,7 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 ## Unreleased
 
 ### Added
-- Base flake resolution: `fleet/clawdlets.json.baseFlake` (fallback: `git remote origin`) used by deploy commands (`bootstrap`, `lockdown`, `server rebuild`).
+- Base flake resolution: `fleet/clawdlets.json.baseFlake` (fallback: `git remote origin`) used by deploy commands (`bootstrap`, `lockdown`).
 - Non-interactive secrets provisioning: `clawdlets secrets init --from-json <path|->`.
 - Fleet-level secret env wiring: `fleet/clawdlets.json.fleet.envSecrets` (env var → sops secret name), used for LLM API keys.
 - New docs: `docs/config.md` (canonical config + host knobs).
@@ -14,6 +14,9 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 - `clawdlets bootstrap --force` skips doctor preflight gate (advanced usage).
 - Destroy command: `clawdlets infra destroy` (with `--force` for non-interactive automation).
 - Local deploy creds: `clawdlets env init` + `clawdlets env show` (default env file: `.clawdlets/env`).
+- Cache-only deploy flow: `clawdlets server deploy` (switch by store path + secrets install) with optional deploy manifest.
+- Host deploy entrypoints: `/etc/clawdlets/bin/install-secrets` + `/etc/clawdlets/bin/switch-system` (sudo allowlist via `clawdlets.operator.deploy`).
+- Private Garnix cache support: `clawdlets.cache.garnix.private.*` (netrc + narinfo TTL).
 
 ### Changed
 - Workflow automation: `nix-clawdbot` bump PRs are created using a GitHub App token (so normal PR checks run) and are compatible with strict branch protection.
@@ -23,12 +26,13 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 - Secrets init JSON: replaces `zAiApiKey` with `secrets.<secretName>` map.
 - Doctor UX: output grouped by scope/category with status coloring; add `clawdlets doctor --show-ok` to include ok checks.
 - Server ops: `server logs|status|audit` now use sudoers-compatible `systemctl`/`journalctl` invocation order; `server logs` defaults to `-n 200` and adds `--lines`.
-- Server rebuild: when connecting as `admin@...` (non-wheel), `server rebuild` runs the constrained `/etc/clawdlets/bin/rebuild-host --rev <sha>` path (requires `clawdlets.operator.rebuild` enabled on-host).
+- Secrets sync now uses the allowlisted `install-secrets` host entrypoint (no `sudo sh -lc`).
 - SSH capture: `sshCapture(..., { tty: true })` now actually allocates a TTY (fixes `ssh: Pseudo-terminal will not be allocated...` for capture use-cases).
 
 ### Removed
 - Stack concept + `clawdlets stack` command.
 - `clawdlets secrets migrate` and stack docs.
+- `clawdlets server rebuild` and `/etc/clawdlets/bin/rebuild-host` (replaced by cache-only deploy flow).
 
 ## [0.1.0] - 2026-01-11
 ### Added

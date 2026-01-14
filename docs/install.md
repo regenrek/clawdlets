@@ -12,7 +12,7 @@ clawdlets --help
 ## Inputs
 
 - `fleet/clawdlets.json` (canonical config: bots, guildId, host settings)
-- `fleet/fleet.nix` (derived fleet config; reads `clawdlets.json`; don’t edit)
+- `infra/configs/fleet.nix` (derived fleet config; reads `clawdlets.json`; don’t edit)
 - `secrets/` (committed; sops-encrypted secrets + sops rules)
 - `.clawdlets/` (gitignored runtime: operator keys + nixos-anywhere extra-files)
 - `infra/disko/example.nix` (disk layout; device via `clawdlets.diskDevice`)
@@ -142,18 +142,14 @@ To rotate later: update the sops value + redeploy (don’t run `passwd` on-host;
 ## 1) Provision + install
 
 ```bash
-clawdlets env init
 clawdlets secrets init
 clawdlets doctor --scope deploy
 clawdlets bootstrap
 ```
 
-Before running live actions, set deploy creds:
-
-- Recommended: edit `.clawdlets/env` (created by `clawdlets env init`)
-  - `HCLOUD_TOKEN` (required for provisioning)
-  - `GITHUB_TOKEN` (optional; only if `baseFlake` points at a private GitHub repo)
-- Alternative: set normal environment variables (CI-friendly)
+Set required env vars before running live actions:
+- `HCLOUD_TOKEN` (required for provisioning)
+- `GITHUB_TOKEN` (optional; only if `baseFlake` points at a private GitHub repo)
 
 Local dev note (working inside this monorepo): install a local wrapper into `~/bin`:
 
@@ -179,17 +175,21 @@ If the flake repo is private, set `GITHUB_TOKEN` in your environment (fine-grain
 this repo; Contents: read-only) so the remote can fetch the flake. Public flake repos
 need no token.
 
-## 2) Rebuild (pinned)
+## 2) Deploy (pinned)
 
-Use a pinned commit for rebuilds. Short revs are fine; the CLI resolves them to a full SHA.
+Use a pinned commit for deploys. Short revs are fine; the CLI resolves them to a full SHA.
 
 ```bash
-just server-rebuild-rev admin@<ipv4> HEAD
+just server-deploy admin@<ipv4> --toplevel /nix/store/... --rev HEAD
 # or:
-clawdlets server rebuild --target-host admin@<ipv4> --rev HEAD
+clawdlets server deploy --target-host admin@<ipv4> --toplevel /nix/store/... --rev HEAD
 ```
 
-`--rev HEAD` is resolved locally before the remote build.
+If you have a CI manifest:
+
+```bash
+clawdlets server deploy --target-host admin@<ipv4> --manifest .clawdlets/deploy.json
+```
 
 More deploy/update options (and tradeoffs): `docs/deploy.md`.
 
@@ -265,7 +265,7 @@ Fix (pick one):
 
 - Reduce closure size: don’t enable `"coding-agent"` / Codex during bootstrap (it pulls in heavy Node deps).
   Example: `clawdlets config set --path fleet.botOverrides.maren.skills.allowBundled --value-json '["github","brave-search"]'`
-- Use a bigger Hetzner server type for bootstrap (`clawdlets host set --server-type ...`).
+- Use a bigger Hetzner server type for bootstrap (`SERVER_TYPE=...` in `.env`).
 - Add swap on the target (best long-term anyway). If you want swap during install/bootstrap, add a swap
   partition in `infra/disko/example.nix` (so it’s available in the installer environment too).
 
@@ -314,10 +314,10 @@ clawdlets host set --public-ssh false
 clawdlets infra apply --public-ssh=false
 ```
 
-Optional: one-shot helper (rebuild over SSH + opentofu apply):
+Optional: one-shot helper (opentofu apply; skip host rebuild if you deploy by store path):
 
 ```bash
-clawdlets lockdown --target-host admin@10.44.0.1
+clawdlets lockdown --target-host admin@10.44.0.1 --skip-rebuild
 ```
 
 ## Optional: Tailscale (recommended)

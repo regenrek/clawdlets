@@ -17,7 +17,7 @@ Set values via CLI (no manual Nix edits):
 - routing overrides (example):
   - `clawdlets config set --path fleet.routingOverrides.maren --value-json '{"channels":["dev"],"requireMention":true}'`
 
-If you change `bots`, update `secrets/hosts/<host>/discord_token_<name>.yaml`, sync, then rebuild.
+If you change `bots`, update `secrets/hosts/<host>/discord_token_<name>.yaml`, sync, then deploy.
 
 ## Documents (AGENTS / SOUL / TOOLS / IDENTITY)
 
@@ -25,7 +25,6 @@ Workspace docs (prompt/policy) live in:
 
 - `fleet/workspaces/common/` (shared)
 - `fleet/workspaces/bots/<bot>/` (overrides; overlay on top of common)
-  - example: `fleet/workspaces/bots/_example/` (copy to a real bot id)
 
 Fleet config points Nix at the workspace seed root:
 
@@ -39,7 +38,7 @@ On every bot service start:
 - always: sync a managed allowlist (AGENTS/SOUL/IDENTITY/TOOLS/USER/HEARTBEAT) into the workspace
 - always: sync `skills/` into the workspace (custom/local skills)
 
-### Custom/local skills (clawdinator-style)
+### Custom/local skills
 
 Put skill definitions under:
 
@@ -47,6 +46,7 @@ Put skill definitions under:
 - per-bot: `fleet/workspaces/bots/<bot>/skills/<skill>/SKILL.md`
 
 The bot config always includes `skills.load.extraDirs = ["<workspace>/skills"]`, so skills in that folder are discoverable without extra per-bot config.
+
 
 ## Identity (optional)
 

@@ -24,7 +24,7 @@ function resolveHostFromFlake(flakeBase: string): string | null {
 export const lockdown = defineCommand({
   meta: {
     name: "lockdown",
-    description: "Rebuild over tailnet and remove public SSH from Hetzner firewall.",
+    description: "Remove public SSH from Hetzner firewall (optional host rebuild).",
   },
   args: {
     runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
@@ -34,7 +34,7 @@ export const lockdown = defineCommand({
     flake: { type: "string", description: "Override base flake (default: clawdlets.json baseFlake or git origin)." },
     rev: { type: "string", description: "Git rev to pin (HEAD/sha/tag).", default: "HEAD" },
     ref: { type: "string", description: "Git ref to pin (branch or tag)." },
-    skipRebuild: { type: "boolean", description: "Skip nixos-rebuild.", default: false },
+    skipRebuild: { type: "boolean", description: "Skip host rebuild (recommended for store-path deploys).", default: false },
     skipTofu: { type: "boolean", description: "Skip opentofu apply.", default: false },
     sshTty: { type: "boolean", description: "Allocate TTY for sudo prompts.", default: true },
     dryRun: { type: "boolean", description: "Print commands without executing.", default: false },
@@ -48,7 +48,14 @@ export const lockdown = defineCommand({
     const hostCfg = clawdletsConfig.hosts[hostName];
     if (!hostCfg) throw new Error(`missing host in fleet/clawdlets.json: ${hostName}`);
 
-    await requireDeployGate({ runtimeDir: (args as any).runtimeDir, envFile: (args as any).envFile, host: hostName, scope: "deploy", strict: true });
+    await requireDeployGate({
+      runtimeDir: (args as any).runtimeDir,
+      envFile: (args as any).envFile,
+      host: hostName,
+      scope: "deploy",
+      strict: true,
+      skipGithubTokenCheck: Boolean((args as any).skipRebuild),
+    });
 
     const targetHost = requireTargetHost(String(args.targetHost || hostCfg.targetHost || ""), hostName);
 

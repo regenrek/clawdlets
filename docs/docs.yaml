@@ -25,7 +25,7 @@ docs:
     summary: required tools and setup notes
   - path: docs/deploy.md
     when: updating a host
-    summary: rebuild patterns; pin rev; rollback mental model
+    summary: deploy patterns; pin rev; rollback mental model
   - path: docs/secrets.md
     when: tokens/keys/sops/age
     summary: local keys; encrypted host secrets; host secret path default
@@ -34,10 +34,10 @@ docs:
     summary: secrets out of store; lockdown verification checks
   - path: docs/ops-invariants.md
     when: rules of engagement
-    summary: rebuild-only policy; no manual host edits
+    summary: deploy-only policy; no manual host edits
   - path: docs/operations.md
     when: day-2 ops
-    summary: status/logs/restart/rebuild patterns
+    summary: status/logs/restart/deploy patterns
   - path: docs/runbook.md
     when: day 0/day 2 checklist
     summary: bootstrap + routine ops + optional sync/snapshots

@@ -19,10 +19,10 @@ This repo has a scheduled workflow that bumps `flake.lock` for `nix-clawdbot` an
 nix flake lock --update-input nix-clawdbot
 ```
 
-2) Rebuild on a staging host (pinned):
+2) Deploy on a staging host (pinned):
 
 ```bash
-just server-rebuild-rev admin@<ipv4> HEAD
+just server-deploy admin@<ipv4> --toplevel /nix/store/... --rev HEAD
 ```
 
 3) Verify:

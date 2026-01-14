@@ -7,15 +7,15 @@
 ```bash
 clawdlets config set --path fleet.routingOverrides.maren --value-json '{"channels":["dev"],"requireMention":true}'
 ```
-2) Rebuild:
+2) Deploy:
 
 ```bash
-just server-rebuild-rev admin@<ipv4> HEAD
+just server-deploy admin@<ipv4> --toplevel /nix/store/... --rev HEAD
 # or:
-clawdlets server rebuild --target-host admin@<ipv4> --rev HEAD
+clawdlets server deploy --target-host admin@<ipv4> --toplevel /nix/store/... --rev HEAD
 ```
 
-`--rev HEAD` resolves to the full SHA locally before the remote build.
+`--rev HEAD` resolves to the full SHA locally before the deploy.
 
 ## Rotate tokens/secrets
 
@@ -23,10 +23,10 @@ clawdlets server rebuild --target-host admin@<ipv4> --rev HEAD
 2) Re-encrypt (or use `clawdlets secrets init` to regenerate)
 3) `clawdlets secrets sync`
 4) `clawdlets secrets verify`
-5) Rebuild (pinned):
+5) Deploy (pinned):
 
 ```bash
-clawdlets server rebuild --target-host admin@<ipv4> --rev HEAD
+clawdlets server deploy --target-host admin@<ipv4> --toplevel /nix/store/... --rev HEAD
 ```
 
 ## Add a bot
@@ -39,10 +39,8 @@ clawdlets bot add --bot <id>
 2) Add secret `secrets/hosts/<host>/discord_token_<id>.yaml` (use `clawdlets secrets init`), then:
 ```bash
 clawdlets secrets sync
-clawdlets server rebuild --target-host admin@<target> --rev HEAD
+clawdlets server deploy --target-host admin@<target> --toplevel /nix/store/... --rev HEAD
 ```
-
-Note: `admin@...` rebuild requires `clawdlets.operator.rebuild` enabled on-host (see `docs/ops-invariants.md`).
 
 ## Add/enable a skill
 
@@ -52,10 +50,10 @@ Note: `admin@...` rebuild requires `clawdlets.operator.rebuild` enabled on-host 
 clawdlets config set --path fleet.botOverrides.maren.skills.allowBundled --value-json '["github","brave-search"]'
 ```
 3) If it needs secrets: add `secrets/hosts/<host>/<secret>.yaml` and reference in `fleet.botOverrides.<bot>.skills.entries."<skill>".*Secret/envSecrets`
-4) Sync + rebuild:
+4) Sync + deploy:
 ```bash
 clawdlets secrets sync
-clawdlets server rebuild --target-host admin@<target> --rev HEAD
+clawdlets server deploy --target-host admin@<target> --toplevel /nix/store/... --rev HEAD
 ```
 
 ## Verify
@@ -151,7 +149,7 @@ Enable via CLI:
 clawdlets fleet set --restic-enable true --restic-repository "s3:s3.amazonaws.com/<bucket>/clawdbot"
 ```
 
-Add secrets under `secrets/hosts/clawdbot-fleet-host/` (example: `restic_password.yaml`), sync, then rebuild.
+Add secrets under `secrets/hosts/clawdbot-fleet-host/` (example: `restic_password.yaml`), sync, then deploy.
 
 Restore (example, run as root on the host):
 

@@ -1,6 +1,6 @@
 { lib }:
 let
-  cfg = builtins.fromJSON (builtins.readFile ./clawdlets.json);
+  cfg = builtins.fromJSON (builtins.readFile ../../fleet/clawdlets.json);
   fleetCfg = cfg.fleet or { };
 
   # Single source of truth for bot instances.
@@ -36,7 +36,7 @@ in {
   guildId = fleetCfg.guildId or "";
 
   # Workspace seed root (common + per-bot overlay). See fleet/workspaces/.
-  documentsDir = ./workspaces;
+  documentsDir = ../../fleet/workspaces;
   identity = null;
 
   codex = {

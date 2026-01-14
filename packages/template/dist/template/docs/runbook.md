@@ -1,6 +1,6 @@
 # Runbook (Day 0 / Day 2)
 
-Goal: deterministic, rebuild-only ops. Repo + `.clawdlets/` are the only sources of truth.
+Goal: deterministic, deploy-only ops. Repo + `.clawdlets/` are the only sources of truth.
 
 ## Repo guardrails (one-time)
 
@@ -20,27 +20,25 @@ If/when you want required status checks, re-run with explicit contexts:
 
 1) Enter deterministic toolchain (optional): `devenv shell`
 2) `export CLAWDLETS_INTERACTIVE=1` (optional; forces prompts)
-3) `clawdlets env init` (set `HCLOUD_TOKEN` in `.clawdlets/env`)
-4) `clawdlets secrets init`
-5) `clawdlets doctor --scope deploy`
-6) `clawdlets infra apply --public-ssh=true`
-7) `clawdlets bootstrap`
-8) Verify tailnet, then: `clawdlets doctor --scope deploy --strict`
-9) Switch admin access to VPN + close public SSH:
+3) `clawdlets secrets init`
+4) `clawdlets doctor --scope deploy`
+5) `clawdlets infra apply --public-ssh=true`
+6) `clawdlets bootstrap`
+7) Verify tailnet, then: `clawdlets doctor --scope deploy --strict`
+8) Switch admin access to VPN + close public SSH:
    - `clawdlets host set --target-host admin@<vpn-ip>`
-   - `clawdlets lockdown`
-10) `clawdlets server audit --target-host admin@<vpn-ip>`
+   - `clawdlets lockdown --skip-rebuild`
+9) `clawdlets server audit --target-host admin@<vpn-ip>`
 
 ## Day 2 (routine ops)
 
-Pinned rebuilds:
+Pinned deploys:
 
-- `clawdlets server rebuild --target-host admin@<vpn-ip> --rev HEAD`
-  - requires `clawdlets.operator.rebuild` enabled (otherwise console breakglass)
+- `clawdlets server deploy --target-host admin@<vpn-ip> --toplevel /nix/store/... --rev HEAD`
 
 Secrets rotation:
 
-- edit `secrets/hosts/<host>/*.yaml` → `clawdlets secrets sync` → rebuild pinned
+- edit `secrets/hosts/<host>/*.yaml` → `clawdlets server deploy` (or `clawdlets secrets sync` + deploy)
 
 ## Rollback (must exist before prod)
 
