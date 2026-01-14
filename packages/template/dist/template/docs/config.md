@@ -42,7 +42,7 @@ Host entry (`hosts.<host>`):
 ```json
 {
   "schemaVersion": 4,
-  "defaultHost": "clawdlets-fleet-mj-2",
+  "defaultHost": "clawdbot-fleet-host",
   "baseFlake": "",
   "fleet": {
     "guildId": "",
@@ -54,7 +54,7 @@ Host entry (`hosts.<host>`):
     "backups": { "restic": { "enable": false, "repository": "" } }
   },
   "hosts": {
-    "clawdlets-fleet-mj-2": {
+    "clawdbot-fleet-host": {
       "enable": false,
       "diskDevice": "/dev/disk/by-id/CHANGE_ME",
       "sshAuthorizedKeys": [],
