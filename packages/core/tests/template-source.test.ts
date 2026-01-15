@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
+import fs from "node:fs";
 import { mkdtemp, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { normalizeTemplatePath, normalizeTemplateRef, normalizeTemplateRepo } from "../src/lib/template-source";
+import { normalizeTemplatePath, normalizeTemplateRef, normalizeTemplateRepo, normalizeTemplateSource } from "../src/lib/template-source";
 import { resolveTemplateTestDir } from "../src/lib/template-test-dir";
 
 describe("template source validation", () => {
@@ -30,6 +31,14 @@ describe("template source validation", () => {
     expect(() => normalizeTemplateRef("")).toThrow(/missing/);
     expect(() => normalizeTemplateRef("main")).toThrow(/40-hex/);
     expect(() => normalizeTemplateRef("bad^ref")).toThrow(/40-hex/);
+  });
+
+  it("accepts config/template-source.json", () => {
+    const repoRoot = path.resolve(__dirname, "..", "..", "..");
+    const configPath = path.join(repoRoot, "config", "template-source.json");
+    const raw = fs.readFileSync(configPath, "utf8");
+    const parsed = JSON.parse(raw);
+    expect(normalizeTemplateSource(parsed)).toBeDefined();
   });
 });
 
