@@ -261,22 +261,20 @@ export const bootstrap = defineCommand({
       redact: [hcloudToken, githubToken].filter(Boolean) as string[],
     });
 
-	    await purgeKnownHosts(ipv4, { dryRun: args.dryRun });
+    await purgeKnownHosts(ipv4, { dryRun: args.dryRun });
 
-	    const publicSshStatus = sshExposureMode === "tailnet" ? "CLOSED" : "OPEN";
+    const publicSshStatus = "OPEN";
 
-	    console.log("🎉 Bootstrap complete.");
-	    console.log(`Host: ${hostName}`);
-	    console.log(`IPv4: ${ipv4}`);
+    console.log("🎉 Bootstrap complete.");
+    console.log(`Host: ${hostName}`);
+    console.log(`IPv4: ${ipv4}`);
     console.log(`SSH exposure: ${sshExposureMode}`);
     console.log(`Public SSH (22): ${publicSshStatus}`);
 
-    if (sshExposureMode !== "tailnet") {
-      console.log("");
-      console.log("⚠ SSH WILL REMAIN OPEN until you switch to tailnet and run lockdown:");
-      console.log(`  clawdlets host set --host ${hostName} --ssh-exposure tailnet`);
-      console.log(`  clawdlets lockdown --host ${hostName}`);
-    }
+    console.log("");
+    console.log("⚠ SSH WILL REMAIN OPEN until you switch to tailnet and run lockdown:");
+    console.log(`  clawdlets host set --host ${hostName} --ssh-exposure tailnet`);
+    console.log(`  clawdlets lockdown --host ${hostName}`);
 
     if (tailnetMode === "tailscale") {
       console.log("");
