@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 
-const repoRoot = path.resolve(__dirname, "..", "..", "..");
+function resolveRepoRoot(): string {
+  return path.resolve(process.env.CLAWDLETS_TEMPLATE_DIR || path.join(__dirname, ".template"));
+}
 
 function hasNix(): boolean {
   try {
@@ -42,14 +45,14 @@ in cfg.security.sudo.extraConfig
 `;
 
   return execFileSync("nix", ["eval", "--impure", "--raw", "--expr", expr], {
-    cwd: repoRoot,
+    cwd: resolveRepoRoot(),
     env: process.env,
     encoding: "utf8",
   }).trim();
 }
 
 describe("sudo deploy allowlist", () => {
-  const testIt = hasNix() ? it : it.skip;
+  const testIt = hasNix() && fs.existsSync(resolveRepoRoot()) ? it : it.skip;
 
   testIt("omits deploy sudo alias when disabled", () => {
     const extra = evalSudoExtraConfig(false);

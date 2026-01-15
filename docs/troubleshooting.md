@@ -13,7 +13,7 @@ ssh-keygen -R "[<ipv4>]:22" || true
 
 ## OpenTofu troubleshooting
 
-Run OpenTofu via nix directly (example plan):
+Run OpenTofu via nix directly (from your project repo, example plan):
 
 ```bash
 nix run --impure nixpkgs#opentofu -- -chdir=infra/opentofu plan

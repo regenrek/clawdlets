@@ -4,14 +4,6 @@
 # local env vars
 .env
 
-# opentofu
-infra/opentofu/.terraform/
-infra/opentofu/*.tfstate
-infra/opentofu/*.tfstate.*
-infra/opentofu/*.tfplan
-terraform.tfstate
-terraform.tfstate.*
-
 # node
 node_modules/
 cli/node_modules/
@@ -20,15 +12,7 @@ cli/coverage/
 packages/core/node_modules/
 packages/core/dist/
 packages/core/coverage/
-packages/template/node_modules/
-packages/template/dist/*
-!packages/template/dist/index.d.ts
-!packages/template/dist/index.d.ts.map
-!packages/template/dist/index.js
-!packages/template/dist/index.js.map
-!packages/template/dist/template/
-!packages/template/dist/template/**
-packages/template/coverage/
+packages/core/tests/.template/
 *.tsbuildinfo
 
 # packaging (generated)

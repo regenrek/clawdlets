@@ -96,6 +96,14 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
+      - name: Read template source
+        id: template
+        run: |
+          set -euo pipefail
+          echo "repo=$(jq -r '.repo' config/template-source.json)" >> "$GITHUB_OUTPUT"
+          echo "path=$(jq -r '.path' config/template-source.json)" >> "$GITHUB_OUTPUT"
+          echo "ref=$(jq -r '.ref' config/template-source.json)" >> "$GITHUB_OUTPUT"
+
       - name: Project init from template repo
         run: |
           set -euo pipefail
@@ -103,7 +111,7 @@ jobs:
           node "${GITHUB_WORKSPACE}/cli/dist/main.js" project init \
             --dir "${tmpdir}/clawdlets-project" \
             --git-init false \
-            --template "regenrek/clawdlets-template" \
-            --template-path "templates/default" \
-            --template-ref "main"
+            --template "${{ steps.template.outputs.repo }}" \
+            --template-path "${{ steps.template.outputs.path }}" \
+            --template-ref "${{ steps.template.outputs.ref }}"
           (cd "${tmpdir}/clawdlets-project" && node "${GITHUB_WORKSPACE}/cli/dist/main.js" doctor --scope repo)

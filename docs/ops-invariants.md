@@ -1,10 +1,10 @@
 # Ops invariants
 
-Goal: zero drift. Repo + `.clawdlets/` are the only sources of truth.
+Goal: zero drift. Project repo + `.clawdlets/` are the only sources of truth.
 
 ## Deploy-only
 
-- Any persistent change must be done by editing this repo (or `.clawdlets/`) and deploying.
+- Any persistent change must be done by editing the project repo (or `.clawdlets/`) and deploying.
 - Prefer pinned deploys: `clawdlets server deploy --manifest deploy-manifest.<host>.json`.
 - Assume the box is disposable. Reinstall beats debugging a snowflake.
 
@@ -24,7 +24,7 @@ Do **not**:
 
 Do:
 
-- change config in `infra/` + deploy
+- change config in the project repo `infra/` + deploy
 - rotate secrets by editing `secrets/hosts/<host>/<secret>.yaml` (sops) then `clawdlets server deploy`
 - use `clawdlets server status|logs|restart|deploy` for day-2 ops
 - run `clawdlets server audit --target-host <host>` after bootstrap/lockdown and after major changes

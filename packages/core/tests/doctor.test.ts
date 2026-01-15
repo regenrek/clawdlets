@@ -44,7 +44,7 @@ describe("doctor", () => {
   beforeAll(async () => {
     repoRoot = await mkdtemp(path.join(tmpdir(), "clawdlets-doctor-"));
     templateRoot = path.join(repoRoot, "__template__");
-    process.env.CLAWEDLETS_TEMPLATE_DIR = templateRoot;
+    process.env.CLAWDLETS_TEMPLATE_DIR = templateRoot;
     await writeFile(path.join(repoRoot, "flake.nix"), "{ }", "utf8");
     await mkdir(path.join(repoRoot, "scripts"), { recursive: true });
     await mkdir(path.join(repoRoot, "docs"), { recursive: true });

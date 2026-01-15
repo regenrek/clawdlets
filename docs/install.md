@@ -9,7 +9,9 @@ npm install -g clawdlets
 clawdlets --help
 ```
 
-## Inputs
+## Project repo inputs
+
+These paths live in the project repo created by `clawdlets project init`.
 
 - `fleet/clawdlets.json` (canonical config: bots, guildId, host settings)
 - `infra/configs/fleet.nix` (derived fleet config; reads `clawdlets.json`; don’t edit)
@@ -27,10 +29,10 @@ clawdlets --help
 
 ## Deterministic dev env (recommended)
 
-If you use `devenv` (devenv.sh), this repo includes `devenv.nix` to provide a consistent toolchain
+If you use `devenv` (devenv.sh), the project repo includes `devenv.nix` to provide a consistent toolchain
 (`pnpm`, `sops`, `age`, `jq`, `gh`, etc).
 
-From repo root:
+From the project repo root:
 
 ```bash
 devenv shell
@@ -181,7 +183,7 @@ clawdlets bootstrap --flake github:<owner>/<repo>
 ```
 
 If the flake repo is private, set `GITHUB_TOKEN` in your environment (fine-grained PAT scoped to
-this repo; Contents: read-only) so the remote can fetch the flake. Public flake repos
+the project repo; Contents: read-only) so the remote can fetch the flake. Public flake repos
 need no token.
 
 ## 1b) Image-based bootstrap (optional)
@@ -237,7 +239,7 @@ public key explicitly to avoid “build from source” surprises during install.
 Default is `cx43` (16GB RAM). Reason: bootstrap builds run on the remote and can OOM on small machines
 when Node/pnpm-heavy packages are in the closure.
 
-This repo installs `x86_64-linux` NixOS. Use Intel/AMD types (`CX*`, `CPX*`, `CCX*`), not ARM (`CAX*`),
+The project repo installs `x86_64-linux` NixOS. Use Intel/AMD types (`CX*`, `CPX*`, `CCX*`), not ARM (`CAX*`),
 unless you also change the flake system to `aarch64-linux`.
 
 Reference:
@@ -354,7 +356,7 @@ clawdlets lockdown
 
 ## Optional: Tailscale (recommended)
 
-This repo enables Tailscale on the host (for reliable admin access even if
+The project repo enables Tailscale on the host (for reliable admin access even if
 WireGuard client setup is inconvenient).
 
 On the server (once):

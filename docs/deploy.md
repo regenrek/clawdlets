@@ -114,7 +114,7 @@ Private Garnix cache:
 - keep `narinfo-cache-positive-ttl` at 3600 (required for presigned URLs)
 - ensure the Garnix project/cache is set to private in Garnix
 
-See `infra/nix/modules/clawdlets-host-baseline.nix` for the module options.
+See your project repo `infra/nix/modules/clawdlets-host-baseline.nix` for the module options.
 
 ## Other options (tradeoffs)
 

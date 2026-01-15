@@ -23,4 +23,4 @@
 ## Template docs sync
 
 Template docs live in `regenrek/clawdlets-template` under `templates/default/docs`.
-If you change docs here, mirror the updates into the template repo.
+Infra + template docs live in the template repo. If you change docs here, mirror the updates into the template repo.

@@ -10,7 +10,7 @@ create a snapshot manually from a seeded VM.
 
 ## POC path (recommended)
 
-This repo now supports a raw image build + upload flow:
+Project repos now support a raw image build + upload flow:
 
 1) **Build image** from the flake (no secrets baked):
 

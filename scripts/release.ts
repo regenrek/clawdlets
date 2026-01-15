@@ -103,9 +103,8 @@ function main() {
 
   const cliPkgPath = path.resolve("cli/package.json");
   const corePkgPath = path.resolve("packages/core/package.json");
-  const templatePkgPath = path.resolve("packages/template/package.json");
 
-  for (const p of [cliPkgPath, corePkgPath, templatePkgPath]) {
+  for (const p of [cliPkgPath, corePkgPath]) {
     if (!fs.existsSync(p)) die(`missing package.json: ${p}`);
   }
 
@@ -137,7 +136,6 @@ function main() {
   if (willBump) {
     bumpPackageVersion(cliPkgPath, next);
     bumpPackageVersion(corePkgPath, next);
-    bumpPackageVersion(templatePkgPath, next);
     run("git add -A");
     run(`git commit -m "chore(release): ${tag}"`);
   } else {

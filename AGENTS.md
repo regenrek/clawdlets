@@ -26,7 +26,7 @@ docs
 
 source of truth
 - cli/src and packages/core/src (not dist)
-- infra/nix and infra/opentofu
+- infra lives in clawdlets-template (project repos)
 - docs/*.md and docs/docs.yaml
 
 generated (do not edit)
