@@ -67,6 +67,7 @@ const add = defineCommand({
       opentofu: { adminCidr: "", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
       sshExposure: { mode: "tailnet" },
       tailnet: { mode: "tailscale" },
+      operator: { deploy: { enable: true } },
       agentModelPrimary: "zai/glm-4.7",
     };
 
