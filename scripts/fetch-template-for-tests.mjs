@@ -2,7 +2,7 @@ import { createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { execFile } from "node:child_process";
@@ -14,33 +14,22 @@ function readJson(filePath) {
   return fs.readFile(filePath, "utf8").then((raw) => JSON.parse(raw));
 }
 
-function requireValue(label, value) {
-  const trimmed = String(value || "").trim();
-  if (!trimmed) throw new Error(`missing ${label}`);
-  return trimmed;
-}
-
-function sanitizeRepoPath(input) {
-  const trimmed = String(input || "").trim().replace(/\\/g, "/");
-  if (!trimmed || trimmed.includes("..")) throw new Error(`invalid template path: ${input}`);
-  return trimmed.replace(/^\/+/, "");
-}
-
-function normalizeRepo(input) {
-  const trimmed = String(input || "").trim();
-  if (!/^[^/]+\/[^/]+$/.test(trimmed)) {
-    throw new Error(`invalid template repo (expected owner/repo): ${trimmed}`);
+async function loadTemplateLib(repoRoot) {
+  const libPath = path.join(repoRoot, "packages", "core", "dist", "lib", "template-source.js");
+  if (!await fs.stat(libPath).then(() => true).catch(() => false)) {
+    throw new Error("missing packages/core/dist (run pnpm -r build)");
   }
-  return trimmed;
+  return await import(pathToFileURL(libPath).href);
 }
 
 async function loadTemplateSource(repoRoot) {
   const configPath = path.join(repoRoot, "config", "template-source.json");
   const cfg = await readJson(configPath);
-  const repo = normalizeRepo(process.env.CLAWDLETS_TEMPLATE_REPO || cfg.repo);
-  const tplPath = sanitizeRepoPath(process.env.CLAWDLETS_TEMPLATE_PATH || cfg.path);
-  const ref = requireValue("template ref", process.env.CLAWDLETS_TEMPLATE_REF || cfg.ref);
-  return { repo, path: tplPath, ref };
+  const repo = process.env.CLAWDLETS_TEMPLATE_REPO || cfg.repo;
+  const tplPath = process.env.CLAWDLETS_TEMPLATE_PATH || cfg.path;
+  const ref = process.env.CLAWDLETS_TEMPLATE_REF || cfg.ref;
+  const lib = await loadTemplateLib(repoRoot);
+  return lib.normalizeTemplateSource({ repo, path: tplPath, ref });
 }
 
 async function readMetadata(destRoot) {

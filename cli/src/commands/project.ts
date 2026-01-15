@@ -8,6 +8,7 @@ import { downloadTemplate } from "giget";
 import { ensureDir, writeFileAtomic } from "@clawdbot/clawdlets-core/lib/fs-safe";
 import { capture, run } from "@clawdbot/clawdlets-core/lib/run";
 import { assertSafeHostName } from "@clawdbot/clawdlets-core/lib/clawdlets-config";
+import { normalizeTemplateSource } from "@clawdbot/clawdlets-core/lib/template-source";
 import { cancelFlow, navOnCancel, NAV_EXIT } from "../lib/wizard.js";
 
 function wantsInteractive(flag: boolean | undefined): boolean {
@@ -107,19 +108,11 @@ async function findTemplateRoot(dir: string): Promise<string> {
   throw new Error(`template root missing fleet/clawdlets.json (searched: ${dir})`);
 }
 
-function resolveTemplateSpec(args: { template?: string; templatePath?: string; templateRef?: string }): {
-  repo: string;
-  path: string;
-  ref: string;
-  spec: string;
-} {
-  const repo = String(args.template || process.env["CLAWDLETS_TEMPLATE_REPO"] || "regenrek/clawdlets-template").trim();
-  const tplPath = String(args.templatePath || process.env["CLAWDLETS_TEMPLATE_PATH"] || "templates/default").trim();
-  const ref = String(args.templateRef || process.env["CLAWDLETS_TEMPLATE_REF"] || "main").trim();
-  if (!repo) throw new Error("template repo missing (set --template or CLAWDLETS_TEMPLATE_REPO)");
-  if (!tplPath) throw new Error("template path missing (set --template-path or CLAWDLETS_TEMPLATE_PATH)");
-  if (!ref) throw new Error("template ref missing (set --template-ref or CLAWDLETS_TEMPLATE_REF)");
-  return { repo, path: tplPath, ref, spec: `github:${repo}/${tplPath}#${ref}` };
+function resolveTemplateSpec(args: { template?: string; templatePath?: string; templateRef?: string }) {
+  const repo = String(args.template || process.env["CLAWDLETS_TEMPLATE_REPO"] || "regenrek/clawdlets-template");
+  const tplPath = String(args.templatePath || process.env["CLAWDLETS_TEMPLATE_PATH"] || "templates/default");
+  const ref = String(args.templateRef || process.env["CLAWDLETS_TEMPLATE_REF"] || "main");
+  return normalizeTemplateSource({ repo, path: tplPath, ref });
 }
 
 const projectInit = defineCommand({
