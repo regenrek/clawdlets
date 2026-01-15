@@ -13,6 +13,7 @@ import { requireDeployGate } from "../../lib/deploy-gate.js";
 import { loadHostContextOrExit } from "../../lib/context.js";
 import { needsSudo, requireTargetHost } from "../ssh-target.js";
 import { formatDeployManifest, parseDeployManifest, requireToplevel, type DeployManifest } from "../../lib/deploy-manifest.js";
+import { resolveManifestPublicKey, resolveManifestSignaturePath, verifyManifestSignature } from "../../lib/manifest-signature.js";
 
 
 async function buildLocalToplevel(params: {
@@ -54,6 +55,9 @@ export const serverDeploy = defineCommand({
     rev: { type: "string", description: "Git rev to pin (HEAD/sha/tag).", default: "HEAD" },
     toplevel: { type: "string", description: "NixOS system toplevel store path (CI mode)." },
     manifest: { type: "string", description: "Path to deploy manifest JSON (CI mode)." },
+    manifestSignature: { type: "string", description: "Path to manifest minisign signature (.minisig)." },
+    manifestPublicKey: { type: "string", description: "Minisign public key string (verify manifest)." },
+    manifestPublicKeyFile: { type: "string", description: "Path to minisign public key (verify manifest)." },
     manifestOut: { type: "string", description: "Write deploy manifest JSON to this path." },
     sshTty: { type: "boolean", description: "Allocate TTY for sudo prompts.", default: true },
   },
@@ -91,6 +95,19 @@ export const serverDeploy = defineCommand({
     let manifestDigest: string | undefined;
 
     if (manifestPath) {
+      const signaturePath = resolveManifestSignaturePath({
+        cwd,
+        manifestPath,
+        signaturePathArg: args.manifestSignature,
+      });
+      const publicKey = resolveManifestPublicKey({
+        publicKeyArg: args.manifestPublicKey,
+        publicKeyFileArg: args.manifestPublicKeyFile,
+        defaultKeyPath: path.join(repoRoot, "config", "manifest.minisign.pub"),
+        hostPublicKey: hostCfg?.selfUpdate?.publicKey,
+      });
+      await verifyManifestSignature({ manifestPath, signaturePath, publicKey });
+
       const manifest = parseDeployManifest(manifestPath);
       if (manifest.host !== hostName) {
         throw new Error(`manifest host mismatch: ${manifest.host} vs ${hostName}`);

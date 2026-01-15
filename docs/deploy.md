@@ -41,14 +41,14 @@ Manifest format:
 
 Recommended: use the built-in workflows:
 
-- `.github/workflows/deploy-manifest.yml` builds all host systems, writes `deploy-manifest.<host>.json`, and publishes them (optional: GitHub Pages).
-- `.github/workflows/deploy.yml` joins the tailnet and runs `clawdlets server deploy --manifest ...` for each host.
+- `.github/workflows/deploy-manifest.yml` builds all host systems, writes `deploy-manifest.<host>.json`, signs them, and publishes them (GitHub Pages).
+- `.github/workflows/deploy.yml` joins the tailnet and runs `clawdlets server deploy --manifest ...` for each host (signature verified).
 
 Required secrets:
 - `TAILSCALE_AUTHKEY`
 - `DEPLOY_SSH_KEY`
 
-Optional (recommended for self-update signing):
+Required for signed manifests:
 - `MINISIGN_PRIVATE_KEY` (passwordless; generated with `minisign -G -n`)
 
 Optional: set GitHub environment protection rules for `prod` to require approvals.
@@ -65,6 +65,10 @@ Promote a pinned SHA (manual, approved):
 ```bash
 clawdlets server deploy --manifest deploy-manifest.<host>.json
 ```
+
+Manifest deploy requires signature verification:
+- provide `<manifest>.minisig`
+- set a public key (`config/manifest.minisign.pub`, `hosts.<host>.selfUpdate.publicKey`, or `--manifest-public-key`)
 
 `server deploy` always installs secrets and then switches the system profile.
 
