@@ -64,12 +64,6 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost /opt/hostedtoolcache
           df -h
 
-      - name: Prewarm template flake inputs (for nix-eval tests)
-        run: |
-          set -euo pipefail
-          node scripts/fetch-template-for-tests.mjs
-          (cd packages/core/tests/.template && nix flake metadata --no-write-lock-file -L)
-
       - name: Nix flake check
         run: nix flake check -L
 
