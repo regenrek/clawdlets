@@ -16,6 +16,6 @@
     "outDir": "dist",
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
   },
-  "references": [{ "path": "../packages/core" }, { "path": "../packages/template" }],
+  "references": [{ "path": "../packages/core" }],
   "include": ["src/**/*.ts"]
 }

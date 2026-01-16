@@ -9,11 +9,11 @@ Goal: publish repo without leaking:
 
 - `.clawdlets/` must never be tracked.
 - Don’t commit plaintext tokens or private keys. Encrypted secrets live under `secrets/` (sops+age); local operator private keys stay in `.clawdlets/`.
-- Keep host-specific values out of `infra/nix/hosts/*.nix` and `fleet/clawdlets.json` before publishing (ship placeholders).
+- Keep host-specific values out of the project repo `infra/nix/hosts/*.nix` and `fleet/clawdlets.json` before publishing (ship placeholders).
 
 ## Recommended process (no history)
 
-1) Create a clean export from this repo:
+1) Create a clean export from the project repo:
 
 ```bash
 mkdir -p /tmp/clawdlets-public
@@ -29,7 +29,7 @@ git commit -m "chore: initial public import"
 
 3) Add CI guardrails:
 - fail if `.clawdlets/**` is tracked
-- fail if `infra/secrets/**` exists (legacy path; this repo should not use it)
+- fail if `infra/secrets/**` exists (legacy path; project repo should not use it)
 
 ## What users do in public repo
 

@@ -9,7 +9,7 @@ import { evalFleetConfig } from "../lib/fleet-nix-eval.js";
 import { ClawdletsConfigSchema } from "../lib/clawdlets-config.js";
 import { getHostNixPath } from "../repo-layout.js";
 import type { DoctorPush } from "./types.js";
-import { dirHasAnyFile, loadKnownBundledSkills } from "./util.js";
+import { dirHasAnyFile, loadKnownBundledSkills, resolveTemplateRoot } from "./util.js";
 
 export type RepoDoctorResult = {
   bundledSkills: string[];
@@ -58,7 +58,8 @@ export async function addRepoChecks(params: {
     detail: layout.opentofuDir,
   });
 
-  const bundledSkills = loadKnownBundledSkills(repoRoot);
+  const templateRoot = resolveTemplateRoot(repoRoot);
+  const bundledSkills = loadKnownBundledSkills(repoRoot, templateRoot);
   if (!bundledSkills.ok) {
     params.push({
       scope: "repo",
@@ -134,7 +135,7 @@ export async function addRepoChecks(params: {
   }
 
   {
-    const r = validateDocsIndexIntegrity({ repoRoot });
+    const r = validateDocsIndexIntegrity({ repoRoot, templateRoot });
     if (!r.ok) {
       params.push({
         scope: "repo",
@@ -147,7 +148,9 @@ export async function addRepoChecks(params: {
         scope: "repo",
         status: "ok",
         label: "docs index integrity",
-        detail: "(docs/docs.yaml matches template; all files exist)",
+        detail: templateRoot
+          ? "(docs/docs.yaml matches template; all files exist)"
+          : "(docs/docs.yaml valid; all files exist)",
       });
     }
   }
@@ -171,15 +174,17 @@ export async function addRepoChecks(params: {
       detail: r.ok ? "(common docs present)" : `missing: ${r.missing.map((p) => path.relative(repoRoot, p)).join(", ")}`,
     });
 
-    const templateCommonDir = path.join(repoRoot, "packages", "template", "dist", "template", "fleet", "workspaces", "common");
-    const templateRequired = required.map((p) => path.join(templateCommonDir, path.basename(p)));
-    const rt = allExist(templateRequired);
-    params.push({
-      scope: "repo",
-      status: rt.ok ? "ok" : "missing",
-      label: "template fleet workspaces",
-      detail: rt.ok ? "(common docs present)" : `missing: ${rt.missing.map((p) => path.relative(repoRoot, p)).join(", ")}`,
-    });
+    if (templateRoot) {
+      const templateCommonDir = path.join(templateRoot, "fleet", "workspaces", "common");
+      const templateRequired = required.map((p) => path.join(templateCommonDir, path.basename(p)));
+      const rt = allExist(templateRequired);
+      params.push({
+        scope: "repo",
+        status: rt.ok ? "ok" : "missing",
+        label: "template fleet workspaces",
+        detail: rt.ok ? "(common docs present)" : `missing: ${rt.missing.map((p) => path.relative(repoRoot, p)).join(", ")}`,
+      });
+    }
   }
 
   {
@@ -197,17 +202,29 @@ export async function addRepoChecks(params: {
       }
     }
 
-    const templateConfigPath = path.join(repoRoot, "packages", "template", "dist", "template", "fleet", "clawdlets.json");
-    if (!fs.existsSync(templateConfigPath)) {
-      params.push({ scope: "repo", status: "missing", label: "template clawdlets config", detail: templateConfigPath });
-    } else {
-      try {
-        const raw = fs.readFileSync(templateConfigPath, "utf8");
-        const parsed = JSON.parse(raw);
-        ClawdletsConfigSchema.parse(parsed);
-        params.push({ scope: "repo", status: "ok", label: "template clawdlets config", detail: path.relative(repoRoot, templateConfigPath) });
-      } catch (e) {
-        params.push({ scope: "repo", status: "missing", label: "template clawdlets config", detail: String((e as Error)?.message || e) });
+    if (templateRoot) {
+      const templateConfigPath = path.join(templateRoot, "fleet", "clawdlets.json");
+      if (!fs.existsSync(templateConfigPath)) {
+        params.push({ scope: "repo", status: "missing", label: "template clawdlets config", detail: templateConfigPath });
+      } else {
+        try {
+          const raw = fs.readFileSync(templateConfigPath, "utf8");
+          const parsed = JSON.parse(raw);
+          ClawdletsConfigSchema.parse(parsed);
+          params.push({
+            scope: "repo",
+            status: "ok",
+            label: "template clawdlets config",
+            detail: path.relative(repoRoot, templateConfigPath),
+          });
+        } catch (e) {
+          params.push({
+            scope: "repo",
+            status: "missing",
+            label: "template clawdlets config",
+            detail: String((e as Error)?.message || e),
+          });
+        }
       }
     }
 
@@ -259,17 +276,8 @@ export async function addRepoChecks(params: {
         }
       }
 
-      {
-        const templateFleetPath = path.join(
-          repoRoot,
-          "packages",
-          "template",
-          "dist",
-          "template",
-          "infra",
-          "configs",
-          "fleet.nix",
-        );
+      if (templateRoot) {
+        const templateFleetPath = path.join(templateRoot, "infra", "configs", "fleet.nix");
         if (!fs.existsSync(templateFleetPath)) {
           params.push({ scope: "repo", status: "missing", label: "template fleet config", detail: templateFleetPath });
         } else {
@@ -358,8 +366,8 @@ export async function addRepoChecks(params: {
     }
   }
 
-  {
-    const templateHostNix = path.join(repoRoot, "packages", "template", "dist", "template", "infra", "nix", "hosts", "clawdlets-host.nix");
+  if (templateRoot) {
+    const templateHostNix = path.join(templateRoot, "infra", "nix", "hosts", "clawdlets-host.nix");
     if (!fs.existsSync(templateHostNix)) {
       params.push({ scope: "repo", status: "missing", label: "template host nix config", detail: templateHostNix });
     } else {

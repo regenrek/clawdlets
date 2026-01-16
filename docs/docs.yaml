@@ -2,6 +2,9 @@ docs:
   - path: docs/overview.md
     when: mental model, repo layout, lifecycle
     summary: git-safe infra; encrypted secrets in /secrets; runtime in .clawdlets; bootstrap -> lockdown -> ops
+  - path: docs/golden-path.md
+    when: first-class workflow
+    summary: bootstrap once, then push -> CI build+manifest -> deploy by store path (cache-only)
   - path: docs/quickstart.md
     when: first run
     summary: minimal command sequence to deploy one host
@@ -26,6 +29,9 @@ docs:
   - path: docs/deploy.md
     when: updating a host
     summary: deploy patterns; pin rev; rollback mental model
+  - path: docs/image-based-provisioning.md
+    when: image-based provisioning
+    summary: phase-4 plan to reach cattle (image builds + upload + secrets injection)
   - path: docs/secrets.md
     when: tokens/keys/sops/age
     summary: local keys; encrypted host secrets; host secret path default

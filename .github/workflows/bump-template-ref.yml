@@ -1,0 +1,54 @@
+name: Bump template ref
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve template ref
+        id: template
+        run: |
+          set -euo pipefail
+          repo="$(jq -r '.repo' config/template-source.json)"
+          if [ -z "$repo" ] || [ "$repo" = "null" ]; then
+            echo "missing template repo in config/template-source.json"
+            exit 1
+          fi
+          sha="$(git ls-remote "https://github.com/${repo}.git" HEAD | awk '{print $1}')"
+          if [ -z "$sha" ]; then
+            echo "failed to resolve template ref for ${repo}"
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Update template ref
+        run: |
+          set -euo pipefail
+          jq --arg ref "${{ steps.template.outputs.sha }}" '.ref=$ref' config/template-source.json \
+            > config/template-source.json.tmp
+          mv config/template-source.json.tmp config/template-source.json
+
+      - name: Create PR
+        uses: peter-evans/create-pull-request@98357b18bf14b5342f975ff684046ec3b2a07725 # v6
+        with:
+          token: ${{ github.token }}
+          branch: chore/bump-template-ref
+          delete-branch: true
+          commit-message: "chore: bump template ref"
+          title: "chore: bump template ref"
+          body: |
+            Automated update of config/template-source.json to latest clawdlets-template HEAD.

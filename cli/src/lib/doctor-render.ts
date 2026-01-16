@@ -4,7 +4,7 @@ import type { DoctorCheck } from "@clawdbot/clawdlets-core/doctor";
 type DoctorStatus = DoctorCheck["status"];
 
 const STATUS_ORDER: Record<DoctorStatus, number> = { missing: 0, warn: 1, ok: 2 };
-const SCOPE_ORDER: Record<DoctorCheck["scope"], number> = { deploy: 0, repo: 1 };
+const SCOPE_ORDER: Record<DoctorCheck["scope"], number> = { bootstrap: 0, "server-deploy": 1, repo: 2 };
 
 function supportsColor(out: NodeJS.WriteStream): boolean {
   if (!out.isTTY) return false;
@@ -87,7 +87,7 @@ function groupChecks(params: { checks: DoctorCheck[]; showOk: boolean }): Array<
 export function renderDoctorReport(params: {
   checks: DoctorCheck[];
   host: string;
-  scope: "repo" | "deploy" | "all";
+  scope: "repo" | "bootstrap" | "server-deploy" | "all";
   strict: boolean;
   showOk: boolean;
 }): string {
@@ -127,7 +127,7 @@ export function renderDoctorReport(params: {
 
 export function renderDoctorGateFailure(params: {
   checks: DoctorCheck[];
-  scope: "repo" | "deploy";
+  scope: "repo" | "bootstrap" | "server-deploy";
   strict: boolean;
 }): string {
   const missing = params.checks.filter((c) => c.status === "missing");

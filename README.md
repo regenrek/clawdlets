@@ -1,6 +1,6 @@
 # Clawdlets
 
-Clawdlets is the hetzner infrastructure companion for [clawdbot](https://github.com/clawdbot/clawdbot) and [nix-clawdbot](https://github.com/clawdbot/nix-clawdbot). It provides the tooling to deploy and manage secure, reproducible bot fleets on Hetzner Cloud using NixOS. We simply handle the deployment plumbing for these core products.
+Clawdlets is the hetzner infrastructure companion for [clawdbot](https://github.com/clawdbot/clawdbot) and [nix-clawdbot](https://github.com/clawdbot/nix-clawdbot). It provides the tooling to deploy and manage secure, reproducible bot fleets on Hetzner Cloud using NixOS. The infra template lives in `regenrek/clawdlets-template`; this repo is the CLI + docs.
 
 🚧 Under construction: Don't use this as it is. Its currently WIP and only for advanced users.
 

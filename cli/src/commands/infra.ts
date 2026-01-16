@@ -47,6 +47,8 @@ const infraApply = defineCommand({
       ? sshPubkeyFileExpanded
       : path.resolve(repoRoot, sshPubkeyFileExpanded);
     if (!fs.existsSync(sshPubkeyFile)) throw new Error(`ssh pubkey file not found: ${sshPubkeyFile}`);
+    const image = String(hostCfg.hetzner.image || "").trim();
+    const location = String(hostCfg.hetzner.location || "").trim();
 
     await applyOpenTofuVars({
       repoRoot: layout.repoRoot,
@@ -55,6 +57,8 @@ const infraApply = defineCommand({
         adminCidr,
         sshPubkeyFile,
         serverType: hostCfg.hetzner.serverType,
+        image,
+        location,
         sshExposureMode: getSshExposureMode(hostCfg),
         tailnetMode: getTailnetMode(hostCfg),
       },
@@ -106,6 +110,8 @@ const infraDestroy = defineCommand({
       ? sshPubkeyFileExpanded
       : path.resolve(repoRoot, sshPubkeyFileExpanded);
     if (!fs.existsSync(sshPubkeyFile)) throw new Error(`ssh pubkey file not found: ${sshPubkeyFile}`);
+    const image = String(hostCfg.hetzner.image || "").trim();
+    const location = String(hostCfg.hetzner.location || "").trim();
 
     const force = Boolean((args as any).force);
     const interactive = process.stdin.isTTY && process.stdout.isTTY;
@@ -129,6 +135,8 @@ const infraDestroy = defineCommand({
         adminCidr,
         sshPubkeyFile,
         serverType: hostCfg.hetzner.serverType,
+        image,
+        location,
         sshExposureMode: getSshExposureMode(hostCfg),
         tailnetMode: getTailnetMode(hostCfg),
       },

@@ -39,7 +39,7 @@ Canonical inputs
 - `clawdlets secrets init --host <host> --from-json .clawdlets/secrets.json --yes`
 
 4) Apply
-- `clawdlets doctor --host <host> --scope deploy`
+- `clawdlets doctor --host <host> --scope bootstrap`
 - `clawdlets bootstrap --host <host>`
 
 5) After bootstrap
@@ -47,6 +47,7 @@ Canonical inputs
   - `clawdlets host set --host <host> --target-host admin@<tailscale-ip>`
 - then:
   - `clawdlets host set --host <host> --ssh-exposure tailnet`
+  - `clawdlets server deploy --host <host> --manifest deploy-manifest.<host>.json`
   - `clawdlets lockdown --host <host>`
 
 ## Notes

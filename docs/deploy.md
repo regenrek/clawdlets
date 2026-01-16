@@ -10,15 +10,23 @@ Goal: keep the **repo public-safe** (no plaintext secrets) and keep local operat
 - installs encrypted secrets to `/var/lib/clawdlets/secrets/hosts/<host>`
 - switches to a prebuilt NixOS system closure by store path
 
-### CI build
+### CI build + manifest
 
-Build the host toplevel (per host):
+Build the host system output (per host):
 
 ```bash
-nix build .#nixosConfigurations.<host>.config.system.build.toplevel
+nix build .#packages.x86_64-linux.<host>-system
 ```
 
-Record a deploy manifest (example):
+Garnix is the canonical builder for `packages.x86_64-linux.<host>-system` (derived from `nixosConfigurations.<host>.config.system.build.toplevel`).
+
+Generate a deploy manifest:
+
+```bash
+clawdlets server manifest --host <host> --out deploy-manifest.<host>.json
+```
+
+Manifest format:
 
 ```json
 {
@@ -29,21 +37,67 @@ Record a deploy manifest (example):
 }
 ```
 
+### GitOps (CI)
+
+Recommended: use the built-in workflows:
+
+- `.github/workflows/deploy-manifest.yml` builds all host systems, writes `deploy-manifest.<host>.json`, signs them, and publishes them (GitHub Pages).
+- `.github/workflows/deploy.yml` joins the tailnet and runs `clawdlets server deploy --manifest ...` for each host (signature verified).
+
+Required secrets:
+- `TAILSCALE_AUTHKEY`
+- `DEPLOY_SSH_KEY`
+
+Required for signed manifests:
+- `MINISIGN_PRIVATE_KEY` (passwordless; generated with `minisign -G -n`)
+
+Optional: set GitHub environment protection rules for `prod` to require approvals.
+
+Promote a pinned SHA (manual, approved):
+
+1) Find the 40-hex rev (manifest workflow writes `deploy/<host>/<rev>.json`).
+2) Run `deploy` workflow with inputs:
+   - `environment=prod`
+   - `rev=<40-hex>`
+
 ### Deploy (switch by store path)
 
 ```bash
-clawdlets server deploy --target-host admin@<tailscale-ip> \
-  --toplevel /nix/store/<hash>-nixos-system-<host>-<version> \
-  --rev <sha>
+clawdlets server deploy --manifest deploy-manifest.<host>.json
 ```
 
-Or, if you have a manifest:
-
-```bash
-clawdlets server deploy --target-host admin@<tailscale-ip> --manifest ./deploy.json
-```
+Manifest deploy requires signature verification:
+- provide `<manifest>.minisig`
+- set a public key (`config/manifest.minisign.pub`, `hosts.<host>.selfUpdate.publicKey`, or `--manifest-public-key`)
 
 `server deploy` always installs secrets and then switches the system profile.
+
+### Self-update (pull-based)
+
+Enable on a host to pull a manifest and switch by store path:
+
+```nix
+clawdlets.selfUpdate.enable = true;
+clawdlets.selfUpdate.manifestUrl = "https://<pages>/deploy/<host>/latest.json";
+```
+
+If you publish signatures, add:
+
+```nix
+clawdlets.selfUpdate.publicKey = "<minisign-pubkey>";
+clawdlets.selfUpdate.signatureUrl = "https://<pages>/deploy/<host>/latest.json.minisig";
+```
+
+Signature workflow:
+
+1) Generate keypair locally (passwordless for CI):
+
+```bash
+minisign -G -n -p minisign.pub -s minisign.key
+```
+
+2) Store `minisign.key` as `MINISIGN_PRIVATE_KEY` in GitHub Actions secrets.
+3) Copy the public key value into `fleet/clawdlets.json` (`hosts.<host>.selfUpdate.publicKey`).
 
 ### Secrets only (optional)
 
@@ -59,18 +113,19 @@ Public cache only (default): just add substituters + trusted keys.
 
 Private Garnix cache:
 
-- enable `clawdlets.cache.garnix.private.enable = true`
-- provide `/etc/nix/netrc` via sops secret (`clawdlets.cache.garnix.private.netrcSecret`)
+- set `hosts.<host>.cache.garnix.private.enable = true` in `fleet/clawdlets.json`
+- provide `/etc/nix/netrc` via sops secret (`hosts.<host>.cache.garnix.private.netrcSecret`)
 - keep `narinfo-cache-positive-ttl` at 3600 (required for presigned URLs)
+- ensure the Garnix project/cache is set to private in Garnix
 
-See `infra/nix/modules/clawdlets-host-baseline.nix` for the module options.
+See your project repo `infra/nix/modules/clawdlets-host-baseline.nix` for the module options.
 
 ## Other options (tradeoffs)
 
 ### Local build (workstation)
 
-If you have a Linux builder, `clawdlets server deploy` can build the toplevel locally
-when `--toplevel` is omitted. macOS builders are not supported for NixOS system builds.
+If you have a Linux builder, `clawdlets server manifest` can build the toplevel locally.
+macOS builders are not supported for NixOS system builds.
 
 ### Private base repo + PAT (bootstrap/lockdown)
 

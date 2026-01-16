@@ -90,6 +90,7 @@ const HostSchema = z.object({
   enable: z.boolean().default(false),
   diskDevice: z.string().trim().default("/dev/disk/by-id/CHANGE_ME"),
   sshAuthorizedKeys: z.array(z.string().trim().min(1)).default([]),
+  sshKnownHosts: z.array(z.string().trim().min(1)).default([]),
   flakeHost: z.string().trim().default(""),
   targetHost: z
     .string()
@@ -102,8 +103,10 @@ const HostSchema = z.object({
   hetzner: z
     .object({
       serverType: z.string().trim().min(1).default("cx43"),
+      image: z.string().trim().default(""),
+      location: z.string().trim().default("nbg1"),
     })
-    .default({ serverType: "cx43" }),
+    .default({ serverType: "cx43", image: "", location: "nbg1" }),
   opentofu: z
     .object({
       adminCidr: z.string().trim().default(""),
@@ -120,15 +123,61 @@ const HostSchema = z.object({
       mode: TailnetModeSchema.default("tailscale"),
     })
     .default({ mode: "tailscale" }),
+  cache: z
+    .object({
+      garnix: z
+        .object({
+          private: z
+            .object({
+              enable: z.boolean().default(false),
+              netrcSecret: z.string().trim().default("garnix_netrc"),
+              netrcPath: z.string().trim().default("/etc/nix/netrc"),
+              narinfoCachePositiveTtl: z.number().int().positive().default(3600),
+            })
+            .default({
+              enable: false,
+              netrcSecret: "garnix_netrc",
+              netrcPath: "/etc/nix/netrc",
+              narinfoCachePositiveTtl: 3600,
+            }),
+        })
+        .default({
+          private: {
+            enable: false,
+            netrcSecret: "garnix_netrc",
+            netrcPath: "/etc/nix/netrc",
+            narinfoCachePositiveTtl: 3600,
+          },
+        }),
+    })
+    .default({
+      garnix: {
+        private: {
+          enable: false,
+          netrcSecret: "garnix_netrc",
+          netrcPath: "/etc/nix/netrc",
+          narinfoCachePositiveTtl: 3600,
+        },
+      },
+    }),
   operator: z
     .object({
       deploy: z
         .object({
-          enable: z.boolean().default(true),
+          enable: z.boolean().default(false),
         })
-        .default({ enable: true }),
+        .default({ enable: false }),
     })
-    .default({ deploy: { enable: true } }),
+    .default({ deploy: { enable: false } }),
+  selfUpdate: z
+    .object({
+      enable: z.boolean().default(false),
+      manifestUrl: z.string().trim().default(""),
+      interval: z.string().trim().default("30min"),
+      publicKey: z.string().trim().default(""),
+      signatureUrl: z.string().trim().default(""),
+    })
+    .default({ enable: false, manifestUrl: "", interval: "30min", publicKey: "", signatureUrl: "" }),
   agentModelPrimary: z.string().trim().default("zai/glm-4.7"),
 });
 
@@ -213,12 +262,24 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
         enable: false,
         diskDevice: "/dev/disk/by-id/CHANGE_ME",
         sshAuthorizedKeys: [],
+        sshKnownHosts: [],
         flakeHost: "",
-        hetzner: { serverType: "cx43" },
+        hetzner: { serverType: "cx43", image: "", location: "nbg1" },
         opentofu: { adminCidr: "", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
         sshExposure: { mode: "tailnet" },
         tailnet: { mode: "tailscale" },
-        operator: { deploy: { enable: true } },
+        cache: {
+          garnix: {
+            private: {
+              enable: true,
+              netrcSecret: "garnix_netrc",
+              netrcPath: "/etc/nix/netrc",
+              narinfoCachePositiveTtl: 3600,
+            },
+          },
+        },
+        operator: { deploy: { enable: false } },
+        selfUpdate: { enable: false, manifestUrl: "", interval: "30min", publicKey: "", signatureUrl: "" },
         agentModelPrimary: "zai/glm-4.7",
       },
     },

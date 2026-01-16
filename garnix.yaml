@@ -1,4 +1,0 @@
-builds:
-  include:
-    - "packages.*"
-    - "packages.x86_64-linux.default"

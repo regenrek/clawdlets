@@ -1,0 +1,29 @@
+name: check-template-tarball
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+
+      - name: Validate template tarball URL
+        run: |
+          set -euo pipefail
+          repo="$(jq -r '.repo' config/template-source.json)"
+          ref="$(jq -r '.ref' config/template-source.json)"
+          if [[ ! "${ref}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "error: template ref must be 40-hex sha (got ${ref})"
+            exit 1
+          fi
+          url="https://codeload.github.com/${repo}/tar.gz/${ref}"
+          curl -fsSL --range 0-0 --retry 3 --retry-delay 2 --max-time 30 "${url}" > /dev/null

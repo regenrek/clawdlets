@@ -11,6 +11,7 @@ This file is **committed to git**. Secrets are not stored here (see `docs/secret
 - `.clawdlets/`: local runtime dir (gitignored)
   - local operator age keys (`.clawdlets/keys/operators/`)
   - `nixos-anywhere --extra-files` payload (`.clawdlets/extra-files/<host>/...`)
+  - image builds (`.clawdlets/images/<host>/...`)
 
 ## Schema overview
 
@@ -29,14 +30,26 @@ Host entry (`hosts.<host>`):
 - `enable`: whether fleet services should run
 - `diskDevice`: passed into the disko module (required for install)
 - `sshAuthorizedKeys`: admin SSH public keys (key-only; no passwords over SSH)
+- `sshKnownHosts`: pinned SSH host keys (known_hosts lines) for deploy automation
 - `flakeHost` (optional): nixosConfiguration output name override
 - `targetHost` (optional): SSH target for server ops (ssh config alias or `user@host`)
 - `hetzner.serverType`: e.g. `cx43`
+- `hetzner.image`: custom image ID/name (optional; used for image-based bootstrap)
+- `hetzner.location`: e.g. `nbg1` (used by OpenTofu + image upload helpers)
 - `opentofu.adminCidr`: CIDR allowed to SSH during bootstrap (e.g. `203.0.113.10/32`)
 - `opentofu.sshPubkeyFile`: local path to `.pub` used for provisioning
-- `operator.deploy.enable`: allow `admin` to run constrained deploy entrypoints (switch-system/install-secrets)
+- `operator.deploy.enable`: allow `admin` to run constrained deploy entrypoints (switch-system/install-secrets). Default: `false`.
 - `sshExposure.mode`: `tailnet|bootstrap|public` (single SSH exposure policy)
 - `tailnet.mode`: `tailscale` or `none` (tailscale mode opens UDP/41641 at the provider firewall for direct tailnet connectivity)
+- `cache.garnix.private.enable`: enable private Garnix cache access (requires netrc secret)
+- `cache.garnix.private.netrcSecret`: sops secret name containing `/etc/nix/netrc`
+- `cache.garnix.private.netrcPath`: path for the netrc file (default: `/etc/nix/netrc`)
+- `cache.garnix.private.narinfoCachePositiveTtl`: TTL for private Garnix cache (default: `3600`)
+- `selfUpdate.enable`: enable pull-based self-updates from a manifest URL
+- `selfUpdate.manifestUrl`: URL to the per-host deploy manifest
+- `selfUpdate.interval`: systemd timer cadence (e.g. `30min`)
+- `selfUpdate.publicKey`: minisign public key (optional)
+- `selfUpdate.signatureUrl`: minisign signature URL (required if publicKey is set)
 
 ## Example
 
@@ -59,11 +72,29 @@ Host entry (`hosts.<host>`):
       "enable": false,
       "diskDevice": "/dev/disk/by-id/CHANGE_ME",
       "sshAuthorizedKeys": [],
+      "sshKnownHosts": [],
       "flakeHost": "",
-      "hetzner": { "serverType": "cx43" },
+      "hetzner": { "serverType": "cx43", "image": "", "location": "nbg1" },
       "opentofu": { "adminCidr": "", "sshPubkeyFile": "~/.ssh/id_ed25519.pub" },
+      "cache": {
+        "garnix": {
+          "private": {
+            "enable": true,
+            "netrcSecret": "garnix_netrc",
+            "netrcPath": "/etc/nix/netrc",
+            "narinfoCachePositiveTtl": 3600
+          }
+        }
+      },
       "sshExposure": { "mode": "tailnet" },
       "tailnet": { "mode": "tailscale" },
+      "selfUpdate": {
+        "enable": false,
+        "manifestUrl": "",
+        "interval": "30min",
+        "publicKey": "",
+        "signatureUrl": ""
+      },
       "agentModelPrimary": "zai/glm-4.7"
     }
   }

@@ -21,14 +21,15 @@ If/when you want required status checks, re-run with explicit contexts:
 1) Enter deterministic toolchain (optional): `devenv shell`
 2) `export CLAWDLETS_INTERACTIVE=1` (optional; forces prompts)
 3) `clawdlets secrets init`
-4) `clawdlets doctor --scope deploy`
+4) `clawdlets doctor --scope bootstrap`
 5) `clawdlets host set --ssh-exposure bootstrap`
 6) `clawdlets bootstrap`
-7) Verify tailnet, then: `clawdlets doctor --scope deploy --strict`
+7) Verify tailnet, then: `clawdlets doctor --scope server-deploy --strict`
 8) Switch admin access to VPN + close public SSH:
    - `clawdlets host set --target-host admin@<vpn-ip>`
    - `clawdlets host set --ssh-exposure tailnet`
-   - `clawdlets lockdown --skip-rebuild`
+   - `clawdlets server deploy --manifest deploy-manifest.<host>.json`
+   - `clawdlets lockdown`
 9) `clawdlets server audit --target-host admin@<vpn-ip>`
 
 ## Day 2 (routine ops)
@@ -36,6 +37,7 @@ If/when you want required status checks, re-run with explicit contexts:
 Pinned deploys:
 
 - `clawdlets server deploy --target-host admin@<vpn-ip> --toplevel /nix/store/... --rev HEAD`
+- `clawdlets server deploy --manifest deploy-manifest.<host>.json`
 
 Secrets rotation:
 

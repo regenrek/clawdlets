@@ -4,6 +4,7 @@ import { shellQuote, sshCapture, sshRun } from "@clawdbot/clawdlets-core/lib/ssh
 import { requireTargetHost, needsSudo } from "./server/common.js";
 import { serverGithubSync } from "./server/github-sync.js";
 import { serverDeploy } from "./server/deploy.js";
+import { serverManifest } from "./server/manifest.js";
 import { loadHostContextOrExit } from "../lib/context.js";
 
 function normalizeSince(value: string): string {
@@ -262,6 +263,7 @@ export const server = defineCommand({
   subCommands: {
     audit: serverAudit,
     deploy: serverDeploy,
+    manifest: serverManifest,
     status: serverStatus,
     logs: serverLogs,
     "github-sync": serverGithubSync,

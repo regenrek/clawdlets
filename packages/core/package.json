@@ -16,8 +16,11 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "pretest": "pnpm -C . build && node ../../scripts/fetch-template-for-tests.mjs",
     "test": "vitest",
+    "pretest:run": "pnpm -C . build && node ../../scripts/fetch-template-for-tests.mjs",
     "test:run": "vitest run",
+    "precoverage": "pnpm -C . build && node ../../scripts/fetch-template-for-tests.mjs",
     "coverage": "vitest run --coverage"
   },
   "dependencies": {

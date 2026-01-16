@@ -17,9 +17,24 @@ export function dirHasAnyFile(dirPath: string): boolean {
   return false;
 }
 
-export function loadKnownBundledSkills(repoRoot: string): { ok: boolean; skills: string[]; errors: string[] } {
+export function resolveTemplateRoot(repoRoot: string): string | null {
+  const env = String(process.env["CLAWDLETS_TEMPLATE_DIR"] || "").trim();
+  if (env) {
+    const resolved = path.resolve(env);
+    if (fs.existsSync(resolved)) return resolved;
+  }
+
+  const local = path.join(repoRoot, "packages", "template", "dist", "template");
+  if (fs.existsSync(local)) return local;
+  return null;
+}
+
+export function loadKnownBundledSkills(
+  repoRoot: string,
+  templateRoot?: string | null,
+): { ok: boolean; skills: string[]; errors: string[] } {
   const repoPath = path.join(repoRoot, "fleet", "bundled-skills.json");
-  const tplPath = path.join(repoRoot, "packages", "template", "dist", "template", "fleet", "bundled-skills.json");
+  const tplPath = templateRoot ? path.join(templateRoot, "fleet", "bundled-skills.json") : null;
 
   const errors: string[] = [];
 
@@ -33,17 +48,18 @@ export function loadKnownBundledSkills(repoRoot: string): { ok: boolean; skills:
     errors.push(String((e as Error)?.message || e));
   }
 
-  try {
-    if (!fs.existsSync(tplPath)) throw new Error(`missing: ${tplPath}`);
-    tplText = fs.readFileSync(tplPath, "utf8");
-  } catch (e) {
-    errors.push(String((e as Error)?.message || e));
+  if (tplPath) {
+    try {
+      if (!fs.existsSync(tplPath)) throw new Error(`missing: ${tplPath}`);
+      tplText = fs.readFileSync(tplPath, "utf8");
+    } catch (e) {
+      errors.push(String((e as Error)?.message || e));
+    }
   }
 
   if (repoText && tplText && repoText.trim() !== tplText.trim()) {
-    errors.push(
-      "bundled skills mismatch: fleet/bundled-skills.json must match packages/template/dist/template/fleet/bundled-skills.json",
-    );
+    const label = tplPath ? path.relative(repoRoot, tplPath) : "template";
+    errors.push(`bundled skills mismatch: fleet/bundled-skills.json must match ${label}`);
   }
 
   if (!repoText) return { ok: false, skills: [], errors };

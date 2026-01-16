@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "dev": "tsc -w --preserveWatchOutput",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node ../scripts/copy-cli-config.mjs",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "help": "node dist/main.js --help",
@@ -28,8 +28,8 @@
   "dependencies": {
     "@clack/prompts": "^0.11.0",
     "@clawdbot/clawdlets-core": "workspace:*",
-    "@clawdlets/template": "workspace:*",
     "citty": "^0.1.6",
+    "giget": "^2.0.0",
     "yaml": "^2.8.0",
     "zod-to-json-schema": "^3.24.6"
   },
@@ -51,7 +51,6 @@
   "license": "MIT",
   "packageManager": "pnpm@10.25.0",
   "bundledDependencies": [
-    "@clawdbot/clawdlets-core",
-    "@clawdlets/template"
+    "@clawdbot/clawdlets-core"
   ]
 }

@@ -17,6 +17,13 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 - Cache-only deploy flow: `clawdlets server deploy` (switch by store path + secrets install) with optional deploy manifest.
 - Host deploy entrypoints: `/etc/clawdlets/bin/install-secrets` + `/etc/clawdlets/bin/switch-system` (sudo allowlist via `clawdlets.operator.deploy`).
 - Private Garnix cache support: `clawdlets.cache.garnix.private.*` (netrc + narinfo TTL).
+- CI workflows: `deploy-manifest` (build + publish per-host manifests) and `deploy` (GitOps tailnet deploy).
+- Manifest signing support in CI (minisign) + self-update signature verification.
+- `clawdlets server manifest` command (pins rev + toplevel + secretsDigest).
+- Self-update module: `clawdlets.selfUpdate.*` (manifest URL + timer).
+- Image pipeline: `nixos-generators` outputs (`<host>-image`), `clawdlets image build|upload`, and `bootstrap --mode image`.
+- Hetzner image/location config fields (`hosts.<host>.hetzner.image/location`).
+- Separate template repo (`regenrek/clawdlets-template`) with CI checks for generated projects.
 
 ### Changed
 - Workflow automation: `nix-clawdbot` bump PRs are created using a GitHub App token (so normal PR checks run) and are compatible with strict branch protection.
@@ -29,11 +36,16 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 - Server ops: `server logs|status|audit` now use sudoers-compatible `systemctl`/`journalctl` invocation order; `server logs` defaults to `-n 200` and adds `--lines`.
 - Secrets sync now uses the allowlisted `install-secrets` host entrypoint (no `sudo sh -lc`).
 - SSH capture: `sshCapture(..., { tty: true })` now actually allocates a TTY (fixes `ssh: Pseudo-terminal will not be allocated...` for capture use-cases).
+- Deploy gate split into `bootstrap` vs `server-deploy`; `server deploy`/`lockdown` no longer require Hetzner creds or nixos-anywhere extra-files.
+- Garnix config now explicitly builds `packages.x86_64-linux.*-system`.
+- Secrets tar digest is now deterministic (canonical tar+gzip).
+- Project init now pulls templates from `regenrek/clawdlets-template` (no embedded template dist in this repo).
 
 ### Removed
 - Stack concept + `clawdlets stack` command.
 - `clawdlets secrets migrate` and stack docs.
 - `clawdlets server rebuild` and `/etc/clawdlets/bin/rebuild-host` (replaced by cache-only deploy flow).
+- Embedded template package (`packages/template`) and base-repo `garnix.yaml`.
 
 ## [0.1.0] - 2026-01-11
 ### Added

@@ -10,6 +10,8 @@ export type OpenTofuApplyVars = {
   adminCidr: string;
   sshPubkeyFile: string;
   serverType?: string;
+  image?: string;
+  location?: string;
   sshExposureMode: SshExposureMode;
   tailnetMode: TailnetMode;
 };
@@ -25,6 +27,8 @@ export async function applyOpenTofuVars(params: {
   const opentofuDir = path.join(repoRoot, "infra", "opentofu");
 
   const resolvedServerType = params.vars.serverType?.trim() || "";
+  const resolvedImage = params.vars.image?.trim() || "";
+  const resolvedLocation = params.vars.location?.trim() || "";
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     HCLOUD_TOKEN: params.vars.hcloudToken,
@@ -79,6 +83,8 @@ export async function applyOpenTofuVars(params: {
     `tailnet_mode=${params.vars.tailnetMode}`,
   ];
   if (env.SERVER_TYPE) tfApplyArgs.push("-var", `server_type=${env.SERVER_TYPE}`);
+  if (resolvedImage) tfApplyArgs.push("-var", `image=${resolvedImage}`);
+  if (resolvedLocation) tfApplyArgs.push("-var", `location=${resolvedLocation}`);
 
   await run(nixBin, tofuArgs(tfApplyArgs), {
     cwd: opentofuDir,
@@ -99,6 +105,8 @@ export async function destroyOpenTofuVars(params: {
   const opentofuDir = path.join(repoRoot, "infra", "opentofu");
 
   const resolvedServerType = params.vars.serverType?.trim() || "";
+  const resolvedImage = params.vars.image?.trim() || "";
+  const resolvedLocation = params.vars.location?.trim() || "";
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     HCLOUD_TOKEN: params.vars.hcloudToken,
@@ -153,6 +161,8 @@ export async function destroyOpenTofuVars(params: {
     `tailnet_mode=${params.vars.tailnetMode}`,
   ];
   if (env.SERVER_TYPE) tfDestroyArgs.push("-var", `server_type=${env.SERVER_TYPE}`);
+  if (resolvedImage) tfDestroyArgs.push("-var", `image=${resolvedImage}`);
+  if (resolvedLocation) tfDestroyArgs.push("-var", `location=${resolvedLocation}`);
 
   await run(nixBin, tofuArgs(tfDestroyArgs), {
     cwd: opentofuDir,

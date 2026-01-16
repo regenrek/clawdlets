@@ -1,17 +1,8 @@
 # Upstream tracking (nix-clawdbot)
 
-We consume `nix-clawdbot` upstream; we do not re-implement its features here.
+`nix-clawdbot` is pinned in the **project repo** (from `clawdlets-template`), not this CLI repo.
 
-## Update procedure
-
-### Option A: automated weekly bump PR (recommended)
-
-This repo has a scheduled workflow that bumps `flake.lock` for `nix-clawdbot` and opens a PR.
-
-- Review the PR like any other change (CI + secret scan required).
-- If it breaks, close the PR (no impact) or revert the merge commit.
-
-### Option B: manual bump (one-off)
+## Update procedure (project repo)
 
 1) Bump the input locally:
 
@@ -22,7 +13,8 @@ nix flake lock --update-input nix-clawdbot
 2) Deploy on a staging host (pinned):
 
 ```bash
-just server-deploy admin@<ipv4> --toplevel /nix/store/... --rev HEAD
+clawdlets server manifest --host <host> --out deploy-manifest.<host>.json
+clawdlets server deploy --manifest deploy-manifest.<host>.json
 ```
 
 3) Verify:

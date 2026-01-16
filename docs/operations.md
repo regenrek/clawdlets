@@ -10,9 +10,8 @@ clawdlets config set --path fleet.routingOverrides.maren --value-json '{"channel
 2) Deploy:
 
 ```bash
-just server-deploy admin@<ipv4> --toplevel /nix/store/... --rev HEAD
-# or:
-clawdlets server deploy --target-host admin@<ipv4> --toplevel /nix/store/... --rev HEAD
+clawdlets server manifest --host <host> --out deploy-manifest.<host>.json
+clawdlets server deploy --manifest deploy-manifest.<host>.json
 ```
 
 `--rev HEAD` resolves to the full SHA locally before the deploy.
@@ -26,7 +25,7 @@ clawdlets server deploy --target-host admin@<ipv4> --toplevel /nix/store/... --r
 5) Deploy (pinned):
 
 ```bash
-clawdlets server deploy --target-host admin@<ipv4> --toplevel /nix/store/... --rev HEAD
+clawdlets server deploy --manifest deploy-manifest.<host>.json
 ```
 
 ## Add a bot
@@ -39,7 +38,7 @@ clawdlets bot add --bot <id>
 2) Add secret `secrets/hosts/<host>/discord_token_<id>.yaml` (use `clawdlets secrets init`), then:
 ```bash
 clawdlets secrets sync
-clawdlets server deploy --target-host admin@<target> --toplevel /nix/store/... --rev HEAD
+clawdlets server deploy --manifest deploy-manifest.<host>.json
 ```
 
 ## Add/enable a skill
@@ -53,7 +52,7 @@ clawdlets config set --path fleet.botOverrides.maren.skills.allowBundled --value
 4) Sync + deploy:
 ```bash
 clawdlets secrets sync
-clawdlets server deploy --target-host admin@<target> --toplevel /nix/store/... --rev HEAD
+clawdlets server deploy --manifest deploy-manifest.<host>.json
 ```
 
 ## Verify

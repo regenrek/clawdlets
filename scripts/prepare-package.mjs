@@ -92,17 +92,8 @@ function main() {
   if (!fs.existsSync(corePkgPath)) die(`missing core package.json at ${corePkgPath}`);
   if (!fs.existsSync(coreDistDir)) die(`missing core dist/ (run build): ${coreDistDir}`);
 
-  const templateDir = path.join(repoRoot, "packages", "template");
-  const templatePkgPath = path.join(templateDir, "package.json");
-  const templateDistDir = path.join(templateDir, "dist");
-  const templateDataDir = path.join(templateDir, "template");
-  if (!fs.existsSync(templatePkgPath)) die(`missing template package.json at ${templatePkgPath}`);
-  if (!fs.existsSync(templateDistDir)) die(`missing template dist/ (run build): ${templateDistDir}`);
-  if (!fs.existsSync(templateDataDir)) die(`missing template/ data dir: ${templateDataDir}`);
-
   const cliPkg = readJson(cliPkgPath);
   const corePkg = readJson(corePkgPath);
-  const templatePkg = readJson(templatePkgPath);
 
   const cliVersion = String(cliPkg?.version || "").trim();
   if (!cliVersion) die("cli package.json missing version");
@@ -129,7 +120,7 @@ function main() {
   if (fs.existsSync(licenseSrc)) cpFile(licenseSrc, path.join(outPkgDir, "LICENSE"));
 
   // Bundle internal workspace deps into node_modules.
-  const bundled = [String(corePkg.name), String(templatePkg.name)];
+  const bundled = [String(corePkg.name)];
   const nmRoot = path.join(outPkgDir, "node_modules");
 
   const coreOutDir = path.join(nmRoot, ...String(corePkg.name).split("/"));
@@ -137,13 +128,6 @@ function main() {
   writeJson(path.join(coreOutDir, "package.json"), corePkg);
   cpDir(coreDistDir, path.join(coreOutDir, "dist"));
   removeTsBuildInfoFiles(path.join(coreOutDir, "dist"));
-
-  const templateOutDir = path.join(nmRoot, ...String(templatePkg.name).split("/"));
-  ensureDir(templateOutDir);
-  writeJson(path.join(templateOutDir, "package.json"), templatePkg);
-  cpDir(templateDistDir, path.join(templateOutDir, "dist"));
-  cpDir(templateDataDir, path.join(templateOutDir, "template"));
-  removeTsBuildInfoFiles(path.join(templateOutDir, "dist"));
 
   // Publishable package.json (no workspace: protocol).
   const nextCliPkg = { ...cliPkg };
@@ -157,7 +141,7 @@ function main() {
 
   const deps = { ...(nextCliPkg.dependencies || {}) };
   for (const name of bundled) {
-    const v = name === String(corePkg.name) ? String(corePkg.version) : String(templatePkg.version);
+    const v = String(corePkg.version);
     deps[name] = v && v !== "undefined" ? v : cliVersion;
   }
   nextCliPkg.dependencies = deps;

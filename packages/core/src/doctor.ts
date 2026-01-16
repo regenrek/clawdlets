@@ -12,7 +12,7 @@ export async function collectDoctorChecks(params: {
   runtimeDir?: string;
   envFile?: string;
   host: string;
-  scope?: "repo" | "deploy" | "all";
+  scope?: "repo" | "bootstrap" | "server-deploy" | "all";
   skipGithubTokenCheck?: boolean;
 }): Promise<DoctorCheck[]> {
   const deployCreds = loadDeployCreds({ cwd: params.cwd, runtimeDir: params.runtimeDir, envFile: params.envFile });
@@ -21,12 +21,14 @@ export async function collectDoctorChecks(params: {
   const layout = getRepoLayout(repoRoot, params.runtimeDir);
 
   const wantRepo = params.scope === "repo" || params.scope === "all" || params.scope == null;
-  const wantDeploy = params.scope === "deploy" || params.scope === "all" || params.scope == null;
+  const wantBootstrap = params.scope === "bootstrap" || params.scope === "all" || params.scope == null;
+  const wantServerDeploy = params.scope === "server-deploy" || params.scope === "all" || params.scope == null;
 
   const checks: DoctorCheck[] = [];
   const push = (c: DoctorCheck) => {
     if (c.scope === "repo" && !wantRepo) return;
-    if (c.scope === "deploy" && !wantDeploy) return;
+    if (c.scope === "bootstrap" && !wantBootstrap) return;
+    if (c.scope === "server-deploy" && !wantServerDeploy) return;
     checks.push(c);
   };
 
@@ -45,12 +47,12 @@ export async function collectDoctorChecks(params: {
     push,
   });
 
-  if (wantDeploy) {
-    if (deployCreds.envFile && deployCreds.envFile.status !== "ok") {
-      const detail = deployCreds.envFile.error ? `${deployCreds.envFile.path} (${deployCreds.envFile.error})` : deployCreds.envFile.path;
-      push({ scope: "deploy", status: "missing", label: "deploy env file", detail });
-    }
+  if (wantBootstrap && deployCreds.envFile && deployCreds.envFile.status !== "ok") {
+    const detail = deployCreds.envFile.error ? `${deployCreds.envFile.path} (${deployCreds.envFile.error})` : deployCreds.envFile.path;
+    push({ scope: "bootstrap", status: "missing", label: "deploy env file", detail });
+  }
 
+  if (wantBootstrap) {
     await addDeployChecks({
       cwd: params.cwd,
       repoRoot,
@@ -63,6 +65,24 @@ export async function collectDoctorChecks(params: {
       fleetBots: repoResult.fleetBots,
       push,
       skipGithubTokenCheck: params.skipGithubTokenCheck,
+      scope: "bootstrap",
+    });
+  }
+
+  if (wantServerDeploy) {
+    await addDeployChecks({
+      cwd: params.cwd,
+      repoRoot,
+      layout,
+      host,
+      nixBin: NIX_BIN,
+      hcloudToken: HCLOUD_TOKEN,
+      sopsAgeKeyFile: SOPS_AGE_KEY_FILE,
+      githubToken: GITHUB_TOKEN,
+      fleetBots: repoResult.fleetBots,
+      push,
+      skipGithubTokenCheck: params.skipGithubTokenCheck,
+      scope: "server-deploy",
     });
   }
 

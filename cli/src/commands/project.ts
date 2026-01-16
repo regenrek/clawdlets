@@ -1,12 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { tmpdir } from "node:os";
 import { defineCommand } from "citty";
 import * as p from "@clack/prompts";
-import { getTemplateDir } from "@clawdlets/template";
+import { downloadTemplate } from "giget";
 import { ensureDir, writeFileAtomic } from "@clawdbot/clawdlets-core/lib/fs-safe";
 import { capture, run } from "@clawdbot/clawdlets-core/lib/run";
 import { assertSafeHostName } from "@clawdbot/clawdlets-core/lib/clawdlets-config";
+import { resolveTemplateSpec } from "../lib/template-spec.js";
 import { cancelFlow, navOnCancel, NAV_EXIT } from "../lib/wizard.js";
 
 function wantsInteractive(flag: boolean | undefined): boolean {
@@ -89,14 +91,34 @@ async function dirHasAnyFiles(dir: string): Promise<boolean> {
   }
 }
 
+async function findTemplateRoot(dir: string): Promise<string> {
+  const direct = path.join(dir, "fleet", "clawdlets.json");
+  if (fs.existsSync(direct)) return dir;
+
+  const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+  const candidates: string[] = [];
+  for (const ent of entries) {
+    if (!ent.isDirectory()) continue;
+    const candidate = path.join(dir, ent.name);
+    if (fs.existsSync(path.join(candidate, "fleet", "clawdlets.json"))) {
+      candidates.push(candidate);
+    }
+  }
+  if (candidates.length === 1) return candidates[0]!;
+  throw new Error(`template root missing fleet/clawdlets.json (searched: ${dir})`);
+}
+
 const projectInit = defineCommand({
-  meta: { name: "init", description: "Scaffold a new clawdlets infra repo (from @clawdlets/template)." },
+  meta: { name: "init", description: "Scaffold a new clawdlets infra repo (from clawdlets-template)." },
   args: {
     dir: { type: "string", description: "Target directory (created if missing)." },
     host: { type: "string", description: "Host name placeholder (default: clawdbot-fleet-host).", default: "clawdbot-fleet-host" },
     gitInit: { type: "boolean", description: "Run `git init` in the new directory.", default: true },
     interactive: { type: "boolean", description: "Prompt for confirmation (requires TTY).", default: false },
     dryRun: { type: "boolean", description: "Print planned files without writing.", default: false },
+    template: { type: "string", description: "Template repo (default: config/template-source.json)." },
+    templatePath: { type: "string", description: "Template path inside repo (default: config/template-source.json)." },
+    templateRef: { type: "string", description: "Template git ref (default: config/template-source.json)." },
   },
   async run({ args }) {
     const interactive = wantsInteractive(Boolean(args.interactive));
@@ -126,8 +148,11 @@ const projectInit = defineCommand({
       }
     }
 
-    const templateDir = getTemplateDir();
-    if (!fs.existsSync(templateDir)) throw new Error(`template dir missing: ${templateDir}`);
+    const templateSpec = resolveTemplateSpec({
+      template: args.template,
+      templatePath: args.templatePath,
+      templateRef: args.templateRef,
+    });
 
     const exists = fs.existsSync(destDir);
     if (exists && (await dirHasAnyFiles(destDir))) {
@@ -139,6 +164,20 @@ const projectInit = defineCommand({
       "clawdbot-fleet-host": host,
       "clawdbot_fleet_host": host.replace(/-/g, "_"),
     };
+
+    const tempDir = await fs.promises.mkdtemp(path.join(tmpdir(), "clawdlets-template-"));
+    let templateDir = tempDir;
+    try {
+      const downloaded = await downloadTemplate(templateSpec.spec, {
+        dir: tempDir,
+        force: true,
+        auth: String(process.env["GITHUB_TOKEN"] || process.env["CLAWDLETS_TEMPLATE_TOKEN"] || "").trim() || undefined,
+      });
+      templateDir = await findTemplateRoot(downloaded.dir || tempDir);
+    } catch (e) {
+      await fs.promises.rm(tempDir, { recursive: true, force: true });
+      throw e;
+    }
 
     const planned: string[] = [];
     const walk = async (srcDir: string, rel: string) => {
@@ -159,11 +198,13 @@ const projectInit = defineCommand({
     if (args.dryRun) {
       p.note(planned.sort().join("\n"), "Planned files");
       p.outro("dry-run");
+      await fs.promises.rm(tempDir, { recursive: true, force: true });
       return;
     }
 
     await ensureDir(destDir);
     await copyTree({ srcDir: templateDir, destDir, subs });
+    await fs.promises.rm(tempDir, { recursive: true, force: true });
 
     if (args.gitInit) {
       try {

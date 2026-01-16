@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+import { tmpdir } from "node:os";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getRepoLayout } from "@clawdbot/clawdlets-core/repo-layout";
 
@@ -98,7 +101,29 @@ describe("lockdown command", () => {
     });
   });
 
-  it("uses switch-system wrapper instead of nixos-rebuild", async () => {
+  it("applies opentofu vars without ssh", async () => {
+    const tempDir = await fs.promises.mkdtemp(path.join(tmpdir(), "clawdlets-lockdown-"));
+    const keyPath = path.join(tempDir, "id_ed25519.pub");
+    await fs.promises.writeFile(keyPath, "ssh-ed25519 AAAA", "utf8");
+    loadClawdletsConfigMock.mockReturnValue({
+      layout: getRepoLayout("/repo"),
+      configPath: "/repo/fleet/clawdlets.json",
+      config: {
+        schemaVersion: 5,
+        defaultHost: hostName,
+        fleet: { bots: ["maren"] },
+        hosts: {
+          [hostName]: {
+            ...baseHost,
+            opentofu: {
+              ...baseHost.opentofu,
+              sshPubkeyFile: keyPath,
+            },
+          },
+        },
+      },
+    });
+
     const { lockdown } = await import("../src/commands/lockdown.ts");
     await lockdown.run({
       args: {
@@ -106,15 +131,14 @@ describe("lockdown command", () => {
         rev: "HEAD",
         ref: "",
         skipRebuild: false,
-        skipTofu: true,
+        skipTofu: false,
         dryRun: false,
         sshTty: false,
       } as any,
     });
 
-    expect(sshCaptureMock).toHaveBeenCalled();
-    const runCmds = sshRunMock.mock.calls.map((call) => call[1]);
-    expect(runCmds.some((cmd) => cmd.includes("/etc/clawdlets/bin/switch-system"))).toBe(true);
-    expect(runCmds.some((cmd) => cmd.includes("nixos-rebuild"))).toBe(false);
+    expect(applyOpenTofuVarsMock).toHaveBeenCalled();
+    expect(sshCaptureMock).not.toHaveBeenCalled();
+    expect(sshRunMock).not.toHaveBeenCalled();
   });
 });

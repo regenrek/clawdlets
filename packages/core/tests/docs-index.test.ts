@@ -5,28 +5,28 @@ import path from "node:path";
 import { validateDocsIndexIntegrity } from "../src/lib/docs-index";
 
 describe("docs index integrity", () => {
-  it("keeps docs/docs.yaml in sync with template + references existing files", () => {
+  it("validates docs/docs.yaml in the repo", () => {
     const repoRoot = path.resolve(__dirname, "..", "..", "..");
     const r = validateDocsIndexIntegrity({ repoRoot });
     expect(r).toEqual({ ok: true, errors: [] });
   });
 
-  it("reports missing indexes", async () => {
+  it("reports missing repo docs index", async () => {
     const repoRoot = await mkdtemp(path.join(tmpdir(), "clawdlets-docs-index-"));
     await mkdir(path.join(repoRoot, "docs"), { recursive: true });
-    await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "docs"), { recursive: true });
     const r = validateDocsIndexIntegrity({ repoRoot });
     expect(r.ok).toBe(false);
     expect(r.errors.some((e) => e.includes("missing docs index"))).toBe(true);
   });
 
-  it("reports mismatch, duplicates, and missing referenced files", async () => {
+  it("reports template mismatch when templateRoot is provided", async () => {
     const repoRoot = await mkdtemp(path.join(tmpdir(), "clawdlets-docs-index-"));
+    const templateRoot = await mkdtemp(path.join(tmpdir(), "clawdlets-docs-template-"));
     await mkdir(path.join(repoRoot, "docs"), { recursive: true });
-    await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "docs"), { recursive: true });
+    await mkdir(path.join(templateRoot, "docs"), { recursive: true });
 
     await writeFile(path.join(repoRoot, "docs", "overview.md"), "# overview\n", "utf8");
-    await writeFile(path.join(repoRoot, "packages", "template", "dist", "template", "docs", "overview.md"), "# overview\n", "utf8");
+    await writeFile(path.join(templateRoot, "docs", "overview.md"), "# overview\n", "utf8");
 
     await writeFile(
       path.join(repoRoot, "docs", "docs.yaml"),
@@ -34,23 +34,32 @@ describe("docs index integrity", () => {
       "utf8",
     );
     await writeFile(
-      path.join(repoRoot, "packages", "template", "dist", "template", "docs", "docs.yaml"),
+      path.join(templateRoot, "docs", "docs.yaml"),
       ["docs:", "  - path: docs/overview.md", "    when: seed", "    summary: different", ""].join("\n"),
       "utf8",
     );
 
-    const mismatch = validateDocsIndexIntegrity({ repoRoot });
+    const mismatch = validateDocsIndexIntegrity({ repoRoot, templateRoot });
     expect(mismatch.ok).toBe(false);
     expect(mismatch.errors.some((e) => e.includes("docs index mismatch"))).toBe(true);
+  });
+
+  it("reports duplicates and missing referenced files", async () => {
+    const repoRoot = await mkdtemp(path.join(tmpdir(), "clawdlets-docs-index-"));
+    await mkdir(path.join(repoRoot, "docs"), { recursive: true });
 
     await writeFile(
       path.join(repoRoot, "docs", "docs.yaml"),
-      ["docs:", "  - path: docs/missing.md", "    when: seed", "    summary: seed", "  - path: docs/missing.md", "    when: seed", "    summary: seed", ""].join("\n"),
-      "utf8",
-    );
-    await writeFile(
-      path.join(repoRoot, "packages", "template", "dist", "template", "docs", "docs.yaml"),
-      ["docs:", "  - path: docs/missing.md", "    when: seed", "    summary: seed", ""].join("\n"),
+      [
+        "docs:",
+        "  - path: docs/missing.md",
+        "    when: seed",
+        "    summary: seed",
+        "  - path: docs/missing.md",
+        "    when: seed",
+        "    summary: seed",
+        "",
+      ].join("\n"),
       "utf8",
     );
 
@@ -63,14 +72,8 @@ describe("docs index integrity", () => {
   it("rejects invalid docs index structure", async () => {
     const repoRoot = await mkdtemp(path.join(tmpdir(), "clawdlets-docs-index-"));
     await mkdir(path.join(repoRoot, "docs"), { recursive: true });
-    await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "docs"), { recursive: true });
 
     await writeFile(path.join(repoRoot, "docs", "docs.yaml"), "foo\n", "utf8");
-    await writeFile(
-      path.join(repoRoot, "packages", "template", "dist", "template", "docs", "docs.yaml"),
-      ["docs:", "  - path: docs/overview.md", ""].join("\n"),
-      "utf8",
-    );
 
     const r = validateDocsIndexIntegrity({ repoRoot });
     expect(r.ok).toBe(false);
@@ -80,16 +83,10 @@ describe("docs index integrity", () => {
   it("rejects unsafe docs entry paths", async () => {
     const repoRoot = await mkdtemp(path.join(tmpdir(), "clawdlets-docs-index-"));
     await mkdir(path.join(repoRoot, "docs"), { recursive: true });
-    await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "docs"), { recursive: true });
 
     await writeFile(
       path.join(repoRoot, "docs", "docs.yaml"),
       ["docs:", "  - path: /etc/passwd", ""].join("\n"),
-      "utf8",
-    );
-    await writeFile(
-      path.join(repoRoot, "packages", "template", "dist", "template", "docs", "docs.yaml"),
-      ["docs:", "  - path: docs/overview.md", ""].join("\n"),
       "utf8",
     );
 

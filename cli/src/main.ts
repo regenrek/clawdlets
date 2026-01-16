@@ -6,6 +6,7 @@ import { doctor } from "./commands/doctor.js";
 import { env } from "./commands/env.js";
 import { host } from "./commands/host.js";
 import { fleet } from "./commands/fleet.js";
+import { image } from "./commands/image.js";
 import { infra } from "./commands/infra.js";
 import { lockdown } from "./commands/lockdown.js";
 import { project } from "./commands/project.js";
@@ -25,6 +26,7 @@ const main = defineCommand({
     env,
     host,
     fleet,
+    image,
     infra,
     lockdown,
     project,

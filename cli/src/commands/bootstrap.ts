@@ -39,12 +39,13 @@ function resolveHostFromFlake(flakeBase: string): string | null {
 export const bootstrap = defineCommand({
   meta: {
     name: "bootstrap",
-    description: "Provision Hetzner VM + install NixOS via nixos-anywhere.",
+    description: "Provision Hetzner VM + install NixOS (nixos-anywhere or image).",
 	  },
 	  args: {
 	    runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
 	    envFile: { type: "string", description: "Env file for deploy creds (default: <runtimeDir>/env)." },
 	    host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
+	    mode: { type: "string", description: "Bootstrap mode: nixos-anywhere|image.", default: "nixos-anywhere" },
 	    flake: { type: "string", description: "Override base flake (default: clawdlets.json baseFlake or git origin)." },
 	    rev: { type: "string", description: "Git rev to pin (HEAD/sha/tag).", default: "HEAD" },
 	    ref: { type: "string", description: "Git ref to pin (branch or tag)." },
@@ -61,11 +62,20 @@ export const bootstrap = defineCommand({
 	    if (!hostCfg) throw new Error(`missing host in fleet/clawdlets.json: ${hostName}`);
 	    const sshExposureMode = getSshExposureMode(hostCfg);
 	    const tailnetMode = getTailnetMode(hostCfg);
+	    const modeRaw = String((args as any).mode || "nixos-anywhere").trim();
+	    if (modeRaw !== "nixos-anywhere" && modeRaw !== "image") {
+	      throw new Error(`invalid --mode: ${modeRaw} (expected nixos-anywhere|image)`);
+	    }
+	    const mode = modeRaw as "nixos-anywhere" | "image";
 
 	    if (Boolean((args as any).force)) {
 	      console.error("warn: skipping doctor gate (--force)");
 	    } else {
-	      await requireDeployGate({ runtimeDir: (args as any).runtimeDir, envFile: (args as any).envFile, host: hostName, scope: "deploy", strict: false });
+	      if (mode === "nixos-anywhere") {
+	        await requireDeployGate({ runtimeDir: (args as any).runtimeDir, envFile: (args as any).envFile, host: hostName, scope: "bootstrap", strict: false });
+	      } else {
+	        console.error("warn: skipping doctor gate for image bootstrap");
+	      }
 	    }
 
 	    const deployCreds = loadDeployCreds({ cwd, runtimeDir: (args as any).runtimeDir, envFile: (args as any).envFile });
@@ -81,6 +91,11 @@ export const bootstrap = defineCommand({
 
 	    const serverType = String(hostCfg.hetzner.serverType || "").trim();
 	    if (!serverType) throw new Error(`missing hetzner.serverType for ${hostName} (set via: clawdlets host set --server-type ...)`);
+	    const image = String(hostCfg.hetzner.image || "").trim();
+	    const location = String(hostCfg.hetzner.location || "").trim();
+	    if (mode === "image" && !image) {
+	      throw new Error(`missing hetzner.image for ${hostName} (set via: clawdlets host set --hetzner-image <image_id>)`);
+	    }
 
 	    const adminCidr = String(hostCfg.opentofu.adminCidr || "").trim();
 	    if (!adminCidr) throw new Error(`missing opentofu.adminCidr for ${hostName} (set via: clawdlets host set --admin-cidr ...)`);
@@ -102,6 +117,8 @@ export const bootstrap = defineCommand({
 	        adminCidr,
 	        sshPubkeyFile,
 	        serverType,
+	        image,
+	        location,
 	        sshExposureMode,
 	        tailnetMode,
 	      },
@@ -129,6 +146,24 @@ export const bootstrap = defineCommand({
 
     console.log(`Target IPv4: ${ipv4}`);
     await purgeKnownHosts(ipv4, { dryRun: args.dryRun });
+
+    if (mode === "image") {
+      console.log("🎉 Bootstrap complete (image mode).");
+      console.log(`Host: ${hostName}`);
+      console.log(`IPv4: ${ipv4}`);
+      console.log(`SSH exposure: ${sshExposureMode}`);
+      console.log("");
+      console.log("Next:");
+      console.log(`1) Set targetHost for deploys:`);
+      console.log(`   clawdlets host set --host ${hostName} --target-host admin@${ipv4}`);
+      console.log("2) Deploy secrets + system:");
+      console.log(`   clawdlets server deploy --host ${hostName} --target-host admin@${ipv4} --manifest deploy-manifest.${hostName}.json`);
+      console.log("");
+      console.log("After tailnet is healthy, lock down SSH:");
+      console.log(`  clawdlets host set --host ${hostName} --ssh-exposure tailnet`);
+      console.log(`  clawdlets lockdown --host ${hostName}`);
+      return;
+    }
 
 	    const baseResolved = await resolveBaseFlake({ repoRoot, config: clawdletsConfig });
 	    const flakeBase = String(args.flake || baseResolved.flake || "").trim();

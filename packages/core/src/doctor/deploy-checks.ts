@@ -14,6 +14,7 @@ import { validateHostSecretsYamlFiles } from "../lib/secrets-policy.js";
 import { buildFleetEnvSecretsPlan } from "../lib/fleet-env-secrets.js";
 import { capture } from "../lib/run.js";
 import { looksLikeSshKeyContents, normalizeSshPublicKey } from "../lib/ssh.js";
+import type { DoctorCheck } from "./types.js";
 import {
   getSshExposureMode,
   isPublicSshExposure,
@@ -51,31 +52,36 @@ export async function addDeployChecks(params: {
   fleetBots: string[] | null;
   push: DoctorPush;
   skipGithubTokenCheck?: boolean;
+  scope: "bootstrap" | "server-deploy";
 }): Promise<void> {
   const host = params.host.trim() || "clawdbot-fleet-host";
+  const scope = params.scope;
+  const push = (c: Omit<DoctorCheck, "scope">) =>
+    params.push({ scope, ...c });
+  const isBootstrap = scope === "bootstrap";
+  const isServerDeploy = scope === "server-deploy";
 
   try {
     const v = await capture(params.nixBin, ["--version"], { cwd: params.repoRoot });
-    params.push({ scope: "deploy", status: "ok", label: "nix", detail: v });
+    push({ status: "ok", label: "nix", detail: v });
   } catch {
-    params.push({
-      scope: "deploy",
+    push({
       status: "missing",
       label: "nix",
       detail: `(${params.nixBin} not found; install Nix first)`,
     });
   }
 
-  params.push({
-    scope: "deploy",
-    status: params.hcloudToken ? "ok" : "missing",
-    label: "HCLOUD_TOKEN",
-    detail: params.hcloudToken ? "(set)" : "(set in .clawdlets/env or env var; run: clawdlets env init)",
-  });
+  if (isBootstrap) {
+    push({
+      status: params.hcloudToken ? "ok" : "missing",
+      label: "HCLOUD_TOKEN",
+      detail: params.hcloudToken ? "(set)" : "(set in .clawdlets/env or env var; run: clawdlets env init)",
+    });
+  }
 
   if (params.sopsAgeKeyFile) {
-    params.push({
-      scope: "deploy",
+    push({
       status: fs.existsSync(params.sopsAgeKeyFile) ? "ok" : "missing",
       label: "SOPS_AGE_KEY_FILE",
       detail: params.sopsAgeKeyFile,
@@ -84,8 +90,7 @@ export async function addDeployChecks(params: {
     const operatorKeyExists =
       fs.existsSync(params.layout.localOperatorKeysDir) &&
       fs.readdirSync(params.layout.localOperatorKeysDir, { withFileTypes: true }).some((e) => e.isFile() && e.name.endsWith(".agekey"));
-    params.push({
-      scope: "deploy",
+    push({
       status: operatorKeyExists ? "ok" : "warn",
       label: "SOPS_AGE_KEY_FILE",
       detail: operatorKeyExists ? "(using local operator key(s))" : "(not set; sops edit/decrypt may fail)",
@@ -95,22 +100,21 @@ export async function addDeployChecks(params: {
   const extraFilesDir = getHostExtraFilesDir(params.layout, host);
   const extraFilesKey = getHostExtraFilesKeyPath(params.layout, host);
 
-  params.push({
-    scope: "deploy",
-    status: fs.existsSync(extraFilesDir) ? "ok" : "missing",
-    label: "nixos-anywhere extra-files dir",
-    detail: extraFilesDir,
-  });
+  if (isBootstrap) {
+    push({
+      status: fs.existsSync(extraFilesDir) ? "ok" : "missing",
+      label: "nixos-anywhere extra-files dir",
+      detail: extraFilesDir,
+    });
 
-  params.push({
-    scope: "deploy",
-    status: fs.existsSync(extraFilesKey) ? "ok" : "missing",
-    label: "sops-nix age key (extra-files)",
-    detail: extraFilesKey,
-  });
+    push({
+      status: fs.existsSync(extraFilesKey) ? "ok" : "missing",
+      label: "sops-nix age key (extra-files)",
+      detail: extraFilesKey,
+    });
+  }
 
-  params.push({
-    scope: "deploy",
+  push({
     status: fs.existsSync(params.layout.sopsConfigPath) ? "ok" : "missing",
     label: "sops config",
     detail: params.layout.sopsConfigPath,
@@ -128,8 +132,7 @@ export async function addDeployChecks(params: {
   }
 
   if (clawdletsConfigError) {
-    params.push({
-      scope: "deploy",
+    push({
       status: "warn",
       label: "clawdlets config",
       detail: clawdletsConfigError,
@@ -137,10 +140,9 @@ export async function addDeployChecks(params: {
   }
 
   if (!clawdletsConfigError && !clawdletsHostCfg) {
-    params.push({ scope: "deploy", status: "warn", label: "host config", detail: `(missing host in fleet/clawdlets.json: ${host})` });
+    push({ status: "warn", label: "host config", detail: `(missing host in fleet/clawdlets.json: ${host})` });
   } else if (clawdletsHostCfg) {
-    params.push({
-      scope: "deploy",
+    push({
       status: clawdletsHostCfg.enable ? "ok" : "warn",
       label: "services.clawdbotFleet.enable",
       detail: clawdletsHostCfg.enable ? "(true)" : "(false; host will install but fleet services/VPN won't run until enabled)",
@@ -149,8 +151,7 @@ export async function addDeployChecks(params: {
     {
       const mode = getSshExposureMode(clawdletsHostCfg);
       const isPublic = isPublicSshExposure(mode);
-      params.push({
-        scope: "deploy",
+      push({
         status: isPublic ? "warn" : "ok",
         label: "sshExposure",
         detail: isPublic ? `(mode=${mode}; public SSH allowed)` : "(mode=tailnet)",
@@ -159,18 +160,17 @@ export async function addDeployChecks(params: {
 
     const mode = String(clawdletsHostCfg.tailnet?.mode || "none");
     if (mode === "none") {
-      params.push({ scope: "deploy", status: "warn", label: "tailnet configured", detail: "(tailnet.mode=none)" });
+      push({ status: "warn", label: "tailnet configured", detail: "(tailnet.mode=none)" });
     } else if (mode === "tailscale") {
-      params.push({ scope: "deploy", status: "ok", label: "tailnet configured", detail: "(tailscale)" });
+      push({ status: "ok", label: "tailnet configured", detail: "(tailscale)" });
     } else {
-      params.push({ scope: "deploy", status: "warn", label: "tailnet configured", detail: `(unknown: ${mode})` });
+      push({ status: "warn", label: "tailnet configured", detail: `(unknown: ${mode})` });
     }
   }
 
   if (clawdletsCfg) {
     const baseResolved = await resolveBaseFlake({ repoRoot: params.repoRoot, config: clawdletsCfg });
-    params.push({
-      scope: "deploy",
+    push({
       status: baseResolved.flake ? "ok" : "warn",
       label: "base flake",
       detail: baseResolved.flake ?? "(unset; inferred from origin if present)",
@@ -210,8 +210,7 @@ export async function addDeployChecks(params: {
           detailParts.push("(ok)");
         }
 
-        params.push({
-          scope: "deploy",
+        push({
           status,
           label: "discord routing",
           detail: detailParts.join("; "),
@@ -221,55 +220,54 @@ export async function addDeployChecks(params: {
   }
 
   if (clawdletsHostCfg) {
-    params.push({
-      scope: "deploy",
-      status: clawdletsHostCfg.targetHost ? "ok" : "warn",
-      label: "targetHost",
-      detail: clawdletsHostCfg.targetHost || "(unset; required for lockdown/server ops)",
-    });
+    if (isServerDeploy) {
+      push({
+        status: clawdletsHostCfg.targetHost ? "ok" : "warn",
+        label: "targetHost",
+        detail: clawdletsHostCfg.targetHost || "(unset; required for lockdown/server ops)",
+      });
+    }
 
-    const serverType = String(clawdletsHostCfg.hetzner?.serverType || "").trim();
-    params.push({
-      scope: "deploy",
-      status: serverType ? "ok" : "missing",
-      label: "hetzner.serverType",
-      detail: serverType || "(unset)",
-    });
+    if (isBootstrap) {
+      const serverType = String(clawdletsHostCfg.hetzner?.serverType || "").trim();
+      push({
+        status: serverType ? "ok" : "missing",
+        label: "hetzner.serverType",
+        detail: serverType || "(unset)",
+      });
 
-    const adminCidr = String(clawdletsHostCfg.opentofu?.adminCidr || "").trim();
-    params.push({
-      scope: "deploy",
-      status: adminCidr ? "ok" : "missing",
-      label: "opentofu.adminCidr",
-      detail: adminCidr || "(unset)",
-    });
+      const adminCidr = String(clawdletsHostCfg.opentofu?.adminCidr || "").trim();
+      push({
+        status: adminCidr ? "ok" : "missing",
+        label: "opentofu.adminCidr",
+        detail: adminCidr || "(unset)",
+      });
 
-    {
-      const raw = String(clawdletsHostCfg.opentofu?.sshPubkeyFile || "").trim();
-      if (!raw) {
-        params.push({ scope: "deploy", status: "missing", label: "opentofu ssh pubkey file", detail: "(unset)" });
-      } else if (looksLikeSshKeyContents(raw)) {
-        params.push({
-          scope: "deploy",
-          status: "missing",
-          label: "opentofu ssh pubkey file",
-          detail: "(must be a path, not key contents)",
-        });
-      } else {
-        const expanded = expandPath(raw);
-        const abs = path.isAbsolute(expanded) ? expanded : path.resolve(params.repoRoot, expanded);
-        params.push({ scope: "deploy", status: fs.existsSync(abs) ? "ok" : "missing", label: "opentofu ssh pubkey file", detail: abs });
-
-        const sshKey = fs.existsSync(abs) ? normalizeSshPublicKey(fs.readFileSync(abs, "utf8")) : null;
-        if (sshKey) {
-          const authorized = (clawdletsHostCfg.sshAuthorizedKeys || []) as string[];
-          const has = authorized.some((k) => normalizeSshPublicKey(k) === sshKey);
-          params.push({
-            scope: "deploy",
-            status: has ? "ok" : "warn",
-            label: "admin authorizedKeys includes ssh pubkey file",
-            detail: has ? "(ok)" : `(add your key via: clawdlets host set --add-ssh-key-file ${raw})`,
+      {
+        const raw = String(clawdletsHostCfg.opentofu?.sshPubkeyFile || "").trim();
+        if (!raw) {
+          push({ status: "missing", label: "opentofu ssh pubkey file", detail: "(unset)" });
+        } else if (looksLikeSshKeyContents(raw)) {
+          push({
+            status: "missing",
+            label: "opentofu ssh pubkey file",
+            detail: "(must be a path, not key contents)",
           });
+        } else {
+          const expanded = expandPath(raw);
+          const abs = path.isAbsolute(expanded) ? expanded : path.resolve(params.repoRoot, expanded);
+          push({ status: fs.existsSync(abs) ? "ok" : "missing", label: "opentofu ssh pubkey file", detail: abs });
+
+          const sshKey = fs.existsSync(abs) ? normalizeSshPublicKey(fs.readFileSync(abs, "utf8")) : null;
+          if (sshKey) {
+            const authorized = (clawdletsHostCfg.sshAuthorizedKeys || []) as string[];
+            const has = authorized.some((k) => normalizeSshPublicKey(k) === sshKey);
+            push({
+              status: has ? "ok" : "warn",
+              label: "admin authorizedKeys includes ssh pubkey file",
+              detail: has ? "(ok)" : `(add your key via: clawdlets host set --add-ssh-key-file ${raw})`,
+            });
+          }
         }
       }
     }
@@ -278,26 +276,23 @@ export async function addDeployChecks(params: {
     const integrity = validateHostSecretsYamlFiles({ secretsDir: secretsLocalDir });
     if (!integrity.ok) {
       const first = integrity.violations[0]!;
-      params.push({
-        scope: "deploy",
+      push({
         status: "missing",
         label: "secrets integrity",
         detail: `${path.relative(params.repoRoot, first.filePath)}:${first.line ?? 1} ${first.message}`,
       });
     } else {
-      params.push({ scope: "deploy", status: "ok", label: "secrets integrity", detail: "(one secret per file; key matches filename)" });
+      push({ status: "ok", label: "secrets integrity", detail: "(one secret per file; key matches filename)" });
     }
 
     const hostKeyFile = getHostEncryptedAgeKeyFile(params.layout, host);
-    params.push({
-      scope: "deploy",
+    push({
       status: fs.existsSync(hostKeyFile) ? "ok" : "missing",
       label: "host sops-nix age key (encrypted)",
       detail: hostKeyFile,
     });
 
-    params.push({
-      scope: "deploy",
+    push({
       status: "ok",
       label: "remote secrets dir",
       detail: getHostRemoteSecretsDir(host),
@@ -307,23 +302,21 @@ export async function addDeployChecks(params: {
     try {
       if (clawdletsCfg) envPlan = buildFleetEnvSecretsPlan({ config: clawdletsCfg as any, hostName: host });
     } catch (e) {
-      params.push({ scope: "deploy", status: "warn", label: "envSecrets plan", detail: String((e as Error)?.message || e) });
+      push({ status: "warn", label: "envSecrets plan", detail: String((e as Error)?.message || e) });
       envPlan = null;
     }
 
     if (envPlan && envPlan.missingEnvSecretMappings.length > 0) {
       for (const m of envPlan.missingEnvSecretMappings.slice(0, 10)) {
         const rec = getRecommendedSecretNameForEnvVar(m.envVar);
-        params.push({
-          scope: "deploy",
+        push({
           status: "missing",
           label: `envSecrets mapping: ${m.envVar}`,
           detail: `missing for bot=${m.bot} (model=${m.model}); set: clawdlets config set --path fleet.envSecrets.${m.envVar} --value ${rec || "<secret_name>"}`,
         });
       }
       if (envPlan.missingEnvSecretMappings.length > 10) {
-        params.push({
-          scope: "deploy",
+        push({
           status: "missing",
           label: "envSecrets mapping",
           detail: `(+${envPlan.missingEnvSecretMappings.length - 10} more missing mappings)`,
@@ -344,15 +337,14 @@ export async function addDeployChecks(params: {
       ]));
       for (const secretName of required) {
         const f = path.join(secretsLocalDir, `${secretName}.yaml`);
-        params.push({
-          scope: "deploy",
+        push({
           status: fs.existsSync(f) ? "ok" : "missing",
           label: `secret: ${secretName}`,
           detail: fs.existsSync(f) ? undefined : f,
         });
       }
     } else {
-      params.push({ scope: "deploy", status: "warn", label: "required secrets", detail: "(fleet bots list missing; cannot validate discord_token_<bot> secrets)" });
+      push({ status: "warn", label: "required secrets", detail: "(fleet bots list missing; cannot validate discord_token_<bot> secrets)" });
     }
 
     if (envPlan && envPlan.secretNamesRequired.length > 0 && params.sopsAgeKeyFile && fs.existsSync(params.sopsAgeKeyFile)) {
@@ -370,21 +362,20 @@ export async function addDeployChecks(params: {
           const v = readYamlScalarFromMapping({ yamlText: decrypted, key: secretName }) || "";
           const value = v.trim();
           if (!value) {
-            params.push({ scope: "deploy", status: "missing", label: `secret value: ${secretName}`, detail: "(empty)" });
+            push({ status: "missing", label: `secret value: ${secretName}`, detail: "(empty)" });
             continue;
           }
           if (value === "<OPTIONAL>" || isPlaceholderSecretValue(value)) {
-            params.push({ scope: "deploy", status: "missing", label: `secret value: ${secretName}`, detail: `(placeholder: ${value})` });
+            push({ status: "missing", label: `secret value: ${secretName}`, detail: `(placeholder: ${value})` });
             continue;
           }
-          params.push({ scope: "deploy", status: "ok", label: `secret value: ${secretName}` });
+          push({ status: "ok", label: `secret value: ${secretName}` });
         } catch (e) {
-          params.push({ scope: "deploy", status: "warn", label: `secret value: ${secretName}`, detail: String((e as Error)?.message || e) });
+          push({ status: "warn", label: `secret value: ${secretName}`, detail: String((e as Error)?.message || e) });
         }
       }
     } else if (envPlan && envPlan.secretNamesRequired.length > 0) {
-      params.push({
-        scope: "deploy",
+      push({
         status: "warn",
         label: "LLM API keys",
         detail: "(set SOPS_AGE_KEY_FILE to verify required key values are not placeholders)",
@@ -397,7 +388,7 @@ export async function addDeployChecks(params: {
       try {
         parsed = (YAML.parse(sopsText) as { creation_rules?: unknown }) || {};
       } catch {
-        params.push({ scope: "deploy", status: "warn", label: "sops config parse", detail: "(invalid YAML)" });
+        push({ status: "warn", label: "sops config parse", detail: "(invalid YAML)" });
         parsed = null;
       }
 
@@ -408,8 +399,7 @@ export async function addDeployChecks(params: {
 
         const checkRule = (label: string, expected: string, detail: string) => {
           const hasRule = rules.some((r) => String(r?.path_regex || "") === expected);
-          params.push({
-            scope: "deploy",
+          push({
             status: hasRule ? "ok" : "missing",
             label,
             detail: hasRule ? "(ok)" : detail,
@@ -421,7 +411,7 @@ export async function addDeployChecks(params: {
           const expected = getHostSecretsSopsCreationRulePathRegex(params.layout, host);
           checkRule("sops creation rule (host secrets)", expected, `(missing rule for ${rel}/*.yaml; run: clawdlets secrets init)`);
         } catch (e) {
-          params.push({ scope: "deploy", status: "warn", label: "sops creation rule (host secrets)", detail: String((e as Error)?.message || e) });
+          push({ status: "warn", label: "sops creation rule (host secrets)", detail: String((e as Error)?.message || e) });
         }
 
         try {
@@ -429,18 +419,26 @@ export async function addDeployChecks(params: {
           const expected = getHostAgeKeySopsCreationRulePathRegex(params.layout, host);
           checkRule("sops creation rule (host age key)", expected, `(missing rule for ${rel}; run: clawdlets secrets init)`);
         } catch (e) {
-          params.push({ scope: "deploy", status: "warn", label: "sops creation rule (host age key)", detail: String((e as Error)?.message || e) });
+          push({ status: "warn", label: "sops creation rule (host age key)", detail: String((e as Error)?.message || e) });
         }
       }
     }
   }
 
-  if (params.skipGithubTokenCheck) {
-    params.push({
-      scope: "deploy",
+  if (isServerDeploy) {
+    push({
       status: "ok",
       label: "GITHUB_TOKEN",
-      detail: "(skipped; cache-only deploy)",
+      detail: "(not required; cache-only deploy)",
+    });
+    return;
+  }
+
+  if (params.skipGithubTokenCheck) {
+    push({
+      status: "ok",
+      label: "GITHUB_TOKEN",
+      detail: "(skipped)",
     });
     return;
   }
@@ -450,8 +448,7 @@ export async function addDeployChecks(params: {
   const githubRepo = tryParseGithubFlakeUri(flakeBase);
 
   if (!githubRepo) {
-    params.push({
-      scope: "deploy",
+    push({
       status: "ok",
       label: "GITHUB_TOKEN",
       detail: "(not needed; origin flake is not github:...)",
@@ -467,36 +464,31 @@ export async function addDeployChecks(params: {
     });
 
     if (check.ok && check.status === "public") {
-      params.push({
-        scope: "deploy",
+      push({
         status: "ok",
         label: "GITHUB_TOKEN",
         detail: `(set; has access to ${githubRepo.owner}/${githubRepo.repo})`,
       });
     } else if (check.ok && check.status === "unauthorized") {
-      params.push({
-        scope: "deploy",
+      push({
         status: "missing",
         label: "GITHUB_TOKEN",
         detail: "(invalid/expired; GitHub API returned 401)",
       });
     } else if (check.ok && check.status === "private-or-missing") {
-      params.push({
-        scope: "deploy",
+      push({
         status: "missing",
         label: "GITHUB_TOKEN",
         detail: `(set but no access; GitHub API returned 404 for ${githubRepo.owner}/${githubRepo.repo})`,
       });
     } else if (check.ok && check.status === "rate-limited") {
-      params.push({
-        scope: "deploy",
+      push({
         status: "warn",
         label: "GITHUB_TOKEN",
         detail: "(set; GitHub API rate-limited during verification)",
       });
     } else {
-      params.push({
-        scope: "deploy",
+      push({
         status: "warn",
         label: "GITHUB_TOKEN",
         detail: "(set; could not verify against GitHub API)",
@@ -511,29 +503,25 @@ export async function addDeployChecks(params: {
   });
 
   if (check.ok && check.status === "public") {
-    params.push({
-      scope: "deploy",
+    push({
       status: "ok",
       label: "GITHUB_TOKEN",
       detail: `(optional; ${githubRepo.owner}/${githubRepo.repo} is public)`,
     });
   } else if (check.ok && check.status === "private-or-missing") {
-    params.push({
-      scope: "deploy",
+    push({
       status: "missing",
       label: "GITHUB_TOKEN",
       detail: `(required; ${githubRepo.owner}/${githubRepo.repo} is private)`,
     });
   } else if (check.ok && check.status === "rate-limited") {
-    params.push({
-      scope: "deploy",
+    push({
       status: "warn",
       label: "GITHUB_TOKEN",
       detail: "(unknown; GitHub API rate-limited; if bootstrap fails with 404, set token)",
     });
   } else {
-    params.push({
-      scope: "deploy",
+    push({
       status: "warn",
       label: "GITHUB_TOKEN",
       detail: "(unknown; could not verify repo visibility; if bootstrap fails with 404, set token)",

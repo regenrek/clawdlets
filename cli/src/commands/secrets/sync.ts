@@ -5,7 +5,7 @@ import { run } from "@clawdbot/clawdlets-core/lib/run";
 import { shellQuote, sshRun } from "@clawdbot/clawdlets-core/lib/ssh-remote";
 import { getHostRemoteSecretsDir, getHostSecretsDir } from "@clawdbot/clawdlets-core/repo-layout";
 import { resolveGitRev } from "@clawdbot/clawdlets-core/lib/git";
-import { createSecretsTar } from "../../lib/secrets-tar.js";
+import { createSecretsTar } from "@clawdbot/clawdlets-core/lib/secrets-tar";
 import { needsSudo, requireTargetHost } from "./common.js";
 import { loadHostContextOrExit } from "../../lib/context.js";
 

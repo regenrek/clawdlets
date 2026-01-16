@@ -55,6 +55,7 @@ Fast fix: re-run `clawdlets secrets init` (it regenerates/upgrades `.sops.yaml`)
 ## Common keys
 
 - `tailscale_auth_key` (required when using Tailscale auto-join)
+- `garnix_netrc` (netrc for private Garnix cache access; installed at `/etc/nix/netrc` when enabled)
 - `discord_token_<bot>`
 - LLM API keys (configured via `fleet.envSecrets` in `fleet/clawdlets.json`):
   - `z_ai_api_key` (Z.AI; env: `ZAI_API_KEY` + `Z_AI_API_KEY`)

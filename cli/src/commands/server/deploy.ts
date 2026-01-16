@@ -8,55 +8,13 @@ import { loadDeployCreds } from "@clawdbot/clawdlets-core/lib/deploy-creds";
 import { withFlakesEnv } from "@clawdbot/clawdlets-core/lib/nix-flakes";
 import { shellQuote, sshRun } from "@clawdbot/clawdlets-core/lib/ssh-remote";
 import { getHostSecretsDir } from "@clawdbot/clawdlets-core/repo-layout";
+import { createSecretsTar } from "@clawdbot/clawdlets-core/lib/secrets-tar";
 import { requireDeployGate } from "../../lib/deploy-gate.js";
-import { createSecretsTar } from "../../lib/secrets-tar.js";
 import { loadHostContextOrExit } from "../../lib/context.js";
 import { needsSudo, requireTargetHost } from "../ssh-target.js";
+import { formatDeployManifest, parseDeployManifest, requireToplevel, type DeployManifest } from "../../lib/deploy-manifest.js";
+import { resolveManifestPublicKey, resolveManifestSignaturePath, verifyManifestSignature } from "../../lib/manifest-signature.js";
 
-type DeployManifest = {
-  rev: string;
-  host: string;
-  toplevel: string;
-  secretsDigest?: string;
-};
-
-const REV_RE = /^[0-9a-f]{40}$/;
-const DIGEST_RE = /^[0-9a-f]{64}$/;
-
-function requireRev(value: string): string {
-  const v = value.trim();
-  if (!REV_RE.test(v)) throw new Error(`invalid rev (expected 40-char sha): ${v || "<empty>"}`);
-  return v;
-}
-
-function requireToplevel(value: string): string {
-  const v = value.trim();
-  if (!v) throw new Error("missing toplevel store path");
-  if (/\s/.test(v)) throw new Error(`invalid toplevel (contains whitespace): ${v}`);
-  if (!v.startsWith("/nix/store/")) throw new Error(`invalid toplevel (expected /nix/store/...): ${v}`);
-  return v;
-}
-
-function parseManifest(manifestPath: string): DeployManifest {
-  const raw = fs.readFileSync(manifestPath, "utf8");
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (e) {
-    throw new Error(`invalid deploy manifest JSON: ${manifestPath} (${String((e as Error)?.message || e)})`);
-  }
-  if (!parsed || typeof parsed !== "object") throw new Error(`invalid deploy manifest: ${manifestPath}`);
-  const rev = requireRev(String((parsed as any).rev ?? ""));
-  const host = String((parsed as any).host ?? "").trim();
-  if (!host) throw new Error(`invalid deploy manifest host: ${manifestPath}`);
-  const toplevel = requireToplevel(String((parsed as any).toplevel ?? ""));
-  const secretsDigestRaw = String((parsed as any).secretsDigest ?? "").trim();
-  const secretsDigest = secretsDigestRaw ? secretsDigestRaw : undefined;
-  if (secretsDigest && !DIGEST_RE.test(secretsDigest)) {
-    throw new Error(`invalid deploy manifest secretsDigest (expected sha256 hex): ${manifestPath}`);
-  }
-  return { rev, host, toplevel, secretsDigest };
-}
 
 async function buildLocalToplevel(params: {
   repoRoot: string;
@@ -97,6 +55,9 @@ export const serverDeploy = defineCommand({
     rev: { type: "string", description: "Git rev to pin (HEAD/sha/tag).", default: "HEAD" },
     toplevel: { type: "string", description: "NixOS system toplevel store path (CI mode)." },
     manifest: { type: "string", description: "Path to deploy manifest JSON (CI mode)." },
+    manifestSignature: { type: "string", description: "Path to manifest minisign signature (.minisig)." },
+    manifestPublicKey: { type: "string", description: "Minisign public key string (verify manifest)." },
+    manifestPublicKeyFile: { type: "string", description: "Path to minisign public key (verify manifest)." },
     manifestOut: { type: "string", description: "Write deploy manifest JSON to this path." },
     sshTty: { type: "boolean", description: "Allocate TTY for sudo prompts.", default: true },
   },
@@ -110,7 +71,7 @@ export const serverDeploy = defineCommand({
       runtimeDir: (args as any).runtimeDir,
       envFile: (args as any).envFile,
       host: hostName,
-      scope: "deploy",
+      scope: "server-deploy",
       strict: false,
       skipGithubTokenCheck: true,
     });
@@ -134,7 +95,20 @@ export const serverDeploy = defineCommand({
     let manifestDigest: string | undefined;
 
     if (manifestPath) {
-      const manifest = parseManifest(manifestPath);
+      const signaturePath = resolveManifestSignaturePath({
+        cwd,
+        manifestPath,
+        signaturePathArg: args.manifestSignature,
+      });
+      const publicKey = resolveManifestPublicKey({
+        publicKeyArg: args.manifestPublicKey,
+        publicKeyFileArg: args.manifestPublicKeyFile,
+        defaultKeyPath: path.join(repoRoot, "config", "manifest.minisign.pub"),
+        hostPublicKey: hostCfg?.selfUpdate?.publicKey,
+      });
+      await verifyManifestSignature({ manifestPath, signaturePath, publicKey });
+
+      const manifest = parseDeployManifest(manifestPath);
       if (manifest.host !== hostName) {
         throw new Error(`manifest host mismatch: ${manifest.host} vs ${hostName}`);
       }
@@ -209,7 +183,7 @@ export const serverDeploy = defineCommand({
     if (manifestOut) {
       fs.mkdirSync(path.dirname(manifestOut), { recursive: true });
       const manifest: DeployManifest = { rev: resolvedRev, host: hostName, toplevel, secretsDigest: digest };
-      fs.writeFileSync(manifestOut, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+      fs.writeFileSync(manifestOut, formatDeployManifest(manifest), "utf8");
       console.log(`ok: wrote deploy manifest ${manifestOut}`);
     }
 

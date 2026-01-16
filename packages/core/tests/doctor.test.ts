@@ -6,13 +6,17 @@ import { sopsPathRegexForDirFiles, sopsPathRegexForPathSuffix } from "../src/lib
 
 let mockFleetMain: any = null;
 let mockFleetTemplate: any = null;
+let templateRoot = "";
 
 vi.mock("../src/lib/run.js", () => ({
   capture: vi.fn(async (_cmd: string, args: string[]) => {
     if (args.includes("--version")) return "nix (mock) 2.0";
     if (args[0] === "eval" || args.includes("eval")) {
       const joined = args.join(" ");
-      const isTemplate = joined.includes("packages/template/dist/template/infra/configs/fleet.nix");
+      const templateFleetPath = templateRoot
+        ? path.join(templateRoot, "infra", "configs", "fleet.nix")
+        : "";
+      const isTemplate = templateFleetPath && joined.includes(templateFleetPath);
       return JSON.stringify(isTemplate ? mockFleetTemplate : mockFleetMain);
     }
     return "";
@@ -39,15 +43,17 @@ describe("doctor", () => {
 
   beforeAll(async () => {
     repoRoot = await mkdtemp(path.join(tmpdir(), "clawdlets-doctor-"));
+    templateRoot = path.join(repoRoot, "__template__");
+    process.env.CLAWDLETS_TEMPLATE_DIR = templateRoot;
     await writeFile(path.join(repoRoot, "flake.nix"), "{ }", "utf8");
     await mkdir(path.join(repoRoot, "scripts"), { recursive: true });
     await mkdir(path.join(repoRoot, "docs"), { recursive: true });
     await mkdir(path.join(repoRoot, "fleet", "workspaces", "common"), { recursive: true });
-    await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "docs"), { recursive: true });
-    await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "fleet"), { recursive: true });
-    await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "fleet", "workspaces", "common"), { recursive: true });
-    await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "infra", "configs"), { recursive: true });
-    await mkdir(path.join(repoRoot, "packages", "template", "dist", "template", "infra", "nix", "hosts"), { recursive: true });
+    await mkdir(path.join(templateRoot, "docs"), { recursive: true });
+    await mkdir(path.join(templateRoot, "fleet"), { recursive: true });
+    await mkdir(path.join(templateRoot, "fleet", "workspaces", "common"), { recursive: true });
+    await mkdir(path.join(templateRoot, "infra", "configs"), { recursive: true });
+    await mkdir(path.join(templateRoot, "infra", "nix", "hosts"), { recursive: true });
     await mkdir(path.join(repoRoot, "infra", "opentofu"), { recursive: true });
     await mkdir(path.join(repoRoot, "fleet"), { recursive: true });
     await mkdir(path.join(repoRoot, "infra", "configs"), { recursive: true });
@@ -56,11 +62,7 @@ describe("doctor", () => {
 
     const bundledSkillsText = ["[", '  "github",', '  "brave-search",', '  "coding-agent"', "]", ""].join("\n");
     await writeFile(path.join(repoRoot, "fleet", "bundled-skills.json"), bundledSkillsText, "utf8");
-    await writeFile(
-      path.join(repoRoot, "packages", "template", "dist", "template", "fleet", "bundled-skills.json"),
-      bundledSkillsText,
-      "utf8",
-    );
+    await writeFile(path.join(templateRoot, "fleet", "bundled-skills.json"), bundledSkillsText, "utf8");
 
     const workspaceDocs = {
       "AGENTS.md": "# agents\n",
@@ -72,7 +74,7 @@ describe("doctor", () => {
     };
     for (const [name, text] of Object.entries(workspaceDocs)) {
       await writeFile(path.join(repoRoot, "fleet", "workspaces", "common", name), text, "utf8");
-      await writeFile(path.join(repoRoot, "packages", "template", "dist", "template", "fleet", "workspaces", "common", name), text, "utf8");
+      await writeFile(path.join(templateRoot, "fleet", "workspaces", "common", name), text, "utf8");
     }
 
     await writeFile(path.join(repoRoot, "docs", "overview.md"), "# overview\n", "utf8");
@@ -88,9 +90,9 @@ describe("doctor", () => {
       "utf8",
     );
 
-    await writeFile(path.join(repoRoot, "packages", "template", "dist", "template", "docs", "overview.md"), "# overview\n", "utf8");
+    await writeFile(path.join(templateRoot, "docs", "overview.md"), "# overview\n", "utf8");
     await writeFile(
-      path.join(repoRoot, "packages", "template", "dist", "template", "docs", "docs.yaml"),
+      path.join(templateRoot, "docs", "docs.yaml"),
       [
         "docs:",
         "  - path: docs/overview.md",
@@ -140,11 +142,7 @@ describe("doctor", () => {
     };
 
     await writeFile(path.join(repoRoot, "fleet", "clawdlets.json"), JSON.stringify(clawdletsConfig, null, 2) + "\n", "utf8");
-    await writeFile(
-      path.join(repoRoot, "packages", "template", "dist", "template", "fleet", "clawdlets.json"),
-      JSON.stringify(clawdletsConfig, null, 2) + "\n",
-      "utf8",
-    );
+    await writeFile(path.join(templateRoot, "fleet", "clawdlets.json"), JSON.stringify(clawdletsConfig, null, 2) + "\n", "utf8");
 
     await writeFile(
       path.join(repoRoot, "infra", "configs", "fleet.nix"),
@@ -166,7 +164,7 @@ describe("doctor", () => {
     );
 
     await writeFile(
-      path.join(repoRoot, "packages", "template", "dist", "template", "infra", "configs", "fleet.nix"),
+      path.join(templateRoot, "infra", "configs", "fleet.nix"),
       [
         "{ lib }:",
         "let",
@@ -247,7 +245,7 @@ describe("doctor", () => {
     );
 
     await writeFile(
-      path.join(repoRoot, "packages", "template", "dist", "template", "infra", "nix", "hosts", "clawdlets-host.nix"),
+      path.join(templateRoot, "infra", "nix", "hosts", "clawdlets-host.nix"),
       [
         "{ config, lib, ... }:",
         "let",
@@ -269,7 +267,7 @@ describe("doctor", () => {
   });
 
   afterEach(() => {
-    process.env = { ...originalEnv };
+    process.env = { ...originalEnv, CLAWDLETS_TEMPLATE_DIR: templateRoot };
     mockFleetMain = {
       bots: ["alpha", "beta"],
       botProfiles: {
@@ -295,7 +293,7 @@ describe("doctor", () => {
     await writeFile(configPath, "{", "utf8");
 
     const { collectDoctorChecks } = await import("../src/doctor");
-    const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host", scope: "deploy" });
+    const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host", scope: "server-deploy" });
     const check = checks.find((c) => c.label === "clawdlets config");
     expect(check?.status).toBe("warn");
 
@@ -313,7 +311,7 @@ describe("doctor", () => {
 
     process.env.HCLOUD_TOKEN = "abc";
     const { collectDoctorChecks } = await import("../src/doctor");
-    const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host", scope: "deploy" });
+    const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host", scope: "server-deploy" });
     const check = checks.find((c) => c.label === "discord routing");
     expect(check?.status).toBe("missing");
 

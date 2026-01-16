@@ -21,12 +21,12 @@ clawdlets --help
 
 If you’re developing inside this monorepo, use the pnpm wrappers (example): `pnpm run clawdlets:secrets -- init` == `clawdlets secrets init`.
 
-- `clawdlets doctor --scope deploy`: deploy preflight (fails on missing).
-- `clawdlets doctor --scope deploy --strict`: lockdown gate (fails on warn/missing).
+- `clawdlets doctor --scope bootstrap`: bootstrap preflight (fails on missing).
+- `clawdlets doctor --scope server-deploy --strict`: deploy gate (fails on warn/missing).
 - `clawdlets secrets init`: generates operator keys + host key, writes encrypted secrets under `secrets/hosts/<host>/`, and generates `.clawdlets/extra-files/<host>/...` for first install.
 - `clawdlets bootstrap`: runs OpenTofu + `nixos-anywhere` install (prints target IPv4; clears stale `known_hosts`).
 - `clawdlets infra apply`: opentofu apply only (driven by `fleet/clawdlets.json`).
-- `clawdlets lockdown`: reconcile to tailnet-only SSH (use `--skip-rebuild` if you deploy by store path).
+- `clawdlets lockdown`: reconcile to tailnet-only SSH (OpenTofu only).
 - `clawdlets server <cmd>`: run server-side operations over SSH (`status`, `logs`, `restart`, `deploy`).
 
 ## Recommended workflow (new host)
@@ -39,12 +39,19 @@ cd ./clawdlets-myproject
 ```
 
 Note: `project init` already includes `fleet/clawdlets.json`. Don’t run `clawdlets config init` unless you want to reset it (`--force`).
+Template source defaults to the pinned config in `config/template-source.json` (repo + path + 40-hex ref).
+Override with `--template`, `--template-path`, or `--template-ref` (or env `CLAWDLETS_TEMPLATE_*`).
+
+0.5) Enable Garnix for the project repo (private cache) and add the netrc secret:
+- turn on Garnix for the repo and set the cache to private
+- add `secrets/hosts/<host>/garnix_netrc.yaml` with your netrc credentials (required)
 
 1) Configure fleet + host (CLI-first):
 - set guild id: `clawdlets fleet set --guild-id <discord-guild-id>`
 - add bots: `clawdlets bot add --bot <id>` (repeat)
 - host basics:
   - add SSH key: `clawdlets host set --add-ssh-key-file ~/.ssh/id_ed25519.pub`
+  - pin host key (for CI deploy): `clawdlets host set --add-ssh-known-host "<host> ssh-ed25519 AAAA..."`
   - set disk device: `clawdlets host set --disk-device /dev/disk/by-id/...`
   - enable fleet: `clawdlets host set --enable true`
   - tailnet defaults to Tailscale (change via `clawdlets host set --tailnet none|tailscale` if needed)
@@ -55,7 +62,7 @@ Canonical config lives in `fleet/clawdlets.json` (don’t edit Nix files directl
 2) Create secrets + preflight:
 ```bash
 clawdlets secrets init
-clawdlets doctor --scope deploy
+clawdlets doctor --scope bootstrap
 ```
 
 Non-interactive: keep inputs in `.clawdlets/secrets.json` and run `clawdlets secrets init --from-json .clawdlets/secrets.json` (if the file is missing, `secrets init` will write a template and exit).
@@ -67,6 +74,14 @@ LLM API keys are provided via `secrets.<secretName>` in that JSON (e.g. `secrets
 clawdlets bootstrap
 ```
 
+Optional image-based bootstrap: see `docs/image-based-provisioning.md` and run:
+
+```bash
+clawdlets image build --host <host>
+clawdlets image upload --host <host> --image-url https://<bucket>/<image>.raw --compression bz2
+clawdlets bootstrap --mode image
+```
+
 4) Verify access:
 - SSH (when `sshExposure.mode=bootstrap|public`): `ssh admin@<ipv4>`
 - Console: `admin` login should work (sudo password exists; SSH stays key-only)
@@ -75,15 +90,22 @@ clawdlets bootstrap
 ```bash
 clawdlets host set --target-host admin@<tailscale-ip>
 clawdlets host set --ssh-exposure tailnet
+clawdlets server deploy --manifest deploy-manifest.<host>.json
 clawdlets lockdown
 ```
 
 6) Deploy (pinned to a full commit SHA):
 ```bash
-clawdlets server deploy --target-host admin@<ipv4> --toplevel /nix/store/... --rev HEAD
+clawdlets server deploy --manifest deploy-manifest.<host>.json
 ```
 
-`--rev HEAD` resolves to the full SHA locally before the deploy.
+Manifest pins the full 40-hex SHA.
+
+If you don’t have CI manifests yet, generate one locally:
+
+```bash
+clawdlets server manifest --host <host> --out deploy-manifest.<host>.json
+```
 
 ## Server checks
 
