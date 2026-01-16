@@ -408,6 +408,24 @@ describe("doctor", () => {
     await writeFile(configPath, original, "utf8");
   });
 
+  it("requires garnix_netrc when private Garnix cache enabled", async () => {
+    const configPath = path.join(repoRoot, "fleet", "clawdlets.json");
+    const original = await readFile(configPath, "utf8");
+
+    const raw = JSON.parse(original) as any;
+    raw.hosts["clawdbot-fleet-host"].cache = {
+      garnix: { private: { enable: true, netrcSecret: "garnix_netrc" } },
+    };
+    await writeFile(configPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+
+    process.env.HCLOUD_TOKEN = "abc";
+    const { collectDoctorChecks } = await import("../src/doctor");
+    const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host" });
+    expect(checks.some((c) => c.label === "secret: garnix_netrc" && c.status === "missing")).toBe(true);
+
+    await writeFile(configPath, original, "utf8");
+  });
+
   it("requires GITHUB_TOKEN when repo is private", async () => {
     const git = await import("../src/lib/git");
     const github = await import("../src/lib/github");

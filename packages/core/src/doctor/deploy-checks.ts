@@ -311,6 +311,20 @@ export async function addDeployChecks(params: {
       detail: getHostRemoteSecretsDir(host),
     });
 
+    {
+      const garnixPrivate = (clawdletsHostCfg.cache?.garnix?.private as any) || null;
+      const enabled = Boolean(garnixPrivate?.enable);
+      if (enabled) {
+        const secretName = String(garnixPrivate?.netrcSecret || "garnix_netrc").trim();
+        if (!secretName) {
+          push({ status: "missing", label: "garnix netrc secret", detail: "(unset; expected cache.garnix.private.netrcSecret)" });
+        } else {
+          const f = path.join(secretsLocalDir, `${secretName}.yaml`);
+          push({ status: fs.existsSync(f) ? "ok" : "missing", label: `secret: ${secretName}`, detail: fs.existsSync(f) ? undefined : f });
+        }
+      }
+    }
+
     let envPlan: ReturnType<typeof buildFleetEnvSecretsPlan> | null = null;
     try {
       if (clawdletsCfg) envPlan = buildFleetEnvSecretsPlan({ config: clawdletsCfg as any, hostName: host });
