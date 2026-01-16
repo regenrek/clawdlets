@@ -32,6 +32,11 @@ function cpDir(src, dest) {
   fs.cpSync(src, dest, { recursive: true });
 }
 
+function cpDirDereference(src, dest) {
+  rmForce(dest);
+  fs.cpSync(src, dest, { recursive: true, dereference: true });
+}
+
 function cpFile(src, dest) {
   ensureDir(path.dirname(dest));
   fs.copyFileSync(src, dest);
@@ -129,6 +134,17 @@ function main() {
   cpDir(coreDistDir, path.join(coreOutDir, "dist"));
   removeTsBuildInfoFiles(path.join(coreOutDir, "dist"));
 
+  // Bundle runtime deps of the bundled workspace packages.
+  // npm pack will treat these as part of the bundled closure; if they're missing,
+  // installs can produce empty "invalid" node_modules entries.
+  for (const depName of Object.keys(corePkg.dependencies || {})) {
+    const srcDepDir = path.join(coreDir, "node_modules", ...String(depName).split("/"));
+    if (!fs.existsSync(srcDepDir)) die(`missing installed dependency (run install): ${srcDepDir}`);
+    const destDepDir = path.join(nmRoot, ...String(depName).split("/"));
+    ensureDir(path.dirname(destDepDir));
+    cpDirDereference(srcDepDir, destDepDir);
+  }
+
   // Publishable package.json (no workspace: protocol).
   const nextCliPkg = { ...cliPkg };
   nextCliPkg.private = false;
@@ -140,6 +156,13 @@ function main() {
   nextCliPkg.bundledDependencies = Array.from(new Set([...(nextCliPkg.bundledDependencies || []), ...bundled]));
 
   const deps = { ...(nextCliPkg.dependencies || {}) };
+
+  // Ensure runtime deps of bundled workspace packages are installed by npm.
+  // Bundled dependencies' transitive deps are not installed automatically.
+  for (const [name, version] of Object.entries(corePkg.dependencies || {})) {
+    if (!deps[name]) deps[name] = version;
+  }
+
   for (const name of bundled) {
     const v = String(corePkg.version);
     deps[name] = v && v !== "undefined" ? v : cliVersion;

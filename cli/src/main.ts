@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { defineCommand, runMain } from "citty";
 import { bot } from "./commands/bot.js";
 import { bootstrap } from "./commands/bootstrap.js";

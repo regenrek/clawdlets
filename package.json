@@ -6,6 +6,7 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r --if-present test",
+    "template:smoke": "node scripts/template-smoke.mjs",
     "clawdlets:build": "pnpm -C cli build",
     "clawdlets:doctor": "node cli/dist/main.js doctor",
     "clawdlets:bootstrap": "node cli/dist/main.js bootstrap",
