@@ -90,6 +90,7 @@ const HostSchema = z.object({
   enable: z.boolean().default(false),
   diskDevice: z.string().trim().default("/dev/disk/by-id/CHANGE_ME"),
   sshAuthorizedKeys: z.array(z.string().trim().min(1)).default([]),
+  sshKnownHosts: z.array(z.string().trim().min(1)).default([]),
   flakeHost: z.string().trim().default(""),
   targetHost: z
     .string()
@@ -261,6 +262,7 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
         enable: false,
         diskDevice: "/dev/disk/by-id/CHANGE_ME",
         sshAuthorizedKeys: [],
+        sshKnownHosts: [],
         flakeHost: "",
         hetzner: { serverType: "cx43", image: "", location: "nbg1" },
         opentofu: { adminCidr: "", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },

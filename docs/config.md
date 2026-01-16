@@ -30,6 +30,7 @@ Host entry (`hosts.<host>`):
 - `enable`: whether fleet services should run
 - `diskDevice`: passed into the disko module (required for install)
 - `sshAuthorizedKeys`: admin SSH public keys (key-only; no passwords over SSH)
+- `sshKnownHosts`: pinned SSH host keys (known_hosts lines) for deploy automation
 - `flakeHost` (optional): nixosConfiguration output name override
 - `targetHost` (optional): SSH target for server ops (ssh config alias or `user@host`)
 - `hetzner.serverType`: e.g. `cx43`
@@ -71,6 +72,7 @@ Host entry (`hosts.<host>`):
       "enable": false,
       "diskDevice": "/dev/disk/by-id/CHANGE_ME",
       "sshAuthorizedKeys": [],
+      "sshKnownHosts": [],
       "flakeHost": "",
       "hetzner": { "serverType": "cx43", "image": "", "location": "nbg1" },
       "opentofu": { "adminCidr": "", "sshPubkeyFile": "~/.ssh/id_ed25519.pub" },

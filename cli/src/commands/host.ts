@@ -38,6 +38,21 @@ function readSshPublicKeysFromFile(filePath: string): string[] {
   return keys;
 }
 
+function readKnownHostsFromFile(filePath: string): string[] {
+  const stat = fs.statSync(filePath);
+  if (!stat.isFile()) throw new Error(`not a file: ${filePath}`);
+  if (stat.size > 256 * 1024) throw new Error(`known_hosts file too large (>256KB): ${filePath}`);
+
+  const raw = fs.readFileSync(filePath, "utf8");
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"));
+
+  if (lines.length === 0) throw new Error(`no known_hosts entries found in file: ${filePath}`);
+  return lines;
+}
+
 function toStringArray(v: unknown): string[] {
   if (v == null) return [];
   if (Array.isArray(v)) return v.map((x) => String(x));
@@ -61,6 +76,7 @@ const add = defineCommand({
       enable: false,
       diskDevice: "/dev/disk/by-id/CHANGE_ME",
       sshAuthorizedKeys: [],
+      sshKnownHosts: [],
       flakeHost: "",
       targetHost: undefined,
       hetzner: { serverType: "cx43", image: "", location: "nbg1" },
@@ -134,6 +150,9 @@ const set = defineCommand({
     "clear-ssh-keys": { type: "boolean", description: "Clear sshAuthorizedKeys.", default: false },
     "add-ssh-key": { type: "string", description: "Add SSH public key contents (repeatable).", array: true },
     "add-ssh-key-file": { type: "string", description: "Add SSH public key from file (repeatable).", array: true },
+    "clear-ssh-known-hosts": { type: "boolean", description: "Clear sshKnownHosts.", default: false },
+    "add-ssh-known-host": { type: "string", description: "Add known_hosts entry (repeatable).", array: true },
+    "add-ssh-known-host-file": { type: "string", description: "Add known_hosts entries from file (repeatable).", array: true },
   },
   async run({ args }) {
     const repoRoot = findRepoRoot(process.cwd());
@@ -212,6 +231,24 @@ const set = defineCommand({
       }
 
       next.sshAuthorizedKeys = Array.from(keys);
+    }
+
+    if ((args as any)["clear-ssh-known-hosts"]) next.sshKnownHosts = [];
+    {
+      const knownHosts = new Set<string>(next.sshKnownHosts || []);
+
+      for (const file of toStringArray((args as any)["add-ssh-known-host-file"])) {
+        for (const line of readKnownHostsFromFile(file)) knownHosts.add(line);
+      }
+
+      for (const raw of toStringArray((args as any)["add-ssh-known-host"])) {
+        const trimmed = raw.trim();
+        if (!trimmed) continue;
+        if (trimmed.startsWith("#")) continue;
+        knownHosts.add(trimmed);
+      }
+
+      next.sshKnownHosts = Array.from(knownHosts);
     }
 
     const nextConfig = ClawdletsConfigSchema.parse({ ...config, hosts: { ...config.hosts, [hostName]: next } });

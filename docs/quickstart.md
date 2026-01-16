@@ -51,6 +51,7 @@ Override with `--template`, `--template-path`, or `--template-ref` (or env `CLAW
 - add bots: `clawdlets bot add --bot <id>` (repeat)
 - host basics:
   - add SSH key: `clawdlets host set --add-ssh-key-file ~/.ssh/id_ed25519.pub`
+  - pin host key (for CI deploy): `clawdlets host set --add-ssh-known-host "<host> ssh-ed25519 AAAA..."`
   - set disk device: `clawdlets host set --disk-device /dev/disk/by-id/...`
   - enable fleet: `clawdlets host set --enable true`
   - tailnet defaults to Tailscale (change via `clawdlets host set --tailnet none|tailscale` if needed)
