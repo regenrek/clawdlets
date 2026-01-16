@@ -5,6 +5,7 @@ This repo publishes `clawdlets` to npm via GitHub Actions using npm Trusted Publ
 ## Preconditions
 
 - Clean working tree on `main`
+- `main` up to date with `origin/main`
 - `CHANGELOG.md` has a section for the exact version you will release: `## [X.Y.Z] - YYYY-MM-DD`
 - GitHub Actions is configured as a **Trusted Publisher** for the npm package
   - Workflow: `npm-release.yml`
@@ -26,13 +27,19 @@ pnpm dlx tsx scripts/release.ts patch
 Or:
 
 ```bash
-pnpm dlx tsx scripts/release.ts 0.1.0
+pnpm dlx tsx scripts/release.ts 0.1.1
 ```
 
 The script:
 - bumps versions (`packages/cli/`, `packages/core/`)
 - runs gates (`pnpm gate`, `scripts/secleak-check.sh`)
 - commits `chore(release): vX.Y.Z`, tags `vX.Y.Z`, pushes
+
+Dry-run (gates only):
+
+```bash
+pnpm dlx tsx scripts/release.ts patch --dry-run
+```
 
 ## What happens on GitHub
 
@@ -51,6 +58,7 @@ The script:
   - Commit + push
 - If template changes were made, bump `config/template-source.json` in this repo (or use the
   `bump-template-ref` workflow) so `clawdlets project init` stays pinned to the latest template.
+  - Note: bump-template-ref PRs require `BUMP_TEMPLATE_REF_TOKEN` secret (so required PR checks run under strict branch protection).
 
 ## Troubleshooting
 
