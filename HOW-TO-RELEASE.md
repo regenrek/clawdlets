@@ -31,7 +31,7 @@ pnpm dlx tsx scripts/release.ts 0.1.0
 
 The script:
 - bumps versions (`packages/cli/`, `packages/core/`)
-- runs gates (`pnpm -r test`, `pnpm -r build`, `pnpm -C packages/core run coverage`, `scripts/secleak-check.sh`)
+- runs gates (`pnpm gate`, `scripts/secleak-check.sh`)
 - commits `chore(release): vX.Y.Z`, tags `vX.Y.Z`, pushes
 
 ## What happens on GitHub
@@ -47,7 +47,7 @@ The script:
 ## After publish
 
 - Update the template repo pin so project CI/deploy uses the new CLI:
-  - In `clawdlets-template`, set `templates/default/config/clawdlets-cli-version.txt` to `X.Y.Z`
+  - In `clawdlets-template`, set `templates/default/config/clawdlets-cli-version.txt` to the clawdlets git ref you want projects to run (recommend: tag `vX.Y.Z`; for testing: full 40-hex SHA)
   - Commit + push
 - If template changes were made, bump `config/template-source.json` in this repo (or use the
   `bump-template-ref` workflow) so `clawdlets project init` stays pinned to the latest template.

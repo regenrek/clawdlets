@@ -122,9 +122,7 @@ function main() {
   console.log(`Releasing ${tag}...`);
 
   // Gates always run (even on --dry-run) so "dry-run" still proves releasability.
-  run("pnpm -r test");
-  run("pnpm -r build");
-  run("pnpm -C packages/core run coverage");
+  run("pnpm gate");
   run("scripts/secleak-check.sh");
 
   if (dryRun) {

@@ -45,13 +45,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Test
-        run: pnpm -r test
-
-      - name: Build
-        run: pnpm -r build
-
-      - name: Coverage gate
-        run: pnpm -C packages/core run coverage
+        run: pnpm gate
 
       - name: Secleak gate
         run: scripts/secleak-check.sh

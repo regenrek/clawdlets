@@ -24,6 +24,7 @@ Ready to ship? Check out the [Quickstart Guide](docs/quickstart.md) to get your 
 
 - Install git hooks: `nix run nixpkgs#lefthook -- install -f`
 - Policy is in `.forbidden-paths.regex` (blocks committing local runtime + credential files).
+- Manual gate before PR/release: `pnpm gate`
 
 ## Ask an agent (copy/paste prompt)
 

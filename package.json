@@ -6,6 +6,7 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r --if-present test",
+    "gate": "pnpm -r build && pnpm -r typecheck && pnpm -C packages/cli test && pnpm -C packages/core run coverage",
     "template:smoke": "node scripts/template-smoke.mjs",
     "clawdlets:build": "pnpm -C packages/cli build",
     "clawdlets:doctor": "node packages/cli/dist/main.js doctor",
