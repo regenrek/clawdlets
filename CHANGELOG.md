@@ -5,6 +5,8 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 
 ## Unreleased
 
+## [0.1.1] - 2026-01-16
+
 ### Added
 - Base flake resolution: `fleet/clawdlets.json.baseFlake` (fallback: `git remote origin`) used by deploy commands (`bootstrap`, `lockdown`).
 - Non-interactive secrets provisioning: `clawdlets secrets init --from-json <path|->`.
