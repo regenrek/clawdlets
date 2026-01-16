@@ -107,6 +107,8 @@ If you don’t have CI manifests yet, generate one locally:
 clawdlets server manifest --host <host> --out deploy-manifest.<host>.json
 ```
 
+Note: building NixOS system artifacts requires Linux. On macOS, use CI (`deploy-manifest.yml`) or a Linux builder and then deploy by `--manifest`/`--toplevel`.
+
 ## Server checks
 
 ```bash

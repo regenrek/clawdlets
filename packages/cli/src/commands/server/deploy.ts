@@ -14,6 +14,7 @@ import { loadHostContextOrExit } from "../../lib/context.js";
 import { needsSudo, requireTargetHost } from "../ssh-target.js";
 import { formatDeployManifest, parseDeployManifest, requireToplevel, type DeployManifest } from "../../lib/deploy-manifest.js";
 import { resolveManifestPublicKey, resolveManifestSignaturePath, verifyManifestSignature } from "../../lib/manifest-signature.js";
+import { requireLinuxForLocalNixosBuild } from "../../lib/linux-build.js";
 
 
 async function buildLocalToplevel(params: {
@@ -21,9 +22,7 @@ async function buildLocalToplevel(params: {
   nixBin: string;
   host: string;
 }): Promise<string> {
-  if (process.platform !== "linux") {
-    throw new Error("local build requires Linux; use --toplevel or a CI manifest");
-  }
+  requireLinuxForLocalNixosBuild({ platform: process.platform, command: "clawdlets server deploy" });
   const attr = `.#nixosConfigurations.${params.host}.config.system.build.toplevel`;
   const out = await capture(params.nixBin, ["build", "--json", "--no-link", attr], {
     cwd: params.repoRoot,

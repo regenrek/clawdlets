@@ -9,6 +9,7 @@ import { getHostSecretsDir } from "@clawdlets/core/repo-layout";
 import { createSecretsTar } from "@clawdlets/core/lib/secrets-tar";
 import { loadHostContextOrExit } from "../../lib/context.js";
 import { formatDeployManifest, requireToplevel, requireRev, type DeployManifest } from "../../lib/deploy-manifest.js";
+import { requireLinuxForLocalNixosBuild } from "../../lib/linux-build.js";
 
 async function buildToplevel(params: {
   repoRoot: string;
@@ -59,9 +60,7 @@ export const serverManifest = defineCommand({
 
     const nixBin = String(args.nixBin || process.env.NIX_BIN || "nix").trim() || "nix";
     const toplevelArg = String(args.toplevel || "").trim();
-    if (!toplevelArg && process.platform !== "linux") {
-      throw new Error("manifest build requires Linux; pass --toplevel to skip local build");
-    }
+    if (!toplevelArg) requireLinuxForLocalNixosBuild({ platform: process.platform, command: "clawdlets server manifest" });
     const toplevel = toplevelArg ? requireToplevel(toplevelArg) : await buildToplevel({ repoRoot, nixBin, host: hostName });
 
     const secretsDir = getHostSecretsDir(layout, hostName);
