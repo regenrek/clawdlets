@@ -23,6 +23,7 @@ let
   system = "x86_64-linux";
   hostName = "clawdbot-fleet-host";
   nixpkgs = flake.inputs.nixpkgs;
+  lib = nixpkgs.lib;
   pkgs = import nixpkgs { inherit system; };
   cfg = (nixpkgs.lib.nixosSystem {
     inherit system;
@@ -39,7 +40,7 @@ let
       ./infra/disko/example.nix
       ./infra/nix/modules/clawdlets-image-formats.nix
       ./infra/nix/hosts/clawdlets-host.nix
-      ({ ... }: { clawdlets.operator.deploy.enable = ${deployEnabled ? "true" : "false"}; })
+      ({ ... }: { clawdlets.operator.deploy.enable = lib.mkForce ${deployEnabled ? "true" : "false"}; })
     ];
   }).config;
 in cfg.security.sudo.extraConfig
