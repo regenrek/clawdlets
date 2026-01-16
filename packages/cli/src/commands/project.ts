@@ -165,6 +165,20 @@ const projectInit = defineCommand({
       }
     }
 
+    let enableGarnixPrivate = true;
+    if (interactive) {
+      const v = await p.confirm({
+        message: "Enable private Garnix cache? (recommended; requires garnix_netrc secret)",
+        initialValue: true,
+      });
+      if (p.isCancel(v)) {
+        const nav = await navOnCancel({ flow: "project init", canBack: false });
+        if (nav === NAV_EXIT) cancelFlow();
+        return;
+      }
+      enableGarnixPrivate = Boolean(v);
+    }
+
     const templateSpec = resolveTemplateSpec({
       template: args.template,
       templatePath: args.templatePath,
@@ -223,6 +237,21 @@ const projectInit = defineCommand({
     await copyTree({ srcDir: templateDir, destDir, subs });
     await fs.promises.rm(tempDir, { recursive: true, force: true });
     const hasHooks = await ensureHookExecutables(destDir);
+
+    if (interactive && !enableGarnixPrivate) {
+      const configPath = path.join(destDir, "fleet", "clawdlets.json");
+      const raw = await fs.promises.readFile(configPath, "utf8");
+      const parsed = JSON.parse(raw) as any;
+      const hostCfg = parsed?.hosts?.[host];
+      if (hostCfg && typeof hostCfg === "object") {
+        hostCfg.cache = hostCfg.cache && typeof hostCfg.cache === "object" ? hostCfg.cache : {};
+        hostCfg.cache.garnix = hostCfg.cache.garnix && typeof hostCfg.cache.garnix === "object" ? hostCfg.cache.garnix : {};
+        hostCfg.cache.garnix.private =
+          hostCfg.cache.garnix.private && typeof hostCfg.cache.garnix.private === "object" ? hostCfg.cache.garnix.private : {};
+        hostCfg.cache.garnix.private.enable = false;
+        await writeFileAtomic(configPath, `${JSON.stringify(parsed, null, 2)}\n`);
+      }
+    }
 
     if (args.gitInit) {
       try {

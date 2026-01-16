@@ -140,6 +140,10 @@ const set = defineCommand({
     "disk-device": { type: "string", description: "Disk device (Hetzner Cloud: /dev/sda).", },
     "agent-model-primary": { type: "string", description: "Primary agent model (e.g. zai/glm-4.7)." },
     tailnet: { type: "string", description: "Tailnet mode: none|tailscale." },
+    "garnix-private-cache": { type: "string", description: "Enable private Garnix cache access (true/false). Requires garnix netrc secret.", },
+    "garnix-netrc-secret": { type: "string", description: "Sops secret name containing /etc/nix/netrc (default: garnix_netrc).", },
+    "garnix-netrc-path": { type: "string", description: "Filesystem path for netrc on host (default: /etc/nix/netrc).", },
+    "garnix-narinfo-cache-positive-ttl": { type: "string", description: "narinfo-cache-positive-ttl when private cache enabled (default: 3600).", },
     "flake-host": { type: "string", description: "Flake output host name override (default: same as host name)." },
     "target-host": { type: "string", description: "SSH target (ssh config alias or user@host)." },
     "server-type": { type: "string", description: "Hetzner server type (e.g. cx43)." },
@@ -190,6 +194,21 @@ const set = defineCommand({
 
     if ((args as any)["disk-device"] !== undefined) next.diskDevice = String((args as any)["disk-device"]).trim();
     if ((args as any)["agent-model-primary"] !== undefined) next.agentModelPrimary = String((args as any)["agent-model-primary"]).trim();
+
+    if ((args as any)["garnix-private-cache"] !== undefined) {
+      const v = parseBoolOrUndefined((args as any)["garnix-private-cache"]);
+      if (v !== undefined) next.cache.garnix.private.enable = v;
+    }
+    if ((args as any)["garnix-netrc-secret"] !== undefined) next.cache.garnix.private.netrcSecret = String((args as any)["garnix-netrc-secret"]).trim();
+    if ((args as any)["garnix-netrc-path"] !== undefined) next.cache.garnix.private.netrcPath = String((args as any)["garnix-netrc-path"]).trim();
+    if ((args as any)["garnix-narinfo-cache-positive-ttl"] !== undefined) {
+      const raw = String((args as any)["garnix-narinfo-cache-positive-ttl"]).trim();
+      if (raw) {
+        const n = Number(raw);
+        if (!Number.isInteger(n) || n <= 0) throw new Error("invalid --garnix-narinfo-cache-positive-ttl (expected positive integer)");
+        next.cache.garnix.private.narinfoCachePositiveTtl = n;
+      }
+    }
 
     if ((args as any)["flake-host"] !== undefined) next.flakeHost = String((args as any)["flake-host"]).trim();
 

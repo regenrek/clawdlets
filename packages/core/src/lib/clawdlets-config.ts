@@ -130,7 +130,7 @@ const HostSchema = z.object({
           private: z
             .object({
               enable: z.boolean().default(false),
-              netrcSecret: z.string().trim().default("garnix_netrc"),
+              netrcSecret: SecretNameSchema.default("garnix_netrc"),
               netrcPath: z.string().trim().default("/etc/nix/netrc"),
               narinfoCachePositiveTtl: z.number().int().positive().default(3600),
             })
