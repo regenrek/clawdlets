@@ -64,13 +64,11 @@
         installPhase = ''
           runHook preInstall
 
-          mkdir -p $out/lib/clf/packages/clf
-          mkdir -p $out/lib/clf/packages/core
+          mkdir -p $out/lib/clf
           mkdir -p $out/bin
 
           cp -r node_modules $out/lib/clf/node_modules
-          cp -r packages/core $out/lib/clf/packages/core
-          cp -r packages/clf $out/lib/clf/packages/clf
+          cp -r packages $out/lib/clf/packages
 
           makeWrapper ${pkgs.nodejs_22}/bin/node $out/bin/clf \
             --add-flags "$out/lib/clf/packages/clf/cli/dist/main.js"
