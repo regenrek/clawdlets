@@ -164,19 +164,93 @@ describe("ensureHcloudSshKeyId", () => {
       }),
     ).rejects.toThrow(/HTTP 500: boom/);
   });
+
+  it("truncates oversized error bodies", async () => {
+    const huge = "x".repeat(70_000);
+    const fetchMock = vi.fn(async () => new Response(huge, { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      ensureHcloudSshKeyId({
+        token: "token",
+        name: "clawdlets",
+        publicKey: "ssh-ed25519 ZZZ",
+      }),
+    ).rejects.toThrow(/truncated/);
+  });
+
+  it("surfaces create ssh key errors with body text", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeJsonResponse({ ssh_keys: [] }))
+      .mockResolvedValueOnce(new Response("boom", { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      ensureHcloudSshKeyId({
+        token: "token",
+        name: "clawdlets",
+        publicKey: "ssh-ed25519 ERR",
+      }),
+    ).rejects.toThrow(/create ssh key failed: HTTP 500: boom/);
+  });
+
+  it("surfaces list-after-409 errors with body text", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeJsonResponse({ ssh_keys: [] }))
+      .mockResolvedValueOnce(makeJsonResponse({ error: "conflict" }, 409))
+      .mockResolvedValueOnce(makeJsonResponse({ error: "conflict" }, 409))
+      .mockResolvedValueOnce(new Response("boom", { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      ensureHcloudSshKeyId({
+        token: "token",
+        name: "clawdlets",
+        publicKey: "ssh-ed25519 ERR409",
+      }),
+    ).rejects.toThrow(/list ssh keys failed after 409: HTTP 500: boom/);
+  });
 });
 
 describe("ensureHcloudFirewallId", () => {
   const makeJsonResponse = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-  it("returns existing firewall id by name", async () => {
-    const fetchMock = vi.fn(async () =>
-      makeJsonResponse({
-        firewalls: [{ id: 99, name: "clawdlets-cattle-base", labels: {} }],
-        meta: { pagination: { next_page: null } },
+  it("surfaces list firewall errors with body text", async () => {
+    const fetchMock = vi.fn(async () => new Response("nope", { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      ensureHcloudFirewallId({
+        token: "token",
+        name: "fw",
+        rules: [{ direction: "in", protocol: "udp", port: "41641", source_ips: ["0.0.0.0/0"] }],
+        labels: { "managed-by": "clawdlets" },
       }),
-    );
+    ).rejects.toThrow(/list firewalls failed: HTTP 500: nope/);
+  });
+
+  it("returns existing firewall id by name and uses label_selector", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          firewalls: [{ id: 99, name: "clawdlets-cattle-base", labels: { "managed-by": "clawdlets" } }],
+          meta: { pagination: { next_page: null } },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          firewall: {
+            id: 99,
+            name: "clawdlets-cattle-base",
+            labels: { "managed-by": "clawdlets" },
+            rules: [{ direction: "in", protocol: "udp", port: "41641", source_ips: ["0.0.0.0/0"] }],
+          },
+        }),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     const id = await ensureHcloudFirewallId({
@@ -187,7 +261,193 @@ describe("ensureHcloudFirewallId", () => {
     });
 
     expect(id).toBe("99");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const url = String(fetchMock.mock.calls[0]?.[0] || "");
+    expect(url).toMatch(/label_selector=/);
+  });
+
+  it("surfaces get firewall errors with body text", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          firewalls: [{ id: 99, name: "fw", labels: { "managed-by": "clawdlets" } }],
+          meta: { pagination: { next_page: null } },
+        }),
+      )
+      .mockResolvedValueOnce(new Response("boom", { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      ensureHcloudFirewallId({
+        token: "token",
+        name: "fw",
+        rules: [{ direction: "in", protocol: "udp", port: "41641", source_ips: ["0.0.0.0/0"] }],
+        labels: { "managed-by": "clawdlets" },
+      }),
+    ).rejects.toThrow(/get firewall failed: HTTP 500: boom/);
+  });
+
+  it("surfaces set_rules errors with body text", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          firewalls: [{ id: 99, name: "fw", labels: { "managed-by": "clawdlets" } }],
+          meta: { pagination: { next_page: null } },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          firewall: { id: 99, name: "fw", labels: { "managed-by": "clawdlets" }, rules: [] },
+        }),
+      )
+      .mockResolvedValueOnce(new Response("nope", { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      ensureHcloudFirewallId({
+        token: "token",
+        name: "fw",
+        rules: [{ direction: "in", protocol: "udp", port: "41641", source_ips: ["0.0.0.0/0"] }],
+        labels: { "managed-by": "clawdlets" },
+      }),
+    ).rejects.toThrow(/set firewall rules failed: HTTP 500: nope/);
+  });
+
+  it("treats firewall rules as order-insensitive", async () => {
+    const rules = [
+      { direction: "in" as const, protocol: "udp" as const, port: "41641", source_ips: ["0.0.0.0/0"] },
+      { direction: "in" as const, protocol: "icmp" as const, source_ips: ["0.0.0.0/0"], description: "icmp" },
+    ];
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          firewalls: [{ id: 99, name: "fw", labels: { "managed-by": "clawdlets" } }],
+          meta: { pagination: { next_page: null } },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          firewall: { id: 99, name: "fw", labels: { "managed-by": "clawdlets" }, rules: [rules[1]!, rules[0]!] },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const id = await ensureHcloudFirewallId({
+      token: "token",
+      name: "fw",
+      rules,
+      labels: { "managed-by": "clawdlets" },
+    });
+
+    expect(id).toBe("99");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("paginates firewall list (next_page) and finds by name", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeJsonResponse({ firewalls: [], meta: { pagination: { next_page: 2 } } }))
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          firewalls: [{ id: 99, name: "clawdlets-cattle-base", labels: { "managed-by": "clawdlets" } }],
+          meta: { pagination: { next_page: null } },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          firewall: {
+            id: 99,
+            name: "clawdlets-cattle-base",
+            labels: { "managed-by": "clawdlets" },
+            rules: [{ direction: "in", protocol: "udp", port: "41641", source_ips: ["0.0.0.0/0"] }],
+          },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const id = await ensureHcloudFirewallId({
+      token: "token",
+      name: "clawdlets-cattle-base",
+      rules: [{ direction: "in", protocol: "udp", port: "41641", source_ips: ["0.0.0.0/0"] }],
+      labels: { "managed-by": "clawdlets" },
+    });
+
+    expect(id).toBe("99");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(String(fetchMock.mock.calls[0]?.[0] || "")).toMatch(/page=1/);
+    expect(String(fetchMock.mock.calls[1]?.[0] || "")).toMatch(/page=2/);
+  });
+
+  it("omits label_selector when labels are not provided", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          firewalls: [{ id: 99, name: "fw", labels: {} }],
+          meta: { pagination: { next_page: null } },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          firewall: {
+            id: 99,
+            name: "fw",
+            labels: {},
+            rules: [{ direction: "in", protocol: "udp", port: "41641", source_ips: ["0.0.0.0/0"] }],
+          },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const id = await ensureHcloudFirewallId({
+      token: "token",
+      name: "fw",
+      rules: [{ direction: "in", protocol: "udp", port: "41641", source_ips: ["0.0.0.0/0"] }],
+    });
+
+    expect(id).toBe("99");
+    const url = String(fetchMock.mock.calls[0]?.[0] || "");
+    expect(url).not.toMatch(/label_selector=/);
+  });
+
+  it("reconciles rules when firewall exists but rules differ", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          firewalls: [{ id: 99, name: "clawdlets-cattle-base", labels: { "managed-by": "clawdlets" } }],
+          meta: { pagination: { next_page: null } },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          firewall: {
+            id: 99,
+            name: "clawdlets-cattle-base",
+            labels: { "managed-by": "clawdlets" },
+            rules: [],
+          },
+        }),
+      )
+      .mockResolvedValueOnce(makeJsonResponse({ action: { id: 1 } }, 201));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const id = await ensureHcloudFirewallId({
+      token: "token",
+      name: "clawdlets-cattle-base",
+      rules: [{ direction: "in", protocol: "udp", port: "41641", source_ips: ["0.0.0.0/0"] }],
+      labels: { "managed-by": "clawdlets" },
+    });
+
+    expect(id).toBe("99");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const url = String(fetchMock.mock.calls[2]?.[0] || "");
+    expect(url).toMatch(/\/actions\/set_rules$/);
+    expect(fetchMock.mock.calls[2]?.[1]?.method).toBe("POST");
   });
 
   it("creates firewall when missing", async () => {
@@ -233,6 +493,12 @@ describe("hcloud servers", () => {
     const servers = await listHcloudServers({ token: "token" });
     expect(servers.map((s) => s.id)).toEqual([1, 2]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("surfaces list servers errors with body text", async () => {
+    const fetchMock = vi.fn(async () => new Response("nope", { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(listHcloudServers({ token: "token" })).rejects.toThrow(/list servers failed: HTTP 500: nope/);
   });
 
   it("creates server with firewalls", async () => {

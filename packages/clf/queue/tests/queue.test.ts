@@ -117,4 +117,37 @@ describe("clf queue", () => {
       q2.close();
     }
   });
+
+  it("issues and consumes cattle bootstrap tokens (one-time)", async () => {
+    const { openClfQueue } = await import("../src/queue");
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-queue-"));
+    const dbPath = path.join(dir, "state.sqlite");
+
+    const q = openClfQueue(dbPath);
+    try {
+      const now = 1_700_000_000_000;
+      const issued = q.createCattleBootstrapToken({
+        jobId: "job-1",
+        requester: "maren",
+        cattleName: "cattle-rex-1",
+        envKeys: ["OPENAI_API_KEY", "GITHUB_TOKEN"],
+        publicEnv: { CLAWDLETS_CATTLE_AUTO_SHUTDOWN: "0" },
+        now,
+        ttlMs: 60_000,
+      });
+
+      const consumed = q.consumeCattleBootstrapToken({ token: issued.token, now: now + 1000 });
+      expect(consumed?.jobId).toBe("job-1");
+      expect(consumed?.requester).toBe("maren");
+      expect(consumed?.cattleName).toBe("cattle-rex-1");
+      expect(consumed?.envKeys).toEqual(["OPENAI_API_KEY", "GITHUB_TOKEN"]);
+      expect(consumed?.publicEnv?.CLAWDLETS_CATTLE_AUTO_SHUTDOWN).toBe("0");
+
+      const consumedAgain = q.consumeCattleBootstrapToken({ token: issued.token, now: now + 2000 });
+      expect(consumedAgain).toBeNull();
+    } finally {
+      q.close();
+    }
+  });
 });

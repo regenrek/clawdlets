@@ -9,26 +9,18 @@ vi.mock("../src/lib/context.js", () => ({
   loadHostContextOrExit: loadHostContextOrExitMock,
 }));
 
+const createClfClientMock = vi.fn();
+vi.mock(import("@clawdlets/clf-queue"), async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, CLF_PROTOCOL_VERSION: (actual as any).CLF_PROTOCOL_VERSION, createClfClient: createClfClientMock };
+});
+
 const loadDeployCredsMock = vi.fn();
 vi.mock("@clawdlets/core/lib/deploy-creds", () => ({
   loadDeployCreds: loadDeployCredsMock,
 }));
 
-const loadIdentityMock = vi.fn();
-vi.mock("@clawdlets/core/lib/identity-loader", () => ({
-  loadIdentity: loadIdentityMock,
-}));
-
-const sopsDecryptYamlFileMock = vi.fn(async (params: { filePath: string }) => {
-  const name = path.basename(params.filePath, ".yaml");
-  return `${name}: secret-${name}\n`;
-});
-vi.mock("@clawdlets/core/lib/sops", () => ({
-  sopsDecryptYamlFile: sopsDecryptYamlFileMock,
-}));
-
 const listCattleServersMock = vi.fn();
-const createCattleServerMock = vi.fn();
 const destroyCattleServerMock = vi.fn();
 const reapExpiredCattleMock = vi.fn(async (params: { dryRun?: boolean; now?: Date }) => {
   const servers = (await listCattleServersMock()) as Array<any>;
@@ -45,7 +37,6 @@ vi.mock("@clawdlets/core/lib/hcloud-cattle", async () => {
   return {
     ...actual,
     listCattleServers: listCattleServersMock,
-    createCattleServer: createCattleServerMock,
     destroyCattleServer: destroyCattleServerMock,
     reapExpiredCattle: reapExpiredCattleMock,
   };
@@ -78,16 +69,9 @@ describe("cattle command", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    fs.mkdirSync(path.join(repoRoot, "secrets", "hosts", hostName), { recursive: true });
-    fs.writeFileSync(path.join(repoRoot, "secrets", "hosts", hostName, "tailscale_auth_key.yaml"), "sops: {}\n", "utf8");
-    fs.writeFileSync(path.join(repoRoot, "secrets", "hosts", hostName, "z_ai_api_key.yaml"), "sops: {}\n", "utf8");
-
-    const ageKeyFile = path.join(repoRoot, "agekey.txt");
-    fs.writeFileSync(ageKeyFile, "AGE-SECRET-KEY-1...\n", "utf8");
-
     loadDeployCredsMock.mockReturnValue({
       envFile: { origin: "default", status: "ok", path: path.join(layout.runtimeDir, "env") },
-      values: { HCLOUD_TOKEN: "token", GITHUB_TOKEN: "", NIX_BIN: "nix", SOPS_AGE_KEY_FILE: ageKeyFile },
+      values: { HCLOUD_TOKEN: "token", GITHUB_TOKEN: "", NIX_BIN: "nix", SOPS_AGE_KEY_FILE: "" },
     });
 
     loadHostContextOrExitMock.mockReturnValue({
@@ -96,15 +80,6 @@ describe("cattle command", () => {
       config,
       hostName,
       hostCfg,
-    });
-
-    loadIdentityMock.mockReturnValue({
-      name: "rex",
-      config: { model: { primary: "zai/glm-4.7" } },
-      cloudInitFiles: [
-        { path: "/var/lib/clawdlets/identity/SOUL.md", permissions: "0600", owner: "root:root", content: "# Rex\n" },
-        { path: "/var/lib/clawdlets/identity/config.json", permissions: "0600", owner: "root:root", content: "{\n}\n" },
-      ],
     });
   });
 
@@ -115,16 +90,13 @@ describe("cattle command", () => {
     nowSpy = undefined;
   });
 
-  it("spawn --dry-run prints a deterministic plan JSON", async () => {
+  it("spawn --dry-run prints a deterministic enqueue request JSON", async () => {
     const taskFile = path.join(repoRoot, "task.json");
     fs.writeFileSync(
       taskFile,
       JSON.stringify({ schemaVersion: 1, taskId: "issue-42", type: "clawdbot.gateway.agent", message: "do the thing", callbackUrl: "" }, null, 2),
       "utf8",
     );
-
-    nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
-    listCattleServersMock.mockResolvedValue([]);
 
     const logs: string[] = [];
     logSpy = vi.spyOn(console, "log").mockImplementation((...args) => logs.push(args.join(" ")));
@@ -135,11 +107,40 @@ describe("cattle command", () => {
     });
 
     const obj = JSON.parse(logs.join("\n"));
-    expect(obj.action).toBe("hcloud.server.create");
-    expect(obj.labels.identity).toBe("rex");
-    expect(obj.labels["task-id"]).toBe("issue-42");
-    expect(obj.createdAt).toBe(1_700_000_000);
-    expect(obj.expiresAt).toBe(1_700_000_000 + 7200);
+    expect(obj.action).toBe("clf.jobs.enqueue");
+    expect(obj.request.kind).toBe("cattle.spawn");
+    expect(obj.request.payload.identity).toBe("rex");
+    expect(obj.request.payload.ttl).toBe("2h");
+    expect(obj.request.payload.task.taskId).toBe("issue-42");
+  });
+
+  it("spawn --wait=false prints the enqueued job id", async () => {
+    const taskFile = path.join(repoRoot, "task.json");
+    fs.writeFileSync(
+      taskFile,
+      JSON.stringify({ schemaVersion: 1, taskId: "issue-42", type: "clawdbot.gateway.agent", message: "do the thing", callbackUrl: "" }, null, 2),
+      "utf8",
+    );
+
+    const enqueueMock = vi.fn(async () => ({ protocolVersion: 1, jobId: "job-1" }));
+    createClfClientMock.mockReturnValue({
+      enqueue: enqueueMock,
+      show: vi.fn(),
+      list: vi.fn(),
+      cancel: vi.fn(),
+      health: vi.fn(),
+    });
+
+    const logs: string[] = [];
+    logSpy = vi.spyOn(console, "log").mockImplementation((...args) => logs.push(args.join(" ")));
+
+    const { cattle } = await import("../src/commands/cattle");
+    await cattle.subCommands.spawn.run({
+      args: { host: hostName, identity: "rex", taskFile, ttl: "2h", wait: false } as any,
+    });
+
+    expect(enqueueMock).toHaveBeenCalled();
+    expect(logs.join("\n")).toMatch(/job-1/);
   });
 
   it("reap --dry-run does not delete", async () => {

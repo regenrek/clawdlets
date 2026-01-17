@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 const require = createRequire(import.meta.url);
 const BetterSqlite3 = require("better-sqlite3") as typeof import("better-sqlite3");
@@ -40,6 +40,17 @@ export type ClfQueueFilters = {
   limit?: number;
 };
 
+export type ClfCattleBootstrapToken = {
+  jobId: string;
+  requester: string;
+  cattleName: string;
+  envKeys: string[];
+  publicEnv: Record<string, string>;
+  createdAt: number; // unix ms
+  expiresAt: number; // unix ms
+  usedAt: number | null; // unix ms
+};
+
 export type ClfQueue = {
   close(): void;
 
@@ -64,6 +75,20 @@ export type ClfQueue = {
   cancel(params: { jobId: string; now?: number }): boolean;
 
   prune(params: { now?: number; keepDays: number }): number;
+
+  createCattleBootstrapToken(params: {
+    jobId: string;
+    requester: string;
+    cattleName: string;
+    envKeys: string[];
+    publicEnv?: Record<string, string>;
+    now?: number; // unix ms
+    ttlMs?: number;
+  }): { token: string; expiresAt: number };
+
+  consumeCattleBootstrapToken(params: { token: string; now?: number }): ClfCattleBootstrapToken | null;
+
+  pruneCattleBootstrapTokens(params: { now?: number }): number;
 };
 
 type JobRow = {
@@ -116,7 +141,7 @@ function rowToJob(row: JobRow): ClfQueueJob {
 }
 
 function migrate(db: import("better-sqlite3").Database): void {
-  const version = db.pragma("user_version", { simple: true }) as number;
+  let version = db.pragma("user_version", { simple: true }) as number;
   if (version === 0) {
     db.exec(`
       pragma foreign_keys = on;
@@ -157,10 +182,30 @@ function migrate(db: import("better-sqlite3").Database): void {
       create index job_events_by_job_id on job_events(job_id, at);
     `);
     db.pragma("user_version = 1");
-    return;
+    version = 1;
   }
 
-  if (version !== 1) throw new Error(`unsupported clf queue schema version: ${version}`);
+  if (version === 1) {
+    db.exec(`
+      create table cattle_bootstrap_tokens (
+        token_hash text primary key,
+        created_at integer not null,
+        expires_at integer not null,
+        used_at integer,
+        job_id text not null,
+        requester text not null,
+        cattle_name text not null,
+        env_keys_json text not null,
+        public_env_json text not null
+      );
+      create index cattle_bootstrap_tokens_by_expires_at on cattle_bootstrap_tokens(expires_at);
+      create index cattle_bootstrap_tokens_by_job_id on cattle_bootstrap_tokens(job_id);
+    `);
+    db.pragma("user_version = 2");
+    version = 2;
+  }
+
+  if (version !== 2) throw new Error(`unsupported clf queue schema version: ${version}`);
 }
 
 function computeBackoffMs(params: { attempt: number; baseMs: number; maxMs: number }): number {
@@ -169,6 +214,10 @@ function computeBackoffMs(params: { attempt: number; baseMs: number; maxMs: numb
   const max = Math.max(base, Math.floor(params.maxMs));
   const factor = 2 ** (a - 1);
   return Math.min(max, base * factor);
+}
+
+function sha256Hex(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 export function openClfQueue(dbPath: string): ClfQueue {
@@ -345,6 +394,111 @@ export function openClfQueue(dbPath: string): ClfQueue {
     `delete from jobs where created_at < @cutoff and status in ('done','failed','canceled')`,
   );
 
+  const insertBootstrapToken = db.prepare<{
+    token_hash: string;
+    created_at: number;
+    expires_at: number;
+    job_id: string;
+    requester: string;
+    cattle_name: string;
+    env_keys_json: string;
+    public_env_json: string;
+  }>(
+    `
+      insert into cattle_bootstrap_tokens (
+        token_hash, created_at, expires_at, used_at,
+        job_id, requester, cattle_name,
+        env_keys_json, public_env_json
+      )
+      values (
+        @token_hash, @created_at, @expires_at, null,
+        @job_id, @requester, @cattle_name,
+        @env_keys_json, @public_env_json
+      )
+    `,
+  );
+
+  type BootstrapTokenRow = {
+    token_hash: string;
+    created_at: number;
+    expires_at: number;
+    used_at: number | null;
+    job_id: string;
+    requester: string;
+    cattle_name: string;
+    env_keys_json: string;
+    public_env_json: string;
+  };
+
+  const getBootstrapToken = db.prepare<{ token_hash: string }, BootstrapTokenRow>(
+    `select * from cattle_bootstrap_tokens where token_hash = @token_hash limit 1`,
+  );
+
+  const markBootstrapTokenUsed = db.prepare<{ token_hash: string; now: number }, { changes: number }>(
+    `
+      update cattle_bootstrap_tokens
+      set used_at = @now
+      where token_hash = @token_hash
+        and used_at is null
+        and expires_at > @now
+    `,
+  );
+
+  const pruneBootstrapTokens = db.prepare<{ now: number }, { changes: number }>(
+    `delete from cattle_bootstrap_tokens where expires_at <= @now or used_at is not null`,
+  );
+
+  const createBootstrapTokenTx = db.transaction((params: {
+    jobId: string;
+    requester: string;
+    cattleName: string;
+    envKeys: string[];
+    publicEnv: Record<string, string>;
+    now: number;
+    ttlMs: number;
+  }) => {
+    const token = randomBytes(32).toString("hex");
+    const tokenHash = sha256Hex(token);
+    const expiresAt = params.now + params.ttlMs;
+
+    insertBootstrapToken.run({
+      token_hash: tokenHash,
+      created_at: params.now,
+      expires_at: expiresAt,
+      job_id: params.jobId,
+      requester: params.requester,
+      cattle_name: params.cattleName,
+      env_keys_json: JSON.stringify(params.envKeys),
+      public_env_json: JSON.stringify(params.publicEnv),
+    });
+
+    return { token, expiresAt };
+  });
+
+  const consumeBootstrapTokenTx = db.transaction((params: { tokenHash: string; now: number }) => {
+    const row = getBootstrapToken.get({ token_hash: params.tokenHash });
+    if (!row) return null;
+    if (row.used_at != null) return null;
+    if (row.expires_at <= params.now) return null;
+
+    const res = markBootstrapTokenUsed.run({ token_hash: params.tokenHash, now: params.now });
+    if (res.changes !== 1) return null;
+
+    const envKeys = safeParseJson(row.env_keys_json);
+    const publicEnv = safeParseJson(row.public_env_json);
+
+    return {
+      jobId: row.job_id,
+      requester: row.requester,
+      cattleName: row.cattle_name,
+      envKeys: Array.isArray(envKeys) ? (envKeys as unknown[]).map((v) => String(v || "").trim()).filter(Boolean) : [],
+      publicEnv: publicEnv && typeof publicEnv === "object" && !Array.isArray(publicEnv) ? (publicEnv as Record<string, string>) : {},
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      usedAt: params.now,
+    } satisfies ClfCattleBootstrapToken;
+  });
+
   const enqueueTx = db.transaction((params: {
     kind: string;
     payload: unknown;
@@ -494,6 +648,40 @@ export function openClfQueue(dbPath: string): ClfQueue {
       const res = pruneJobs.run({ cutoff });
       return res.changes;
     },
+
+    createCattleBootstrapToken: (params) => {
+      const jobId = String(params.jobId || "").trim();
+      if (!jobId) throw new Error("createCattleBootstrapToken.jobId missing");
+      const requester = String(params.requester || "").trim();
+      if (!requester) throw new Error("createCattleBootstrapToken.requester missing");
+      const cattleName = String(params.cattleName || "").trim();
+      if (!cattleName) throw new Error("createCattleBootstrapToken.cattleName missing");
+
+      const envKeys = Array.from(new Set((params.envKeys || []).map((k) => String(k || "").trim()).filter(Boolean)));
+      const publicEnv: Record<string, string> = {};
+      for (const [k, v] of Object.entries(params.publicEnv || {})) {
+        const key = String(k || "").trim();
+        if (!key) continue;
+        publicEnv[key] = String(v ?? "");
+      }
+
+      const now = params.now ?? Date.now();
+      const ttlMs = Math.max(30_000, Math.min(60 * 60_000, Math.floor(params.ttlMs ?? 10 * 60_000)));
+      return createBootstrapTokenTx({ jobId, requester, cattleName, envKeys, publicEnv, now, ttlMs });
+    },
+
+    consumeCattleBootstrapToken: (params) => {
+      const token = String(params.token || "").trim();
+      if (!token) return null;
+      const now = params.now ?? Date.now();
+      const tokenHash = sha256Hex(token);
+      return consumeBootstrapTokenTx({ tokenHash, now });
+    },
+
+    pruneCattleBootstrapTokens: (params) => {
+      const now = params.now ?? Date.now();
+      const res = pruneBootstrapTokens.run({ now });
+      return res.changes;
+    },
   };
 }
-

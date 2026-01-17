@@ -31,6 +31,8 @@ export type ClfWorkerRuntime = {
     defaultTtl: string;
     labels: Record<string, string>;
     defaultAutoShutdown: boolean;
+    secretsBaseUrl: string;
+    bootstrapTtlMs: number;
   };
   identitiesRoot: string;
   adminAuthorizedKeys: string[];
@@ -41,6 +43,26 @@ export type ClfWorkerRuntime = {
 function unixSecondsNow(): number {
   return Math.floor(Date.now() / 1000);
 }
+
+class Mutex {
+  private chain: Promise<void> = Promise.resolve();
+
+  async runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const prev = this.chain;
+    let release!: () => void;
+    this.chain = new Promise<void>((r) => {
+      release = r;
+    });
+    await prev;
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  }
+}
+
+const spawnMutex = new Mutex();
 
 function parseLabelsJson(raw: string): Record<string, string> {
   const v = String(raw || "").trim();
@@ -60,23 +82,23 @@ function requireTtlSeconds(ttlRaw: string): number {
   return parsed.seconds;
 }
 
-function requiredEnvForModel(params: { env: NodeJS.ProcessEnv; model: string }): Record<string, string> {
+function requiredEnvKeysForModel(params: { env: NodeJS.ProcessEnv; model: string }): string[] {
   const required = getModelRequiredEnvVars(params.model);
   if (required.length === 0) throw new Error(`unknown model provider env requirements: ${params.model}`);
-  const out: Record<string, string> = {};
   for (const k of required) {
     const v = String(params.env[k] || "").trim();
     if (!v) throw new Error(`missing required env var for model ${params.model}: ${k}`);
-    out[k] = v;
   }
-  return out;
+  return required;
 }
 
 async function handleCattleSpawn(params: {
   worker: string;
   jobId: string;
+  requester: string;
   payload: unknown;
   rt: ClfWorkerRuntime;
+  queue: ClfQueue;
 }): Promise<{ server: CattleServer }> {
   const p = parseClfJobPayload("cattle.spawn", params.payload);
 
@@ -88,50 +110,63 @@ async function handleCattleSpawn(params: {
   const createdAt = unixSecondsNow();
   const expiresAt = createdAt + ttlSeconds;
 
-  const existing = await listCattleServers({ token: params.rt.hcloudToken });
-  if (existing.length >= params.rt.cattle.maxInstances) {
-    throw new Error(`maxInstances reached (${existing.length}/${params.rt.cattle.maxInstances})`);
-  }
-
-  const name = buildCattleServerName(identity.name, createdAt);
-  const env: Record<string, string> = {
-    ...requiredEnvForModel({ env: params.rt.env, model }),
-  };
-  if (params.rt.env.GITHUB_TOKEN) env.GITHUB_TOKEN = String(params.rt.env.GITHUB_TOKEN);
-
   const autoShutdown = p.autoShutdown ?? params.rt.cattle.defaultAutoShutdown;
-  if (!autoShutdown) env["CLAWDLETS_CATTLE_AUTO_SHUTDOWN"] = "0";
+  const publicEnv: Record<string, string> = {};
+  if (!autoShutdown) publicEnv["CLAWDLETS_CATTLE_AUTO_SHUTDOWN"] = "0";
 
-  const userData = buildCattleCloudInitUserData({
-    hostname: name,
-    adminAuthorizedKeys: params.rt.adminAuthorizedKeys,
-    tailscaleAuthKey: params.rt.tailscaleAuthKey,
-    task: p.task,
-    env,
-    extraWriteFiles: identity.cloudInitFiles,
+  return await spawnMutex.runExclusive(async () => {
+    const existing = await listCattleServers({ token: params.rt.hcloudToken });
+    if (existing.length >= params.rt.cattle.maxInstances) {
+      throw new Error(`maxInstances reached (${existing.length}/${params.rt.cattle.maxInstances})`);
+    }
+
+    const name = buildCattleServerName(identity.name, createdAt);
+
+    const envKeys = requiredEnvKeysForModel({ env: params.rt.env, model });
+    if (params.rt.env.GITHUB_TOKEN) envKeys.push("GITHUB_TOKEN");
+
+    const bootstrap = params.queue.createCattleBootstrapToken({
+      jobId: params.jobId,
+      requester: params.requester,
+      cattleName: name,
+      envKeys,
+      publicEnv,
+      ttlMs: params.rt.cattle.bootstrapTtlMs,
+    });
+
+    const userData = buildCattleCloudInitUserData({
+      hostname: name,
+      adminAuthorizedKeys: params.rt.adminAuthorizedKeys,
+      tailscaleAuthKey: params.rt.tailscaleAuthKey,
+      task: p.task,
+      publicEnv,
+      secretsBootstrap: { baseUrl: params.rt.cattle.secretsBaseUrl, token: bootstrap.token },
+      extraWriteFiles: identity.cloudInitFiles,
+    });
+
+    const labels: Record<string, string> = {
+      ...params.rt.cattle.labels,
+      [CATTLE_LABEL_MANAGED_BY]: CATTLE_LABEL_MANAGED_BY_VALUE,
+      [CATTLE_LABEL_CATTLE]: CATTLE_LABEL_CATTLE_VALUE,
+      [CATTLE_LABEL_IDENTITY]: safeCattleLabelValue(identity.name, "id"),
+      [CATTLE_LABEL_TASK_ID]: safeCattleLabelValue(p.task.taskId, "task"),
+      [CATTLE_LABEL_CREATED_AT]: String(createdAt),
+      [CATTLE_LABEL_EXPIRES_AT]: String(expiresAt),
+    };
+
+    const server = await createCattleServer({
+      token: params.rt.hcloudToken,
+      name,
+      image: String(p.image || params.rt.cattle.image || "").trim(),
+      serverType: String(p.serverType || params.rt.cattle.serverType || "").trim(),
+      location: String(p.location || params.rt.cattle.location || "").trim(),
+      userData,
+      labels,
+    });
+
+    return { server };
   });
 
-  const labels: Record<string, string> = {
-    ...params.rt.cattle.labels,
-    [CATTLE_LABEL_MANAGED_BY]: CATTLE_LABEL_MANAGED_BY_VALUE,
-    [CATTLE_LABEL_CATTLE]: CATTLE_LABEL_CATTLE_VALUE,
-    [CATTLE_LABEL_IDENTITY]: safeCattleLabelValue(identity.name, "id"),
-    [CATTLE_LABEL_TASK_ID]: safeCattleLabelValue(p.task.taskId, "task"),
-    [CATTLE_LABEL_CREATED_AT]: String(createdAt),
-    [CATTLE_LABEL_EXPIRES_AT]: String(expiresAt),
-  };
-
-  const server = await createCattleServer({
-    token: params.rt.hcloudToken,
-    name,
-    image: String(p.image || params.rt.cattle.image || "").trim(),
-    serverType: String(p.serverType || params.rt.cattle.serverType || "").trim(),
-    location: String(p.location || params.rt.cattle.location || "").trim(),
-    userData,
-    labels,
-  });
-
-  return { server };
 }
 
 async function handleCattleReap(params: { payload: unknown; rt: ClfWorkerRuntime }): Promise<{ deletedIds: string[] }> {
@@ -164,7 +199,14 @@ export async function runClfWorkerLoop(params: {
 
     try {
       if (job.kind === "cattle.spawn") {
-        const out = await handleCattleSpawn({ worker: params.workerId, jobId: job.jobId, payload: job.payload, rt: params.runtime });
+        const out = await handleCattleSpawn({
+          worker: params.workerId,
+          jobId: job.jobId,
+          requester: job.requester,
+          payload: job.payload,
+          rt: params.runtime,
+          queue: q,
+        });
         q.ack({ jobId: job.jobId, workerId: params.workerId, result: out });
       } else if (job.kind === "cattle.reap") {
         const out = await handleCattleReap({ payload: job.payload, rt: params.runtime });

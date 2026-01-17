@@ -23,7 +23,7 @@ export {
 export type { ClfCattleSpawnPayload, ClfCattleReapPayload, ClfJobPayloadByKind } from "./jobs.js";
 export { parseClfJobPayload, ClfCattleSpawnPayloadSchema, ClfCattleReapPayloadSchema } from "./jobs.js";
 
-export type { ClfQueue, ClfQueueJob, ClfQueueClaimedJob, ClfQueueFilters } from "./queue.js";
+export type { ClfQueue, ClfQueueJob, ClfQueueClaimedJob, ClfQueueFilters, ClfCattleBootstrapToken } from "./queue.js";
 export { openClfQueue } from "./queue.js";
 
 export type { ClfClient, ClfClientOpts } from "./client.js";

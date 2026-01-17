@@ -6,6 +6,7 @@ import http from "node:http";
 import { openClfQueue } from "@clawdlets/clf-queue";
 import { loadClfOrchestratorConfigFromEnv } from "./config.js";
 import { createOrchestratorHttpServer } from "./http.js";
+import { createCattleInternalHttpServer } from "./cattle-http.js";
 import { loadAdminAuthorizedKeys, parseCattleBaseLabels, runClfWorkerLoop, type ClfWorkerRuntime } from "./worker.js";
 
 function getSystemdListenFd(): number | null {
@@ -49,11 +50,19 @@ async function listenHttpServer(server: http.Server, socketPath: string): Promis
   });
 }
 
+async function listenTcpServer(server: http.Server, host: string, port: number): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, host, () => resolve());
+  });
+}
+
 async function main(): Promise<void> {
   const cfg = loadClfOrchestratorConfigFromEnv(process.env);
 
   const q = openClfQueue(cfg.dbPath);
   const server = createOrchestratorHttpServer({ queue: q });
+  const cattleServer = createCattleInternalHttpServer({ queue: q, env: process.env });
 
   const stopSignal = { stopped: false };
   const stop = () => {
@@ -64,6 +73,9 @@ async function main(): Promise<void> {
 
   await listenHttpServer(server, cfg.socketPath);
   console.log(`clf-orchestrator: listening (socket=${cfg.socketPath})`);
+
+  await listenTcpServer(cattleServer, cfg.cattle.secretsListenHost, cfg.cattle.secretsListenPort);
+  console.log(`clf-orchestrator: cattle api listening (http=${cfg.cattle.secretsListenHost}:${cfg.cattle.secretsListenPort})`);
 
   const adminAuthorizedKeys = loadAdminAuthorizedKeys({
     filePath: cfg.adminAuthorizedKeysFile,
@@ -80,6 +92,8 @@ async function main(): Promise<void> {
       defaultTtl: cfg.cattle.defaultTtl,
       labels: parseCattleBaseLabels(cfg.cattle.labelsJson),
       defaultAutoShutdown: cfg.cattle.defaultAutoShutdown,
+      secretsBaseUrl: cfg.cattle.secretsBaseUrl,
+      bootstrapTtlMs: cfg.cattle.bootstrapTtlMs,
     },
     identitiesRoot: cfg.identitiesRoot,
     adminAuthorizedKeys,
@@ -109,6 +123,7 @@ async function main(): Promise<void> {
     await new Promise((r) => setTimeout(r, 250));
   }
 
+  await new Promise<void>((resolve) => cattleServer.close(() => resolve()));
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await Promise.allSettled(workers);
   q.close();
@@ -119,4 +134,3 @@ main().catch((e) => {
   console.error(String((e as Error)?.message || e));
   process.exitCode = 1;
 });
-

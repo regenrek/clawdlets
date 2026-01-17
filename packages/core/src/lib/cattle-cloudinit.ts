@@ -9,7 +9,8 @@ export type CattleCloudInitParams = {
   adminAuthorizedKeys: string[];
   tailscaleAuthKey: string;
   task: CattleTask;
-  env?: Record<string, string>;
+  publicEnv?: Record<string, string>;
+  secretsBootstrap?: { baseUrl: string; token: string };
   extraWriteFiles?: Array<{
     path: string;
     permissions: string;
@@ -18,11 +19,22 @@ export type CattleCloudInitParams = {
   }>;
 };
 
+function assertOnlyPublicEnv(env: Record<string, string>): void {
+  for (const k of Object.keys(env)) {
+    const key = String(k || "").trim();
+    if (!key) continue;
+    if (!key.startsWith("CLAWDLETS_")) {
+      throw new Error(`cloud-init env not allowed: ${key} (secrets must be fetched at runtime)`);
+    }
+  }
+}
+
 function toEnvFileText(env: Record<string, string> | undefined): string {
   const entries = Object.entries(env || {})
     .map(([k, v]) => [String(k || "").trim(), String(v ?? "")] as const)
     .filter(([k]) => Boolean(k));
   if (entries.length === 0) return "";
+  assertOnlyPublicEnv(Object.fromEntries(entries));
   return `${entries.map(([k, v]) => `${k}=${formatDotenvValue(v)}`).join("\n")}\n`;
 }
 
@@ -38,14 +50,26 @@ export function buildCattleCloudInitUserData(params: CattleCloudInitParams): str
   const tailscaleAuthKey = String(params.tailscaleAuthKey || "").trim();
   if (!tailscaleAuthKey) throw new Error("tailscaleAuthKey is missing");
 
-  const envText = toEnvFileText(params.env);
+  const envText = toEnvFileText(params.publicEnv);
+
+  const bootstrap = params.secretsBootstrap
+    ? {
+        baseUrl: String(params.secretsBootstrap.baseUrl || "").trim(),
+        token: String(params.secretsBootstrap.token || "").trim(),
+      }
+    : null;
+  if (bootstrap) {
+    if (!bootstrap.baseUrl) throw new Error("secretsBootstrap.baseUrl is missing");
+    if (!/^https?:\/\//.test(bootstrap.baseUrl)) throw new Error(`secretsBootstrap.baseUrl must be http(s): ${bootstrap.baseUrl}`);
+    if (!bootstrap.token) throw new Error("secretsBootstrap.token is missing");
+  }
 
   const writeFiles: any[] = [
     {
       path: "/var/lib/clawdlets/cattle/task.json",
       permissions: "0600",
       owner: "root:root",
-      content: `${JSON.stringify(params.task, null, 2)}\n`,
+      content: `${JSON.stringify({ ...params.task, callbackUrl: "" }, null, 2)}\n`,
     },
     {
       path: "/run/secrets/tailscale_auth_key",
@@ -53,10 +77,20 @@ export function buildCattleCloudInitUserData(params: CattleCloudInitParams): str
       owner: "root:root",
       content: `${tailscaleAuthKey}\n`,
     },
+    ...(bootstrap
+      ? [
+          {
+            path: "/run/clawdlets/cattle/bootstrap.json",
+            permissions: "0400",
+            owner: "root:root",
+            content: `${JSON.stringify(bootstrap, null, 2)}\n`,
+          },
+        ]
+      : []),
     ...(envText
       ? [
           {
-            path: "/run/clawdlets/cattle/env",
+            path: "/run/clawdlets/cattle/env.public",
             permissions: "0400",
             owner: "root:root",
             content: envText,

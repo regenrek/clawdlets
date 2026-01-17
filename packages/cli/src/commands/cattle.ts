@@ -2,36 +2,23 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { defineCommand } from "citty";
+import { CLF_PROTOCOL_VERSION, createClfClient } from "@clawdlets/clf-queue";
 import { sanitizeOperatorId } from "@clawdlets/core/lib/identifiers";
 import { loadDeployCreds } from "@clawdlets/core/lib/deploy-creds";
 import { parseTtlToSeconds } from "@clawdlets/core/lib/ttl";
 import { CattleTaskSchema, CATTLE_TASK_SCHEMA_VERSION, type CattleTask } from "@clawdlets/core/lib/cattle-task";
-import { buildCattleCloudInitUserData } from "@clawdlets/core/lib/cattle-cloudinit";
 import {
-  CATTLE_LABEL_CATTLE,
-  CATTLE_LABEL_CATTLE_VALUE,
-  CATTLE_LABEL_CREATED_AT,
-  CATTLE_LABEL_EXPIRES_AT,
   CATTLE_LABEL_IDENTITY,
-  CATTLE_LABEL_MANAGED_BY,
-  CATTLE_LABEL_MANAGED_BY_VALUE,
-  CATTLE_LABEL_TASK_ID,
   buildCattleLabelSelector,
-  createCattleServer,
   destroyCattleServer,
   listCattleServers,
   reapExpiredCattle,
   type CattleServer,
 } from "@clawdlets/core/lib/hcloud-cattle";
-import { buildCattleServerName, safeCattleLabelValue } from "@clawdlets/core/lib/cattle-planner";
+import { safeCattleLabelValue } from "@clawdlets/core/lib/cattle-planner";
 import { openCattleState } from "@clawdlets/core/lib/cattle-state";
-import { getModelRequiredEnvVars } from "@clawdlets/core/lib/llm-provider-env";
 import { run, capture } from "@clawdlets/core/lib/run";
 import { shellQuote, sshRun } from "@clawdlets/core/lib/ssh-remote";
-import { sopsDecryptYamlFile } from "@clawdlets/core/lib/sops";
-import { readYamlScalarFromMapping } from "@clawdlets/core/lib/yaml-scalar";
-import { getHostSecretsDir, getLocalOperatorAgeKeyPath } from "@clawdlets/core/repo-layout";
-import { loadIdentity } from "@clawdlets/core/lib/identity-loader";
 import { loadHostContextOrExit } from "../lib/context.js";
 
 function requireEnabled(params: { enabled: boolean; hint: string }): void {
@@ -88,38 +75,6 @@ function formatTable(rows: string[][]): string {
     .join("\n");
 }
 
-function resolveAgeKeyFile(params: {
-  operatorArg?: unknown;
-  ageKeyFileArg?: unknown;
-  deployCredsAgeKeyFile?: string;
-  layout: Parameters<typeof getLocalOperatorAgeKeyPath>[0];
-}): string {
-  const operatorId = sanitizeOperatorId(String(params.operatorArg || process.env.USER || "operator"));
-  const explicit = String(params.ageKeyFileArg || "").trim();
-  if (explicit) return path.isAbsolute(explicit) ? explicit : path.resolve(process.cwd(), explicit);
-  if (params.deployCredsAgeKeyFile) return String(params.deployCredsAgeKeyFile).trim();
-  return getLocalOperatorAgeKeyPath(params.layout, operatorId);
-}
-
-async function decryptHostSecretScalar(params: {
-  repoRoot: string;
-  hostSecretsDir: string;
-  secretName: string;
-  ageKeyFile: string;
-  nixBin: string;
-}): Promise<string> {
-  const filePath = path.join(params.hostSecretsDir, `${params.secretName}.yaml`);
-  requireFile(filePath, `secret ${params.secretName}`);
-
-  const nix = { nixBin: params.nixBin, cwd: params.repoRoot, dryRun: false } as const;
-  const decrypted = await sopsDecryptYamlFile({ filePath, ageKeyFile: params.ageKeyFile, nix });
-  const value = readYamlScalarFromMapping({ yamlText: decrypted, key: params.secretName });
-  if (value == null) throw new Error(`invalid secret yaml (expected scalar key ${params.secretName}): ${filePath}`);
-  const v = String(value ?? "");
-  if (!v.trim()) throw new Error(`secret is empty: ${params.secretName}`);
-  return v;
-}
-
 async function resolveTailscaleIpv4(hostname: string): Promise<string> {
   const name = String(hostname || "").trim();
   if (!name) throw new Error("hostname missing for tailscale ip resolution");
@@ -136,80 +91,56 @@ function loadTaskFromFile(taskFile: string): CattleTask {
   return parsed.data;
 }
 
-function buildEnvForModel(params: {
-  configEnvSecrets: Record<string, string>;
-  model: string;
-}): { requiredEnvVars: string[]; secretNamesByEnvVar: Record<string, string> } {
-  const requiredEnvVars = getModelRequiredEnvVars(params.model);
-  if (requiredEnvVars.length === 0) {
-    throw new Error(`unknown model provider (cannot determine required env vars): ${params.model}`);
-  }
-  const secretNamesByEnvVar: Record<string, string> = {};
-  for (const envVar of requiredEnvVars) {
-    const secretName = String(params.configEnvSecrets?.[envVar] || "").trim();
-    if (!secretName) {
-      throw new Error(
-        [
-          `missing envSecrets mapping for ${envVar} (model=${params.model})`,
-          `set fleet.envSecrets.${envVar} in fleet/clawdlets.json to a secret name`,
-        ].join("; "),
-      );
+async function waitForClfJobTerminal(params: {
+  client: { show: (jobId: string) => Promise<{ job: any }> };
+  jobId: string;
+  timeoutMs: number;
+  pollMs: number;
+}): Promise<any> {
+  const start = Date.now();
+  while (true) {
+    const res = await params.client.show(params.jobId);
+    const job = res.job;
+    if (job?.status === "done" || job?.status === "failed" || job?.status === "canceled") return job;
+    if (Date.now() - start > params.timeoutMs) {
+      throw new Error(`timeout waiting for job ${params.jobId} (last=${String(job?.status || "")})`);
     }
-    secretNamesByEnvVar[envVar] = secretName;
+    await new Promise((r) => setTimeout(r, params.pollMs));
   }
-  return { requiredEnvVars, secretNamesByEnvVar };
 }
 
 const cattleSpawn = defineCommand({
-  meta: { name: "spawn", description: "Spawn an ephemeral cattle agent VM on Hetzner Cloud." },
+  meta: { name: "spawn", description: "Enqueue a cattle.spawn job via clf-orchestrator (no secrets in user_data)." },
   args: {
     runtimeDir: { type: "string", description: "Runtime directory (default: .clawdlets)." },
-    envFile: { type: "string", description: "Env file for deploy creds (default: <runtimeDir>/env)." },
     host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
-    operator: { type: "string", description: "Operator id for age key name (default: $USER)." },
-    ageKeyFile: { type: "string", description: "Override SOPS_AGE_KEY_FILE path." },
-    identity: { type: "string", description: "Identity name (labels + injected identity files).", required: true },
+    identity: { type: "string", description: "Identity name.", required: true },
     taskFile: { type: "string", description: "Task JSON file (schemaVersion 1).", required: true },
     ttl: { type: "string", description: "TTL override (default: cattle.hetzner.defaultTtl)." },
-    image: { type: "string", description: "Hetzner image id/name override (default: cattle.hetzner.image)." },
+    image: { type: "string", description: "Hetzner image override (default: cattle.hetzner.image)." },
     serverType: { type: "string", description: "Hetzner server type override (default: cattle.hetzner.serverType)." },
     location: { type: "string", description: "Hetzner location override (default: cattle.hetzner.location)." },
-    model: { type: "string", description: "Model id override (default: hosts.<host>.agentModelPrimary)." },
-    callbackUrl: { type: "string", description: "Callback URL override (default: cattle.defaults.callbackUrl)." },
     autoShutdown: { type: "boolean", description: "Auto poweroff after task (default: cattle.defaults.autoShutdown)." },
-    dryRun: { type: "boolean", description: "Print plan without creating a server.", default: false },
+    socket: { type: "string", description: "clf-orchestrator unix socket path (default: /run/clf/orchestrator.sock)." },
+    requester: { type: "string", description: "Requester id (default: $USER)." },
+    idempotencyKey: { type: "string", description: "Idempotency key (optional)." },
+    wait: { type: "boolean", description: "Wait for job completion.", default: true },
+    waitTimeout: { type: "string", description: "Wait timeout seconds.", default: "300" },
+    dryRun: { type: "boolean", description: "Print enqueue request without enqueueing.", default: false },
   },
   async run({ args }) {
     const cwd = process.cwd();
     const ctx = loadHostContextOrExit({ cwd, runtimeDir: (args as any).runtimeDir, hostArg: args.host });
     if (!ctx) return;
-    const { repoRoot, layout, config, hostName, hostCfg } = ctx;
+    const { layout, config } = ctx;
 
     requireEnabled({
       enabled: Boolean(config.cattle?.enabled),
       hint: "cattle is disabled (set cattle.enabled=true in fleet/clawdlets.json)",
     });
 
-    const deployCreds = loadDeployCreds({ cwd, runtimeDir: (args as any).runtimeDir, envFile: (args as any).envFile });
-    if (deployCreds.envFile?.origin === "explicit" && deployCreds.envFile.status !== "ok") {
-      throw new Error(`deploy env file rejected: ${deployCreds.envFile.path} (${deployCreds.envFile.error || deployCreds.envFile.status})`);
-    }
-
-    const hcloudToken = String(deployCreds.values.HCLOUD_TOKEN || "").trim();
-    if (!hcloudToken) throw new Error("missing HCLOUD_TOKEN (set in .clawdlets/env or env var; run: clawdlets env init)");
-
-    const nixBin = String(deployCreds.values.NIX_BIN || "nix").trim() || "nix";
-    const ageKeyFile = resolveAgeKeyFile({
-      operatorArg: (args as any).operator,
-      ageKeyFileArg: (args as any).ageKeyFile,
-      deployCredsAgeKeyFile: deployCreds.values.SOPS_AGE_KEY_FILE,
-      layout,
-    });
-    requireFile(ageKeyFile, "SOPS_AGE_KEY_FILE");
-
-    const identityRaw = String(args.identity || "").trim();
-    if (!identityRaw) throw new Error("missing --identity");
-    const identity = loadIdentity({ repoRoot, identityName: identityRaw });
+    const identity = String(args.identity || "").trim();
+    if (!identity) throw new Error("missing --identity");
 
     const taskFileRaw = String((args as any).taskFile || "").trim();
     if (!taskFileRaw) throw new Error("missing --task-file");
@@ -217,135 +148,118 @@ const cattleSpawn = defineCommand({
     requireFile(taskFile, "task file");
 
     const taskFromFile = loadTaskFromFile(taskFile);
-    const task: CattleTask = {
-      ...taskFromFile,
-      callbackUrl: String(args.callbackUrl || taskFromFile.callbackUrl || config.cattle?.defaults?.callbackUrl || "").trim(),
-    };
+    const task: CattleTask = { ...taskFromFile, callbackUrl: "" };
 
     const ttlRaw = String(args.ttl || config.cattle?.hetzner?.defaultTtl || "").trim();
-    const ttl = requireTtlSeconds(ttlRaw);
-    const createdAt = unixSecondsNow();
-    const expiresAt = createdAt + ttl.seconds;
+    if (ttlRaw) requireTtlSeconds(ttlRaw);
 
-    const image = String(args.image || config.cattle?.hetzner?.image || "").trim();
-    if (!image) throw new Error("missing cattle.hetzner.image (set in fleet/clawdlets.json)");
-    const serverType = String(args.serverType || config.cattle?.hetzner?.serverType || "cx22").trim() || "cx22";
-    const location = String(args.location || config.cattle?.hetzner?.location || "nbg1").trim() || "nbg1";
-
-    const existing = await listCattleServers({ token: hcloudToken });
-    const maxInstances = Number(config.cattle?.hetzner?.maxInstances || 0);
-    if (Number.isFinite(maxInstances) && maxInstances > 0 && existing.length >= maxInstances) {
-      throw new Error(`maxInstances reached (${existing.length}/${maxInstances}); destroy/reap before spawning more`);
-    }
-
-    const adminAuthorizedKeys = hostCfg.sshAuthorizedKeys || [];
-    if (!Array.isArray(adminAuthorizedKeys) || adminAuthorizedKeys.length === 0) {
-      throw new Error(`sshAuthorizedKeys is empty for host ${hostName} (needed for cattle ssh/logs)`);
-    }
-
-    const hostSecretsDir = getHostSecretsDir(layout, hostName);
-    const tailscaleAuthKey = await decryptHostSecretScalar({
-      repoRoot,
-      hostSecretsDir,
-      secretName: "tailscale_auth_key",
-      ageKeyFile,
-      nixBin,
-    });
-
-    const env: Record<string, string> = {};
-    if (deployCreds.values.GITHUB_TOKEN) env.GITHUB_TOKEN = String(deployCreds.values.GITHUB_TOKEN);
-
-    const model = String(args.model || identity.config.model.primary || hostCfg.agentModelPrimary || "").trim();
-    if (!model) throw new Error("missing model (set identities/<name>/config.json model.primary or hosts.<host>.agentModelPrimary)");
-    const envSecrets = (config.fleet?.envSecrets || {}) as Record<string, string>;
-    const envPlan = buildEnvForModel({ configEnvSecrets: envSecrets, model });
-    for (const envVar of envPlan.requiredEnvVars) {
-      const secretName = envPlan.secretNamesByEnvVar[envVar]!;
-      env[envVar] = await decryptHostSecretScalar({
-        repoRoot,
-        hostSecretsDir,
-        secretName,
-        ageKeyFile,
-        nixBin,
-      });
-    }
-
-    const autoShutdown = args.autoShutdown ?? Boolean(config.cattle?.defaults?.autoShutdown ?? true);
-    if (!autoShutdown) env["CLAWDLETS_CATTLE_AUTO_SHUTDOWN"] = "0";
-
-    const name = buildCattleServerName(identity.name, createdAt);
-
-    const userData = buildCattleCloudInitUserData({
-      hostname: name,
-      adminAuthorizedKeys,
-      tailscaleAuthKey,
+    const payload = {
+      identity,
       task,
-      env,
-      extraWriteFiles: identity.cloudInitFiles,
-    });
-
-    const labels: Record<string, string> = {
-      ...(config.cattle?.hetzner?.labels || {}),
-      [CATTLE_LABEL_MANAGED_BY]: CATTLE_LABEL_MANAGED_BY_VALUE,
-      [CATTLE_LABEL_CATTLE]: CATTLE_LABEL_CATTLE_VALUE,
-      [CATTLE_LABEL_IDENTITY]: safeCattleLabelValue(identity.name, "id"),
-      [CATTLE_LABEL_TASK_ID]: safeCattleLabelValue(task.taskId, "task"),
-      [CATTLE_LABEL_CREATED_AT]: String(createdAt),
-      [CATTLE_LABEL_EXPIRES_AT]: String(expiresAt),
+      ttl: ttlRaw,
+      image: String(args.image || config.cattle?.hetzner?.image || "").trim(),
+      serverType: String(args.serverType || config.cattle?.hetzner?.serverType || "").trim(),
+      location: String(args.location || config.cattle?.hetzner?.location || "").trim(),
+      ...(typeof (args as any).autoShutdown === "boolean"
+        ? { autoShutdown: Boolean((args as any).autoShutdown) }
+        : typeof config.cattle?.defaults?.autoShutdown === "boolean"
+          ? { autoShutdown: Boolean(config.cattle.defaults.autoShutdown) }
+          : {}),
     };
 
+    const socketPath = String((args as any).socket || process.env.CLF_SOCKET_PATH || "/run/clf/orchestrator.sock").trim();
+    if (!socketPath) throw new Error("missing --socket (or set CLF_SOCKET_PATH)");
+
+    const requester = sanitizeOperatorId(String((args as any).requester || process.env.USER || "operator"));
+    const idempotencyKey = String((args as any).idempotencyKey || "").trim();
+
+    const request = {
+      protocolVersion: CLF_PROTOCOL_VERSION,
+      requester,
+      idempotencyKey,
+      kind: "cattle.spawn",
+      payload,
+      runAt: "",
+      priority: 0,
+    } as const;
+
     if (args.dryRun) {
-      console.log(
-        JSON.stringify(
-          {
-            action: "hcloud.server.create",
-            name,
-            image,
-            serverType,
-            location,
-            labels,
-            userDataBytes: Buffer.byteLength(userData, "utf8"),
-            ttl: ttl.normalized,
-            createdAt,
-            expiresAt,
-          },
-          null,
-          2,
-        ),
-      );
+      console.log(JSON.stringify({ action: "clf.jobs.enqueue", socketPath, request }, null, 2));
       return;
     }
 
-    const server = await createCattleServer({
-      token: hcloudToken,
-      name,
-      image,
-      serverType,
-      location,
-      userData,
-      labels,
-    });
+    const client = createClfClient({ socketPath });
+    const res = await client.enqueue(request);
 
-    const st = openCattleState(layout.cattleDbPath);
-    try {
-      st.upsertServer({
-        id: server.id,
-        name: server.name,
-        identity: identity.name,
-        task: task.message.split("\n")[0]?.slice(0, 200) || task.taskId,
-        taskId: task.taskId,
-        ttlSeconds: ttl.seconds,
-        createdAt,
-        expiresAt,
-        labels,
-        lastStatus: server.status,
-        lastIpv4: server.ipv4,
-      });
-    } finally {
-      st.close();
+    const waitTimeoutRaw = String((args as any).waitTimeout || "300").trim();
+    if (!/^\d+$/.test(waitTimeoutRaw) || Number(waitTimeoutRaw) <= 0) {
+      throw new Error(`invalid --wait-timeout: ${waitTimeoutRaw}`);
+    }
+    const timeoutMs = Number(waitTimeoutRaw) * 1000;
+
+    if (!args.wait) {
+      console.log(res.jobId);
+      return;
     }
 
-    console.log(`ok: spawned ${server.name} (id=${server.id} ipv4=${server.ipv4 || "?"} ttl=${ttl.normalized})`);
+    const job = await waitForClfJobTerminal({
+      client,
+      jobId: res.jobId,
+      timeoutMs,
+      pollMs: 1_000,
+    });
+
+    if (job.status !== "done") {
+      const err = String(job.lastError || "").trim();
+      throw new Error(`spawn job ${res.jobId} ${job.status}${err ? `: ${err}` : ""}`);
+    }
+
+    const server = (job.result as any)?.server;
+    if (server && typeof server === "object") {
+      const id = String((server as any).id || "").trim();
+      const name = String((server as any).name || "").trim();
+      const ipv4 = String((server as any).ipv4 || "").trim();
+      const createdAtIso = String((server as any).createdAt || "").trim();
+      const expiresAtIso = String((server as any).expiresAt || "").trim();
+
+      const createdAt = Number.isFinite(Date.parse(createdAtIso)) ? Math.floor(Date.parse(createdAtIso) / 1000) : unixSecondsNow();
+      const expiresAt = Number.isFinite(Date.parse(expiresAtIso)) ? Math.floor(Date.parse(expiresAtIso) / 1000) : 0;
+      const ttlSeconds =
+        typeof (server as any).ttlSeconds === "number" && Number.isFinite((server as any).ttlSeconds)
+          ? Math.max(0, Math.floor((server as any).ttlSeconds))
+          : Math.max(0, expiresAt - createdAt);
+
+      const labels =
+        (server as any).labels && typeof (server as any).labels === "object" && !Array.isArray((server as any).labels)
+          ? ((server as any).labels as Record<string, string>)
+          : {};
+
+      if (id && name) {
+        const st = openCattleState(layout.cattleDbPath);
+        try {
+          st.upsertServer({
+            id,
+            name,
+            identity: String((server as any).identity || identity),
+            task: String((server as any).taskId || task.taskId),
+            taskId: String((server as any).taskId || task.taskId),
+            ttlSeconds,
+            createdAt,
+            expiresAt,
+            labels,
+            lastStatus: String((server as any).status || "unknown"),
+            lastIpv4: ipv4,
+          });
+        } finally {
+          st.close();
+        }
+      }
+
+      console.log(`ok: spawned ${name || "cattle"} (id=${id || "?"} ipv4=${ipv4 || "?"} job=${res.jobId})`);
+      return;
+    }
+
+    console.log(`ok: spawn completed (job=${res.jobId})`);
   },
 });
 

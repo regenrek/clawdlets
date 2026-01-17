@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",
+    "@clawdlets/clf-queue": "workspace:*",
     "@clawdlets/core": "workspace:*",
     "citty": "^0.1.6",
     "giget": "^2.0.0",

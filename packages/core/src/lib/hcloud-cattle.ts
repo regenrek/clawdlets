@@ -1,4 +1,4 @@
-import { createHcloudServer, deleteHcloudServer, ensureHcloudFirewallId, listHcloudServers, waitForHcloudServerStatus, type HcloudFirewallRule, type HcloudServer } from "./hcloud.js";
+import { createHcloudServer, deleteHcloudServer, ensureHcloudFirewallId, listHcloudServers, waitForHcloudServerStatus, HcloudHttpError, type HcloudFirewallRule, type HcloudServer } from "./hcloud.js";
 
 export type CattleServerStatus = "running" | "starting" | "stopping" | "off" | "unknown";
 
@@ -151,15 +151,46 @@ export async function reapExpiredCattle(params: {
   now?: Date;
   labelSelector?: string;
   dryRun?: boolean;
+  concurrency?: number;
 }): Promise<ReapExpiredCattleResult> {
   const expired = await listExpiredCattle({ token: params.token, now: params.now, labelSelector: params.labelSelector });
   if (params.dryRun) return { expired, deletedIds: [] };
 
-  const deletedIds: string[] = [];
-  for (const s of expired) {
-    await destroyCattleServer({ token: params.token, id: s.id });
-    deletedIds.push(s.id);
-  }
+  const sleepMs = async (ms: number) => await new Promise((r) => setTimeout(r, ms));
+
+  const destroyWithRetry = async (id: string) => {
+    const maxAttempts = 4;
+    let delayMs = 500;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await destroyCattleServer({ token: params.token, id });
+        return;
+      } catch (e) {
+        const status = e instanceof HcloudHttpError ? e.status : 0;
+        const retryable = status === 0 || status === 429 || (status >= 500 && status <= 599);
+        if (!retryable || attempt === maxAttempts) throw e;
+        await sleepMs(delayMs);
+        delayMs = Math.min(delayMs * 2, 5_000);
+      }
+    }
+  };
+
+  const concurrency = Math.max(1, Math.min(10, Math.floor(params.concurrency ?? 4)));
+  const queue = [...expired];
+  const deleted = new Set<string>();
+
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    while (queue.length > 0) {
+      const s = queue.shift();
+      if (!s) return;
+      await destroyWithRetry(s.id);
+      deleted.add(s.id);
+    }
+  });
+
+  await Promise.all(workers);
+
+  const deletedIds = expired.filter((s) => deleted.has(s.id)).map((s) => s.id);
 
   return { expired, deletedIds };
 }

@@ -17,6 +17,18 @@ type CreateSshKeyResponse = {
 export const HCLOUD_REQUEST_TIMEOUT_MS = 15_000;
 const HCLOUD_ERROR_BODY_LIMIT_BYTES = 64 * 1024;
 
+export class HcloudHttpError extends Error {
+  readonly status: number;
+  readonly bodyText: string;
+
+  constructor(message: string, params: { status: number; bodyText: string }) {
+    super(`${message}: HTTP ${params.status}: ${params.bodyText}`);
+    this.name = "HcloudHttpError";
+    this.status = params.status;
+    this.bodyText = params.bodyText;
+  }
+}
+
 async function readResponseTextLimited(res: Response, limitBytes: number): Promise<string> {
   if (!res.body) return "";
   const reader = res.body.getReader();
@@ -114,7 +126,7 @@ export async function ensureHcloudSshKeyId(params: {
     path: "/ssh_keys",
   });
   if (!list.ok) {
-    throw new Error(`hcloud list ssh keys failed: HTTP ${list.status}: ${list.bodyText}`);
+    throw new HcloudHttpError("hcloud list ssh keys failed", { status: list.status, bodyText: list.bodyText });
   }
 
   const existing = list.json.ssh_keys.find((k) => k.public_key.trim() === normalizedKey);
@@ -143,9 +155,7 @@ export async function ensureHcloudSshKeyId(params: {
       path: "/ssh_keys",
     });
     if (!listAgain.ok) {
-      throw new Error(
-        `hcloud list ssh keys failed after 409: HTTP ${listAgain.status}: ${listAgain.bodyText}`,
-      );
+      throw new HcloudHttpError("hcloud list ssh keys failed after 409", { status: listAgain.status, bodyText: listAgain.bodyText });
     }
 
     const existingAfter409 = listAgain.json.ssh_keys.find(
@@ -154,7 +164,7 @@ export async function ensureHcloudSshKeyId(params: {
     if (existingAfter409) return String(existingAfter409.id);
   }
 
-  throw new Error(`hcloud create ssh key failed: HTTP ${create.status}: ${create.bodyText}`);
+  throw new HcloudHttpError("hcloud create ssh key failed", { status: create.status, bodyText: create.bodyText });
 }
 
 export type HcloudFirewallRule = {
@@ -172,6 +182,10 @@ type HcloudFirewall = {
   labels: Record<string, string>;
 };
 
+type HcloudFirewallWithRules = HcloudFirewall & {
+  rules: HcloudFirewallRule[];
+};
+
 type ListFirewallsResponse = {
   firewalls: HcloudFirewall[];
   meta?: { pagination?: { next_page?: number | null } };
@@ -179,6 +193,14 @@ type ListFirewallsResponse = {
 
 type CreateFirewallResponse = {
   firewall: HcloudFirewall;
+};
+
+type GetFirewallResponse = {
+  firewall: HcloudFirewallWithRules;
+};
+
+type SetFirewallRulesResponse = {
+  action?: unknown;
 };
 
 async function listAllFirewalls(params: { token: string; labelSelector?: string }): Promise<HcloudFirewall[]> {
@@ -195,13 +217,49 @@ async function listAllFirewalls(params: { token: string; labelSelector?: string 
         ...(params.labelSelector ? { label_selector: params.labelSelector } : {}),
       },
     });
-    if (!res.ok) throw new Error(`hcloud list firewalls failed: HTTP ${res.status}: ${res.bodyText}`);
+    if (!res.ok) throw new HcloudHttpError("hcloud list firewalls failed", { status: res.status, bodyText: res.bodyText });
     out.push(...(res.json.firewalls || []));
     const next = res.json.meta?.pagination?.next_page;
     if (!next) break;
     page = next;
   }
   return out;
+}
+
+function labelSelectorFromLabels(labels: Record<string, string> | undefined): string {
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(labels || {})) {
+    const kk = String(k || "").trim();
+    const vv = String(v ?? "").trim();
+    if (!kk || !vv) continue;
+    parts.push(`${kk}=${vv}`);
+  }
+  return parts.join(",");
+}
+
+function normalizeFirewallRules(rules: HcloudFirewallRule[]): unknown[] {
+  const normalized = rules.map((r) => {
+    const sourceIps = (r.source_ips || []).map((s) => String(s || "").trim()).filter(Boolean).sort();
+    const destIps = (r.destination_ips || []).map((s) => String(s || "").trim()).filter(Boolean).sort();
+    return {
+      direction: r.direction,
+      protocol: r.protocol,
+      ...(r.port ? { port: String(r.port) } : {}),
+      ...(sourceIps.length > 0 ? { source_ips: sourceIps } : {}),
+      ...(destIps.length > 0 ? { destination_ips: destIps } : {}),
+      ...(r.description ? { description: String(r.description) } : {}),
+    };
+  });
+  normalized.sort((a: any, b: any) => {
+    const ak = `${a.direction}|${a.protocol}|${a.port || ""}|${(a.source_ips || []).join(",")}|${(a.destination_ips || []).join(",")}|${a.description || ""}`;
+    const bk = `${b.direction}|${b.protocol}|${b.port || ""}|${(b.source_ips || []).join(",")}|${(b.destination_ips || []).join(",")}|${b.description || ""}`;
+    return ak.localeCompare(bk);
+  });
+  return normalized;
+}
+
+function firewallRulesEqual(a: HcloudFirewallRule[], b: HcloudFirewallRule[]): boolean {
+  return JSON.stringify(normalizeFirewallRules(a)) === JSON.stringify(normalizeFirewallRules(b));
 }
 
 export async function ensureHcloudFirewallId(params: {
@@ -212,8 +270,32 @@ export async function ensureHcloudFirewallId(params: {
 }): Promise<string> {
   const name = params.name.trim();
   if (!name) throw new Error("firewall name missing");
-  const existing = (await listAllFirewalls({ token: params.token })).find((fw) => fw.name === name);
-  if (existing) return String(existing.id);
+  const labelSelector = labelSelectorFromLabels(params.labels);
+  const existing = (await listAllFirewalls({ token: params.token, ...(labelSelector ? { labelSelector } : {}) })).find((fw) => fw.name === name);
+  if (existing) {
+    const details = await hcloudRequest<GetFirewallResponse>({
+      token: params.token,
+      method: "GET",
+      path: `/firewalls/${existing.id}`,
+    });
+    if (!details.ok) {
+      throw new HcloudHttpError("hcloud get firewall failed", { status: details.status, bodyText: details.bodyText });
+    }
+
+    const currentRules = details.json.firewall.rules || [];
+    if (!firewallRulesEqual(currentRules, params.rules || [])) {
+      const setRules = await hcloudRequest<SetFirewallRulesResponse>({
+        token: params.token,
+        method: "POST",
+        path: `/firewalls/${existing.id}/actions/set_rules`,
+        body: { rules: params.rules },
+      });
+      if (!setRules.ok) {
+        throw new HcloudHttpError("hcloud set firewall rules failed", { status: setRules.status, bodyText: setRules.bodyText });
+      }
+    }
+    return String(existing.id);
+  }
 
   const created = await hcloudRequest<CreateFirewallResponse>({
     token: params.token,
@@ -225,7 +307,7 @@ export async function ensureHcloudFirewallId(params: {
       ...(params.labels ? { labels: params.labels } : {}),
     },
   });
-  if (!created.ok) throw new Error(`hcloud create firewall failed: HTTP ${created.status}: ${created.bodyText}`);
+  if (!created.ok) throw new HcloudHttpError("hcloud create firewall failed", { status: created.status, bodyText: created.bodyText });
   return String(created.json.firewall.id);
 }
 
@@ -278,7 +360,7 @@ async function listAllServers(params: { token: string; labelSelector?: string })
         ...(params.labelSelector ? { label_selector: params.labelSelector } : {}),
       },
     });
-    if (!res.ok) throw new Error(`hcloud list servers failed: HTTP ${res.status}: ${res.bodyText}`);
+    if (!res.ok) throw new HcloudHttpError("hcloud list servers failed", { status: res.status, bodyText: res.bodyText });
     out.push(...(res.json.servers || []));
     const next = res.json.meta?.pagination?.next_page;
     if (!next) break;
@@ -317,7 +399,7 @@ export async function createHcloudServer(params: {
         : {}),
     },
   });
-  if (!created.ok) throw new Error(`hcloud create server failed: HTTP ${created.status}: ${created.bodyText}`);
+  if (!created.ok) throw new HcloudHttpError("hcloud create server failed", { status: created.status, bodyText: created.bodyText });
   return created.json.server;
 }
 
@@ -329,7 +411,7 @@ export async function getHcloudServer(params: { token: string; id: string }): Pr
     method: "GET",
     path: `/servers/${id}`,
   });
-  if (!res.ok) throw new Error(`hcloud get server failed: HTTP ${res.status}: ${res.bodyText}`);
+  if (!res.ok) throw new HcloudHttpError("hcloud get server failed", { status: res.status, bodyText: res.bodyText });
   return res.json.server;
 }
 
@@ -361,5 +443,5 @@ export async function deleteHcloudServer(params: { token: string; id: string }):
     method: "DELETE",
     path: `/servers/${id}`,
   });
-  if (!res.ok) throw new Error(`hcloud delete server failed: HTTP ${res.status}: ${res.bodyText}`);
+  if (!res.ok) throw new HcloudHttpError("hcloud delete server failed", { status: res.status, bodyText: res.bodyText });
 }

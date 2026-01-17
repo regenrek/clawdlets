@@ -79,6 +79,9 @@ importers:
       '@clack/prompts':
         specifier: ^0.11.0
         version: 0.11.0
+      '@clawdlets/clf-queue':
+        specifier: workspace:*
+        version: link:../clf/queue
       '@clawdlets/core':
         specifier: workspace:*
         version: link:../core

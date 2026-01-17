@@ -129,6 +129,8 @@ describe("clf-orchestrator worker", () => {
             defaultTtl: "2h",
             labels: {},
             defaultAutoShutdown: true,
+            secretsBaseUrl: "http://clawdlets-pet:18337",
+            bootstrapTtlMs: 60_000,
           },
           identitiesRoot,
           adminAuthorizedKeys: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMockKey"],
@@ -155,4 +157,3 @@ describe("clf-orchestrator worker", () => {
     }
   });
 });
-
