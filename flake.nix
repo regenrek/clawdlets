@@ -56,7 +56,7 @@
           pnpm -C packages/clf/cli build
           pnpm -C packages/clf/orchestrator build
 
-          pnpm --offline rebuild better-sqlite3
+          pnpm rebuild better-sqlite3
 
           runHook postBuild
         '';
