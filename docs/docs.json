@@ -1,0 +1,72 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Clawdlets",
+  "theme": "mint",
+  "colors": {
+    "primary": "#FF5A36"
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/regenrek/clawdlets"
+    }
+  ],
+  "navigation": {
+    "groups": [
+      {
+        "group": "Start Here",
+        "pages": [
+          "index",
+          "overview",
+          "quickstart",
+          "golden-path",
+          "runbook"
+        ]
+      },
+      {
+        "group": "Concepts",
+        "pages": [
+          "concepts/index",
+          "concepts/queue"
+        ]
+      },
+      {
+        "group": "Operator CLI (clawdlets)",
+        "pages": [
+          "cli",
+          "install",
+          "config",
+          "deploy",
+          "operations",
+          "troubleshooting"
+        ]
+      },
+      {
+        "group": "Cattle + Control Plane",
+        "pages": [
+          "cattle",
+          "orchestrator",
+          "runtime-layout"
+        ]
+      },
+      {
+        "group": "Security",
+        "pages": [
+          "secrets",
+          "security",
+          "ops-invariants"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "agent-config",
+          "image-based-provisioning",
+          "upstream",
+          "publicing"
+        ]
+      }
+    ]
+  }
+}
+

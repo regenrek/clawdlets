@@ -35,7 +35,9 @@ Edit config/secrets, commit, push to `main`.
 CI (Garnix + GH Actions):
 - builds `packages.x86_64-linux.<host>-system`
 - computes `deploy-manifest.<host>.json` (rev + toplevel + secretsDigest)
-- publishes manifests to GitHub Pages (optional but recommended)
+- publishes manifests to GitHub Pages in the project repo (optional but recommended)
+  - requires enabling GitHub Pages (source: GitHub Actions)
+  - alternative: publish the manifest artifacts to any HTTPS static host
 
 ## 2) GitOps deploy (push-based)
 

@@ -39,10 +39,13 @@ Manifest format:
 
 ### GitOps (CI)
 
-Recommended: use the built-in workflows:
+Recommended: use the built-in workflows shipped by the project template (in your project repo):
 
 - `.github/workflows/deploy-manifest.yml` builds all host systems, writes `deploy-manifest.<host>.json`, signs them, and publishes them (GitHub Pages).
 - `.github/workflows/deploy.yml` joins the tailnet and runs `clawdlets server deploy --manifest ...` for each host (signature verified).
+
+If you publish to GitHub Pages, enable it in your project repo:
+- Settings → Pages → Source: GitHub Actions
 
 Required secrets:
 - `TAILSCALE_AUTHKEY`

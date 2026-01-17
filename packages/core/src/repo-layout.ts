@@ -10,6 +10,10 @@ export type RepoLayout = {
   // Local deploy creds env file (gitignored). Defaults to <runtimeDir>/env.
   envFilePath: string;
 
+  // Local cattle state (gitignored). Defaults to <runtimeDir>/cattle.
+  cattleDir: string;
+  cattleDbPath: string;
+
   infraDir: string;
   opentofuDir: string;
 
@@ -39,6 +43,8 @@ export type RepoLayout = {
 export function getRepoLayout(repoRoot: string, runtimeDir?: string): RepoLayout {
   const resolvedRuntimeDir = runtimeDir ?? path.join(repoRoot, ".clawdlets");
   const envFilePath = path.join(resolvedRuntimeDir, "env");
+  const cattleDir = path.join(resolvedRuntimeDir, "cattle");
+  const cattleDbPath = path.join(cattleDir, "state.sqlite");
   const infraDir = path.join(repoRoot, "infra");
   const opentofuDir = path.join(infraDir, "opentofu");
   const fleetDir = path.join(repoRoot, "fleet");
@@ -61,6 +67,8 @@ export function getRepoLayout(repoRoot: string, runtimeDir?: string): RepoLayout
     repoRoot,
     runtimeDir: resolvedRuntimeDir,
     envFilePath,
+    cattleDir,
+    cattleDbPath,
     infraDir,
     opentofuDir,
     fleetDir,

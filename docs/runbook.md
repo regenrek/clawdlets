@@ -39,6 +39,12 @@ Pinned deploys:
 - `clawdlets server deploy --target-host admin@<vpn-ip> --toplevel /nix/store/... --rev HEAD`
 - `clawdlets server deploy --manifest deploy-manifest.<host>.json`
 
+Orchestrator (if cattle enabled):
+
+- `systemctl status clf-orchestrator.socket`
+- `systemctl status clf-orchestrator`
+- bot-facing: `sudo -u bot-maren clf jobs list --json`
+
 Secrets rotation:
 
 - edit `secrets/hosts/<host>/*.yaml` → `clawdlets server deploy` (or `clawdlets secrets sync` + deploy)

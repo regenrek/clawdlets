@@ -89,6 +89,23 @@ sudo -u bot-maren env HOME=/srv/clawdbot/maren codex login --device-auth
 sudo -u bot-gunnar env HOME=/srv/clawdbot/gunnar codex login --device-auth
 ```
 
+## Orchestrator (`clf`)
+
+Service health:
+
+```bash
+systemctl status clf-orchestrator.socket
+systemctl status clf-orchestrator
+journalctl -u clf-orchestrator --since 10m --no-pager
+```
+
+Bot/job inspection:
+
+```bash
+sudo -u bot-maren clf jobs list --json
+sudo -u bot-maren clf jobs show --job-id <jobId> --json
+```
+
 ## Tailscale
 
 ```bash

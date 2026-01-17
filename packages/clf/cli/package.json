@@ -1,0 +1,33 @@
+{
+  "name": "clf",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "clf": "dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "tsc -w --preserveWatchOutput",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "help": "node dist/main.js --help"
+  },
+  "dependencies": {
+    "@clawdlets/clf-queue": "workspace:*",
+    "@clawdlets/core": "workspace:*",
+    "citty": "^0.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "typescript": "^5.6.3",
+    "vitest": "^4.0.13"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.25.0"
+}

@@ -1,4 +1,7 @@
 docs:
+  - path: docs/index.md
+    when: start here
+    summary: entrypoint; repo model; operator vs bot split; threat model notes
   - path: docs/overview.md
     when: mental model, repo layout, lifecycle
     summary: git-safe infra; encrypted secrets in /secrets; runtime in .clawdlets; bootstrap -> lockdown -> ops
@@ -32,6 +35,18 @@ docs:
   - path: docs/image-based-provisioning.md
     when: image-based provisioning
     summary: phase-4 plan to reach cattle (image builds + upload + secrets injection)
+  - path: docs/cattle.md
+    when: ephemeral agents, burst capacity
+    summary: cattle mode (spawn/list/reap) and the task VM lifecycle
+  - path: docs/orchestrator.md
+    when: bot-facing queue, running jobs from Discord
+    summary: clf + orchestrator (job queue, cattle spawn handlers, local unix socket)
+  - path: docs/concepts/index.md
+    when: concepts hub
+    summary: background concepts for clawdlets/clf
+  - path: docs/concepts/queue.md
+    when: how jobs run
+    summary: clf queue semantics (leases/retry/idempotency) + security boundary
   - path: docs/secrets.md
     when: tokens/keys/sops/age
     summary: local keys; encrypted host secrets; host secret path default

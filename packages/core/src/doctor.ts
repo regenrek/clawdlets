@@ -3,6 +3,7 @@ import { findRepoRoot } from "./lib/repo.js";
 import { loadDeployCreds } from "./lib/deploy-creds.js";
 import { addRepoChecks } from "./doctor/repo-checks.js";
 import { addDeployChecks } from "./doctor/deploy-checks.js";
+import { addCattleChecks } from "./doctor/cattle-checks.js";
 import type { DoctorCheck } from "./doctor/types.js";
 
 export type { DoctorCheck } from "./doctor/types.js";
@@ -12,7 +13,7 @@ export async function collectDoctorChecks(params: {
   runtimeDir?: string;
   envFile?: string;
   host: string;
-  scope?: "repo" | "bootstrap" | "server-deploy" | "all";
+  scope?: "repo" | "bootstrap" | "server-deploy" | "cattle" | "all";
   skipGithubTokenCheck?: boolean;
 }): Promise<DoctorCheck[]> {
   const deployCreds = loadDeployCreds({ cwd: params.cwd, runtimeDir: params.runtimeDir, envFile: params.envFile });
@@ -23,12 +24,14 @@ export async function collectDoctorChecks(params: {
   const wantRepo = params.scope === "repo" || params.scope === "all" || params.scope == null;
   const wantBootstrap = params.scope === "bootstrap" || params.scope === "all" || params.scope == null;
   const wantServerDeploy = params.scope === "server-deploy" || params.scope === "all" || params.scope == null;
+  const wantCattle = params.scope === "cattle" || params.scope === "all" || params.scope == null;
 
   const checks: DoctorCheck[] = [];
   const push = (c: DoctorCheck) => {
     if (c.scope === "repo" && !wantRepo) return;
     if (c.scope === "bootstrap" && !wantBootstrap) return;
     if (c.scope === "server-deploy" && !wantServerDeploy) return;
+    if (c.scope === "cattle" && !wantCattle) return;
     checks.push(c);
   };
 
@@ -83,6 +86,18 @@ export async function collectDoctorChecks(params: {
       push,
       skipGithubTokenCheck: params.skipGithubTokenCheck,
       scope: "server-deploy",
+    });
+  }
+
+  if (wantCattle) {
+    await addCattleChecks({
+      repoRoot,
+      layout,
+      host,
+      nixBin: NIX_BIN,
+      hcloudToken: HCLOUD_TOKEN,
+      sopsAgeKeyFile: SOPS_AGE_KEY_FILE,
+      push,
     });
   }
 

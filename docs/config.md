@@ -17,12 +17,13 @@ This file is **committed to git**. Secrets are not stored here (see `docs/secret
 
 Top-level:
 
-- `schemaVersion`: currently `5`
+- `schemaVersion`: currently `6`
 - `defaultHost` (optional): used when `--host` is omitted
 - `baseFlake` (optional): flake URI for remote builds (e.g. `github:<owner>/<repo>`)
   - if empty, CLI falls back to `git remote origin` (recommended)
 - `fleet.*`: bots + routing/skills overrides
 - `fleet.envSecrets`: env var -> sops secret name (used for LLM API keys + other secret env)
+- `cattle.*`: ephemeral agent instances (Hetzner)
 - `hosts.<host>`: host entries keyed by host name
 
 Host entry (`hosts.<host>`):
@@ -51,11 +52,23 @@ Host entry (`hosts.<host>`):
 - `selfUpdate.publicKey`: minisign public key (optional)
 - `selfUpdate.signatureUrl`: minisign signature URL (required if publicKey is set)
 
+Cattle (`cattle.*`):
+
+- `cattle.enabled`: enable cattle commands (requires `cattle.hetzner.image`)
+- `cattle.hetzner.image`: Hetzner image ID/name for cattle VMs (custom image)
+- `cattle.hetzner.serverType`: e.g. `cx22`
+- `cattle.hetzner.location`: e.g. `nbg1`
+- `cattle.hetzner.maxInstances`: hard cap for parallel cattle instances
+- `cattle.hetzner.defaultTtl`: TTL like `2h` / `30m` (used when `--ttl` omitted)
+- `cattle.hetzner.labels`: extra base labels to stamp on cattle servers (safe keys/values only)
+- `cattle.defaults.autoShutdown`: power off after task completes (recommended)
+- `cattle.defaults.callbackUrl`: optional callback URL for task results
+
 ## Example
 
 ```json
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "defaultHost": "clawdbot-fleet-host",
   "baseFlake": "",
   "fleet": {
@@ -66,6 +79,18 @@ Host entry (`hosts.<host>`):
     "routingOverrides": {},
     "codex": { "enable": false, "bots": [] },
     "backups": { "restic": { "enable": false, "repository": "" } }
+  },
+  "cattle": {
+    "enabled": false,
+    "hetzner": {
+      "image": "",
+      "serverType": "cx22",
+      "location": "nbg1",
+      "maxInstances": 10,
+      "defaultTtl": "2h",
+      "labels": { "managed-by": "clawdlets" }
+    },
+    "defaults": { "autoShutdown": true, "callbackUrl": "" }
   },
   "hosts": {
     "clawdbot-fleet-host": {

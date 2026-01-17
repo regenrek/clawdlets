@@ -73,3 +73,21 @@ clawdlets server restart --target-host <host> --unit clawdbot-melinda.service
 - Confirm `clawdlets.selfUpdate.publicKey` matches the key used in CI.
 - Ensure `.minisig` exists at `.../latest.json.minisig`.
 - Re-run the manifest workflow to republish signatures.
+
+## `clf` socket: permission denied / ENOENT
+
+- Verify socket exists:
+  - `ls -la /run/clf/orchestrator.sock`
+  - `systemctl status clf-orchestrator.socket`
+- Verify caller is allowed:
+  - `id` includes group `clf-bots`
+  - or run as root
+
+## Cattle job stuck (queued/running)
+
+- Orchestrator logs: `journalctl -u clf-orchestrator --since 30m --no-pager`
+- Job inspect: `clf jobs show --job-id <jobId> --json`
+- Common causes:
+  - Hetzner API rate limits / quota
+  - bad `cattle.hetzner.image`
+  - cattle didn’t join tailnet (bad `tailscale_auth_key`)

@@ -5,6 +5,15 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 
 ## Unreleased
 
+### Added
+- Cattle mode (Hetzner): `clawdlets cattle spawn|list|destroy|reap|logs|ssh` (ephemeral single-task VMs).
+- ClawdletFleet control plane (`clf`): sqlite-backed jobs queue + unix-socket orchestrator + CLI for bot-driven orchestration.
+- Cattle secrets channel: one-time bootstrap token + tailnet-only HTTP endpoint to fetch runtime env (no long-lived LLM keys in Hetzner user_data).
+
+### Fixed
+- Nix build for `packages.x86_64-linux.clf` (layout + symlinks) so Garnix packaging succeeds.
+- Orchestrator hardening: safer bearer parsing, no cleartext env logging, no stacktrace exposure in error responses.
+
 ## [0.1.1] - 2026-01-16
 
 ### Added

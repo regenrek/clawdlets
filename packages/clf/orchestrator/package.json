@@ -1,0 +1,32 @@
+{
+  "name": "clf-orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "clf-orchestrator": "dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "tsc -w --preserveWatchOutput",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@clawdlets/core": "workspace:*",
+    "@clawdlets/clf-queue": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "typescript": "^5.6.3",
+    "vitest": "^4.0.13"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.25.0"
+}

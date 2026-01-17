@@ -2,6 +2,9 @@
 
 Canonical source: `clawdlets --help`.
 
+Related
+- `clf` is the bot-facing CLI (`clf jobs ...`). See `docs/orchestrator.md`.
+
 ## Core workflow
 
 - project scaffold: `clawdlets project init --dir ./clawdlets-myproject`

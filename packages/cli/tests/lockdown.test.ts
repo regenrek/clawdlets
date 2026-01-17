@@ -81,7 +81,7 @@ function setConfig() {
     layout: getRepoLayout("/repo"),
     configPath: "/repo/fleet/clawdlets.json",
     config: {
-      schemaVersion: 5,
+      schemaVersion: 6,
       defaultHost: hostName,
       fleet: { bots: ["maren"] },
       hosts: {
@@ -109,7 +109,7 @@ describe("lockdown command", () => {
       layout: getRepoLayout("/repo"),
       configPath: "/repo/fleet/clawdlets.json",
       config: {
-        schemaVersion: 5,
+        schemaVersion: 6,
         defaultHost: hostName,
         fleet: { bots: ["maren"] },
         hosts: {

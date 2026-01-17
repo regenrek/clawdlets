@@ -16,6 +16,12 @@ describe("identifiers", () => {
     expect(() => assertSafeSecretName("../pwn")).toThrow(/invalid secret name/i);
   });
 
+  it("assertSafeIdentityName accepts safe identity", async () => {
+    const { assertSafeIdentityName } = await import("../src/lib/identifiers");
+    expect(() => assertSafeIdentityName("rex")).not.toThrow();
+    expect(() => assertSafeIdentityName("../pwn")).toThrow(/invalid identity name/i);
+  });
+
   it("sanitizeOperatorId strips unsafe chars", async () => {
     const { sanitizeOperatorId } = await import("../src/lib/identifiers");
     expect(sanitizeOperatorId("kevin kern")).toBe("kevin_kern");
