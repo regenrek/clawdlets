@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { EnvVarNameSchema } from "@clawdlets/core/lib/identifiers";
 
 const require = createRequire(import.meta.url);
 const BetterSqlite3 = require("better-sqlite3") as typeof import("better-sqlite3");
@@ -117,6 +118,10 @@ function safeParseJson(value: string | null): unknown {
   } catch {
     return null;
   }
+}
+
+function isSafeEnvVarName(value: string): boolean {
+  return EnvVarNameSchema.safeParse(value).success;
 }
 
 function rowToJob(row: JobRow): ClfQueueJob {
@@ -658,10 +663,17 @@ export function openClfQueue(dbPath: string): ClfQueue {
       if (!cattleName) throw new Error("createCattleBootstrapToken.cattleName missing");
 
       const envKeys = Array.from(new Set((params.envKeys || []).map((k) => String(k || "").trim()).filter(Boolean)));
+      for (const k of envKeys) {
+        if (!isSafeEnvVarName(k)) throw new Error(`createCattleBootstrapToken.envKeys contains invalid env var name: ${k}`);
+      }
       const publicEnv: Record<string, string> = {};
       for (const [k, v] of Object.entries(params.publicEnv || {})) {
         const key = String(k || "").trim();
         if (!key) continue;
+        if (!isSafeEnvVarName(key)) throw new Error(`createCattleBootstrapToken.publicEnv contains invalid env var name: ${key}`);
+        if (!key.startsWith("CLAWDLETS_")) {
+          throw new Error(`createCattleBootstrapToken.publicEnv not allowed: ${key} (public env must use CLAWDLETS_*)`);
+        }
         publicEnv[key] = String(v ?? "");
       }
 

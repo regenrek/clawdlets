@@ -57,6 +57,49 @@ async function listenTcpServer(server: http.Server, host: string, port: number):
   });
 }
 
+function isWildcardHost(host: string): boolean {
+  const h = host.trim().toLowerCase();
+  return h === "0.0.0.0" || h === "::" || h === "[::]";
+}
+
+function isProbablyTailscaleIpv4(ip: string): boolean {
+  const m = ip.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (!m) return false;
+  const a = Number(m[1]);
+  const b = Number(m[2]);
+  const c = Number(m[3]);
+  const d = Number(m[4]);
+  if (![a, b, c, d].every((n) => Number.isFinite(n) && n >= 0 && n <= 255)) return false;
+  // Tailscale IPv4 range: 100.64.0.0/10.
+  return a === 100 && b >= 64 && b <= 127;
+}
+
+function resolveTailscaleListenHost(raw: string): string {
+  const v = String(raw || "").trim();
+  const lower = v.toLowerCase();
+  if (v && lower !== "auto") return v;
+
+  const ifs = os.networkInterfaces();
+  const addrs = ifs["tailscale0"] || [];
+  for (const a of addrs) {
+    if (!a) continue;
+    if (a.family !== "IPv4") continue;
+    if (a.internal) continue;
+    return a.address;
+  }
+
+  for (const addrs of Object.values(ifs)) {
+    for (const a of addrs || []) {
+      if (!a) continue;
+      if (a.family !== "IPv4") continue;
+      if (a.internal) continue;
+      if (isProbablyTailscaleIpv4(a.address)) return a.address;
+    }
+  }
+
+  throw new Error("failed to resolve tailscale listen host (missing tailscale0 IPv4)");
+}
+
 async function main(): Promise<void> {
   const cfg = loadClfOrchestratorConfigFromEnv(process.env);
 
@@ -74,8 +117,14 @@ async function main(): Promise<void> {
   await listenHttpServer(server, cfg.socketPath);
   console.log(`clf-orchestrator: listening (socket=${cfg.socketPath})`);
 
-  await listenTcpServer(cattleServer, cfg.cattle.secretsListenHost, cfg.cattle.secretsListenPort);
-  console.log(`clf-orchestrator: cattle api listening (http=${cfg.cattle.secretsListenHost}:${cfg.cattle.secretsListenPort})`);
+  const cattleListenHost = resolveTailscaleListenHost(cfg.cattle.secretsListenHost);
+  if (isWildcardHost(cattleListenHost)) {
+    throw new Error(`refusing to bind cattle secrets API on wildcard host: ${cattleListenHost} (set CLF_CATTLE_SECRETS_LISTEN_HOST=auto or an explicit tailnet IP)`);
+  }
+  await listenTcpServer(cattleServer, cattleListenHost, cfg.cattle.secretsListenPort);
+
+  const cattleSecretsBaseUrl = cfg.cattle.secretsBaseUrl || `http://${cattleListenHost}:${cfg.cattle.secretsListenPort}`;
+  console.log(`clf-orchestrator: cattle api listening (http=${cattleSecretsBaseUrl})`);
 
   const adminAuthorizedKeys = loadAdminAuthorizedKeys({
     filePath: cfg.adminAuthorizedKeysFile,
@@ -92,7 +141,7 @@ async function main(): Promise<void> {
       defaultTtl: cfg.cattle.defaultTtl,
       labels: parseCattleBaseLabels(cfg.cattle.labelsJson),
       defaultAutoShutdown: cfg.cattle.defaultAutoShutdown,
-      secretsBaseUrl: cfg.cattle.secretsBaseUrl,
+      secretsBaseUrl: cattleSecretsBaseUrl,
       bootstrapTtlMs: cfg.cattle.bootstrapTtlMs,
     },
     identitiesRoot: cfg.identitiesRoot,

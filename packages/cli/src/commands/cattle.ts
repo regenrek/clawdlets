@@ -121,6 +121,7 @@ const cattleSpawn = defineCommand({
     serverType: { type: "string", description: "Hetzner server type override (default: cattle.hetzner.serverType)." },
     location: { type: "string", description: "Hetzner location override (default: cattle.hetzner.location)." },
     autoShutdown: { type: "boolean", description: "Auto poweroff after task (default: cattle.defaults.autoShutdown)." },
+    withGithubToken: { type: "boolean", description: "Include GITHUB_TOKEN in cattle env (explicit).", default: false },
     socket: { type: "string", description: "clf-orchestrator unix socket path (default: /run/clf/orchestrator.sock)." },
     requester: { type: "string", description: "Requester id (default: $USER)." },
     idempotencyKey: { type: "string", description: "Idempotency key (optional)." },
@@ -165,6 +166,7 @@ const cattleSpawn = defineCommand({
         : typeof config.cattle?.defaults?.autoShutdown === "boolean"
           ? { autoShutdown: Boolean(config.cattle.defaults.autoShutdown) }
           : {}),
+      ...((args as any).withGithubToken ? { withGithubToken: true } : {}),
     };
 
     const socketPath = String((args as any).socket || process.env.CLF_SOCKET_PATH || "/run/clf/orchestrator.sock").trim();

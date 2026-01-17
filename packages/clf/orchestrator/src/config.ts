@@ -74,8 +74,9 @@ export function loadClfOrchestratorConfigFromEnv(env: NodeJS.ProcessEnv): ClfOrc
   const adminAuthorizedKeysInline = parseStringEnv(env.CLF_ADMIN_AUTHORIZED_KEYS, "");
 
   const secretsBaseUrl = parseStringEnv(env.CLF_CATTLE_SECRETS_BASE_URL, "");
-  if (!secretsBaseUrl) throw new Error("missing CLF_CATTLE_SECRETS_BASE_URL");
-  if (!/^https?:\/\//.test(secretsBaseUrl)) throw new Error(`invalid CLF_CATTLE_SECRETS_BASE_URL (expected http(s)): ${secretsBaseUrl}`);
+  if (secretsBaseUrl && !/^https?:\/\//.test(secretsBaseUrl)) {
+    throw new Error(`invalid CLF_CATTLE_SECRETS_BASE_URL (expected http(s)): ${secretsBaseUrl}`);
+  }
 
   return {
     dbPath,
@@ -96,10 +97,10 @@ export function loadClfOrchestratorConfigFromEnv(env: NodeJS.ProcessEnv): ClfOrc
       defaultTtl: parseStringEnv(env.CLF_CATTLE_DEFAULT_TTL, "2h"),
       labelsJson: parseStringEnv(env.CLF_CATTLE_LABELS_JSON, "{}"),
       defaultAutoShutdown: parseBoolEnv(env.CLF_CATTLE_AUTO_SHUTDOWN, true),
-      secretsListenHost: parseStringEnv(env.CLF_CATTLE_SECRETS_LISTEN_HOST, "0.0.0.0"),
+      secretsListenHost: parseStringEnv(env.CLF_CATTLE_SECRETS_LISTEN_HOST, "auto"),
       secretsListenPort: Math.max(1, Math.min(65535, parseIntEnv(env.CLF_CATTLE_SECRETS_LISTEN_PORT, 18337))),
       secretsBaseUrl,
-      bootstrapTtlMs: Math.max(30_000, Math.min(60 * 60_000, parseIntEnv(env.CLF_CATTLE_BOOTSTRAP_TTL_MS, 10 * 60_000))),
+      bootstrapTtlMs: Math.max(30_000, Math.min(60 * 60_000, parseIntEnv(env.CLF_CATTLE_BOOTSTRAP_TTL_MS, 5 * 60_000))),
     },
 
     identitiesRoot,

@@ -2,7 +2,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import http from "node:http";
+import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+const require = createRequire(import.meta.url);
+const BetterSqlite3 = require("better-sqlite3") as typeof import("better-sqlite3");
 
 beforeEach(() => {
   vi.unstubAllEnvs();
@@ -153,6 +158,140 @@ describe("clf-orchestrator worker", () => {
       stopSignal.stopped = true;
       await workerPromise;
     } finally {
+      q.close();
+    }
+  });
+});
+
+describe("clf-orchestrator cattle-http", () => {
+  it("serves env for a valid one-time token", async () => {
+    const { openClfQueue } = await import("@clawdlets/clf-queue");
+    const { createCattleInternalHttpServer } = await import("../src/cattle-http");
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-cattle-http-"));
+    const dbPath = path.join(dir, "state.sqlite");
+    const q = openClfQueue(dbPath);
+
+    const server = createCattleInternalHttpServer({
+      queue: q,
+      env: { OPENAI_API_KEY: "secret", OTHER: "nope" },
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const addr = server.address() as { port: number };
+    const base = `http://127.0.0.1:${addr.port}`;
+
+    try {
+      const missing = await fetch(`${base}/v1/cattle/env`);
+      expect(missing.status).toBe(401);
+
+      const invalid = await fetch(`${base}/v1/cattle/env`, { headers: { Authorization: "Bearer nope" } });
+      expect(invalid.status).toBe(401);
+
+      const { token } = q.createCattleBootstrapToken({
+        jobId: "j1",
+        requester: "maren",
+        cattleName: "c1",
+        envKeys: ["OPENAI_API_KEY"],
+        publicEnv: { CLAWDLETS_CATTLE_AUTO_SHUTDOWN: "0" },
+        ttlMs: 60_000,
+      });
+
+      const ok = await fetch(`${base}/v1/cattle/env`, { headers: { Authorization: `Bearer ${token}` } });
+      expect(ok.status).toBe(200);
+      const okJson = (await ok.json()) as any;
+      expect(okJson.ok).toBe(true);
+      expect(okJson.env).toEqual({ CLAWDLETS_CATTLE_AUTO_SHUTDOWN: "0", OPENAI_API_KEY: "secret" });
+
+      const reused = await fetch(`${base}/v1/cattle/env`, { headers: { Authorization: `Bearer ${token}` } });
+      expect(reused.status).toBe(401);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      q.close();
+    }
+  });
+
+  it("rejects expired tokens", async () => {
+    const { openClfQueue } = await import("@clawdlets/clf-queue");
+    const { createCattleInternalHttpServer } = await import("../src/cattle-http");
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-cattle-http-"));
+    const dbPath = path.join(dir, "state.sqlite");
+    const q = openClfQueue(dbPath);
+
+    const server = createCattleInternalHttpServer({ queue: q, env: { OPENAI_API_KEY: "secret" } });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const addr = server.address() as { port: number };
+    const base = `http://127.0.0.1:${addr.port}`;
+
+    try {
+      const { token } = q.createCattleBootstrapToken({
+        jobId: "j1",
+        requester: "maren",
+        cattleName: "c1",
+        envKeys: ["OPENAI_API_KEY"],
+        publicEnv: {},
+        now: 0,
+        ttlMs: 30_000,
+      });
+
+      const res = await fetch(`${base}/v1/cattle/env`, { headers: { Authorization: `Bearer ${token}` } });
+      expect(res.status).toBe(401);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      q.close();
+    }
+  });
+
+  it("rejects invalid env var names (db corruption defense-in-depth)", async () => {
+    const { openClfQueue } = await import("@clawdlets/clf-queue");
+    const { createCattleInternalHttpServer } = await import("../src/cattle-http");
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-cattle-http-"));
+    const dbPath = path.join(dir, "state.sqlite");
+    const q = openClfQueue(dbPath);
+
+    const token = "t_" + Math.random().toString(16).slice(2);
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+
+    const db = new BetterSqlite3(dbPath);
+    try {
+      const now = Date.now();
+      db.prepare(
+        `
+          insert into cattle_bootstrap_tokens (
+            token_hash, created_at, expires_at, used_at,
+            job_id, requester, cattle_name,
+            env_keys_json, public_env_json
+          ) values (
+            @token_hash, @created_at, @expires_at, null,
+            @job_id, @requester, @cattle_name,
+            @env_keys_json, @public_env_json
+          )
+        `,
+      ).run({
+        token_hash: tokenHash,
+        created_at: now,
+        expires_at: now + 60_000,
+        job_id: "j1",
+        requester: "maren",
+        cattle_name: "c1",
+        env_keys_json: JSON.stringify(["BAD-NAME"]),
+        public_env_json: JSON.stringify({}),
+      });
+    } finally {
+      db.close();
+    }
+
+    const server = createCattleInternalHttpServer({ queue: q, env: { OPENAI_API_KEY: "secret" } });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const addr = server.address() as { port: number };
+    const base = `http://127.0.0.1:${addr.port}`;
+
+    try {
+      const res = await fetch(`${base}/v1/cattle/env`, { headers: { Authorization: `Bearer ${token}` } });
+      expect(res.status).toBe(400);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
       q.close();
     }
   });

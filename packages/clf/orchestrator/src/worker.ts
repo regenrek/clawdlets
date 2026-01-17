@@ -123,7 +123,11 @@ async function handleCattleSpawn(params: {
     const name = buildCattleServerName(identity.name, createdAt);
 
     const envKeys = requiredEnvKeysForModel({ env: params.rt.env, model });
-    if (params.rt.env.GITHUB_TOKEN) envKeys.push("GITHUB_TOKEN");
+    if (p.withGithubToken) {
+      const gh = String(params.rt.env.GITHUB_TOKEN || "").trim();
+      if (!gh) throw new Error("withGithubToken requested but GITHUB_TOKEN missing on control plane");
+      envKeys.push("GITHUB_TOKEN");
+    }
 
     const bootstrap = params.queue.createCattleBootstrapToken({
       jobId: params.jobId,

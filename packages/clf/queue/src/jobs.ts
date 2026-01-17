@@ -10,6 +10,7 @@ export const ClfCattleSpawnPayloadSchema = z.object({
   serverType: z.string().trim().optional().default(""),
   location: z.string().trim().optional().default(""),
   autoShutdown: z.boolean().optional(),
+  withGithubToken: z.boolean().optional().default(false),
 });
 export type ClfCattleSpawnPayload = z.infer<typeof ClfCattleSpawnPayloadSchema>;
 
@@ -29,4 +30,3 @@ export function parseClfJobPayload<K extends ClfJobKind>(kind: K, payload: unkno
   // Exhaustive guard for future extensions.
   throw new Error(`unsupported job kind: ${String(kind)}`);
 }
-

@@ -1,6 +1,6 @@
 import YAML from "yaml";
-import { formatDotenvValue } from "./dotenv-file.js";
 import type { CattleTask } from "./cattle-task.js";
+import { EnvVarNameSchema } from "./identifiers.js";
 
 export const HCLOUD_USER_DATA_MAX_BYTES = 32 * 1024;
 
@@ -19,23 +19,18 @@ export type CattleCloudInitParams = {
   }>;
 };
 
-function assertOnlyPublicEnv(env: Record<string, string>): void {
-  for (const k of Object.keys(env)) {
+function normalizePublicEnv(env: Record<string, string> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(env || {})) {
     const key = String(k || "").trim();
     if (!key) continue;
+    void EnvVarNameSchema.parse(key);
     if (!key.startsWith("CLAWDLETS_")) {
       throw new Error(`cloud-init env not allowed: ${key} (secrets must be fetched at runtime)`);
     }
+    out[key] = String(v ?? "");
   }
-}
-
-function toEnvFileText(env: Record<string, string> | undefined): string {
-  const entries = Object.entries(env || {})
-    .map(([k, v]) => [String(k || "").trim(), String(v ?? "")] as const)
-    .filter(([k]) => Boolean(k));
-  if (entries.length === 0) return "";
-  assertOnlyPublicEnv(Object.fromEntries(entries));
-  return `${entries.map(([k, v]) => `${k}=${formatDotenvValue(v)}`).join("\n")}\n`;
+  return out;
 }
 
 export function buildCattleCloudInitUserData(params: CattleCloudInitParams): string {
@@ -50,7 +45,12 @@ export function buildCattleCloudInitUserData(params: CattleCloudInitParams): str
   const tailscaleAuthKey = String(params.tailscaleAuthKey || "").trim();
   if (!tailscaleAuthKey) throw new Error("tailscaleAuthKey is missing");
 
-  const envText = toEnvFileText(params.publicEnv);
+  const publicEnv = normalizePublicEnv(params.publicEnv);
+  const publicEnvKeys = Object.keys(publicEnv).sort();
+  const publicEnvText =
+    publicEnvKeys.length === 0
+      ? ""
+      : `${JSON.stringify(Object.fromEntries(publicEnvKeys.map((k) => [k, publicEnv[k]!] as const)))}\n`;
 
   const bootstrap = params.secretsBootstrap
     ? {
@@ -87,13 +87,13 @@ export function buildCattleCloudInitUserData(params: CattleCloudInitParams): str
           },
         ]
       : []),
-    ...(envText
+    ...(publicEnvText
       ? [
           {
             path: "/run/clawdlets/cattle/env.public",
             permissions: "0400",
             owner: "root:root",
-            content: envText,
+            content: publicEnvText,
           },
         ]
       : []),

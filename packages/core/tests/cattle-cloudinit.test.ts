@@ -53,4 +53,24 @@ describe("cattle-cloudinit", () => {
       }),
     ).toThrow(/user_data too large/i);
   });
+
+  it("always strips callbackUrl from task.json", async () => {
+    const { buildCattleCloudInitUserData } = await import("../src/lib/cattle-cloudinit");
+
+    const userData = buildCattleCloudInitUserData({
+      hostname: "cattle-rex-1700000000",
+      adminAuthorizedKeys: ["ssh-ed25519 AAA"],
+      tailscaleAuthKey: "tskey-auth-123",
+      task: {
+        schemaVersion: 1,
+        taskId: "issue-42",
+        type: "clawdbot.gateway.agent",
+        message: "do it",
+        callbackUrl: "https://evil.example/cb",
+      },
+    });
+
+    expect(userData).toMatch(/\"callbackUrl\": \"\"/);
+    expect(userData).not.toMatch(/evil\\.example/);
+  });
 });

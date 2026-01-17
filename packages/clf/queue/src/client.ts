@@ -25,11 +25,20 @@ export type ClfClient = {
   health(): Promise<{ ok: true }>;
 };
 
+const MAX_RESPONSE_BYTES = 1024 * 1024; // 1 MiB
+
 async function readBody(res: http.IncomingMessage): Promise<string> {
   return await new Promise((resolve, reject) => {
     let out = "";
+    let bytes = 0;
     res.setEncoding("utf8");
     res.on("data", (chunk) => {
+      bytes += Buffer.byteLength(chunk, "utf8");
+      if (bytes > MAX_RESPONSE_BYTES) {
+        res.destroy();
+        reject(new Error(`response body too large (${bytes} bytes; limit ${MAX_RESPONSE_BYTES})`));
+        return;
+      }
       out += chunk;
     });
     res.on("end", () => resolve(out));
@@ -137,4 +146,3 @@ export function createClfClient(opts: ClfClientOpts): ClfClient {
     },
   };
 }
-
