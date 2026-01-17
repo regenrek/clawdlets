@@ -32,6 +32,12 @@ docs:
   - path: docs/image-based-provisioning.md
     when: image-based provisioning
     summary: phase-4 plan to reach cattle (image builds + upload + secrets injection)
+  - path: docs/cattle.md
+    when: ephemeral agents, burst capacity
+    summary: cattle mode (spawn/list/reap) and the task VM lifecycle
+  - path: docs/orchestrator.md
+    when: bot-facing queue, running jobs from Discord
+    summary: clf + orchestrator (job queue, cattle spawn handlers, local unix socket)
   - path: docs/secrets.md
     when: tokens/keys/sops/age
     summary: local keys; encrypted host secrets; host secret path default

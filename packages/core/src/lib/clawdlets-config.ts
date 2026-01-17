@@ -5,8 +5,10 @@ import type { RepoLayout } from "../repo-layout.js";
 import { getRepoLayout } from "../repo-layout.js";
 import { BotIdSchema, EnvVarNameSchema, HostNameSchema, SecretNameSchema, assertSafeHostName } from "./identifiers.js";
 import { isValidTargetHost } from "./ssh-remote.js";
+import { TtlStringSchema } from "./ttl.js";
+import { HcloudLabelsSchema, validateHcloudLabelsAtPath } from "./hcloud-labels.js";
 
-export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 5 as const;
+export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 6 as const;
 
 export const SSH_EXPOSURE_MODES = ["tailnet", "bootstrap", "public"] as const;
 export const SshExposureModeSchema = z.enum(SSH_EXPOSURE_MODES);
@@ -181,11 +183,52 @@ const HostSchema = z.object({
   agentModelPrimary: z.string().trim().default("zai/glm-4.7"),
 });
 
+const CattleSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    hetzner: z
+      .object({
+        image: z.string().trim().default(""),
+        serverType: z.string().trim().min(1).default("cx22"),
+        location: z.string().trim().min(1).default("nbg1"),
+        maxInstances: z.number().int().positive().default(10),
+        defaultTtl: TtlStringSchema.default("2h"),
+        labels: HcloudLabelsSchema.default({ "managed-by": "clawdlets" }),
+      })
+      .default({
+        image: "",
+        serverType: "cx22",
+        location: "nbg1",
+        maxInstances: 10,
+        defaultTtl: "2h",
+        labels: { "managed-by": "clawdlets" },
+      }),
+    defaults: z
+      .object({
+        autoShutdown: z.boolean().default(true),
+        callbackUrl: z.string().trim().default(""),
+      })
+      .default({ autoShutdown: true, callbackUrl: "" }),
+  })
+  .default({
+    enabled: false,
+    hetzner: {
+      image: "",
+      serverType: "cx22",
+      location: "nbg1",
+      maxInstances: 10,
+      defaultTtl: "2h",
+      labels: { "managed-by": "clawdlets" },
+    },
+    defaults: { autoShutdown: true, callbackUrl: "" },
+  });
+
 export const ClawdletsConfigSchema = z.object({
   schemaVersion: z.literal(CLAWDLETS_CONFIG_SCHEMA_VERSION),
   defaultHost: HostNameSchema.optional(),
   baseFlake: z.string().trim().default(""),
   fleet: FleetSchema.default({}),
+  cattle: CattleSchema,
   hosts: z.record(HostNameSchema, HostSchema).refine((v) => Object.keys(v).length > 0, {
     message: "hosts must not be empty",
   }),
@@ -213,6 +256,22 @@ export const ClawdletsConfigSchema = z.object({
         path: ["fleet", "botOverrides", botId, "envSecrets"],
       });
     }
+  }
+
+  validateHcloudLabelsAtPath({
+    value: (cfg as any).cattle?.hetzner?.labels,
+    ctx,
+    path: ["cattle", "hetzner", "labels"],
+  });
+
+  const cattleEnabled = Boolean((cfg as any).cattle?.enabled);
+  const cattleImage = String((cfg as any).cattle?.hetzner?.image || "").trim();
+  if (cattleEnabled && !cattleImage) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["cattle", "hetzner", "image"],
+      message: "cattle.hetzner.image must be set when cattle.enabled is true",
+    });
   }
 });
 
@@ -256,6 +315,18 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
       routingOverrides: {},
       codex: { enable: false, bots: [] },
       backups: { restic: { enable: false, repository: "" } },
+    },
+    cattle: {
+      enabled: false,
+      hetzner: {
+        image: "",
+        serverType: "cx22",
+        location: "nbg1",
+        maxInstances: 10,
+        defaultTtl: "2h",
+        labels: { "managed-by": "clawdlets" },
+      },
+      defaults: { autoShutdown: true, callbackUrl: "" },
     },
     hosts: {
       [host]: {

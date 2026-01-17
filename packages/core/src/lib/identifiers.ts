@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const SAFE_HOSTNAME_RE = /^[a-z][a-z0-9-]*$/;
 const SAFE_BOT_ID_RE = /^[a-z][a-z0-9_-]*$/;
+const SAFE_IDENTITY_NAME_RE = /^[a-z][a-z0-9_-]*$/;
 const SAFE_SECRET_NAME_RE = /^[a-z][a-z0-9_-]*$/;
 const SAFE_OPERATOR_ID_RE = /^[a-zA-Z0-9._-]+$/;
 const SAFE_ENV_VAR_NAME_RE = /^[A-Z_][A-Z0-9_]*$/;
@@ -17,6 +18,12 @@ export const BotIdSchema = z
   .trim()
   .min(1)
   .refine((v) => SAFE_BOT_ID_RE.test(v), { message: "invalid bot id (use [a-z][a-z0-9_-]*)" });
+
+export const IdentityNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((v) => SAFE_IDENTITY_NAME_RE.test(v), { message: "invalid identity name (use [a-z][a-z0-9_-]*)" });
 
 export const SecretNameSchema = z
   .string()
@@ -43,6 +50,10 @@ export function assertSafeHostName(hostName: string): void {
 
 export function assertSafeSecretName(secretName: string): void {
   void SecretNameSchema.parse(secretName);
+}
+
+export function assertSafeIdentityName(identityName: string): void {
+  void IdentityNameSchema.parse(identityName);
 }
 
 export function assertSafeOperatorId(operatorId: string): void {

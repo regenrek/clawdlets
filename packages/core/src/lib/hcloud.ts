@@ -47,10 +47,22 @@ async function readResponseTextLimited(res: Response, limitBytes: number): Promi
 
 async function hcloudRequest<T>(params: {
   token: string;
-  method: "GET" | "POST";
+  method: "GET" | "POST" | "DELETE";
   path: string;
+  query?: Record<string, string | number | undefined>;
   body?: unknown;
 }): Promise<{ ok: true; json: T } | { ok: false; status: number; bodyText: string }> {
+  const search =
+    params.query && Object.keys(params.query).length > 0
+      ? `?${new URLSearchParams(
+          Object.fromEntries(
+            Object.entries(params.query)
+              .filter(([, v]) => v !== undefined && v !== null && `${v}`.length > 0)
+              .map(([k, v]) => [k, `${v}`]),
+          ),
+        ).toString()}`
+      : "";
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     controller.abort();
@@ -58,7 +70,7 @@ async function hcloudRequest<T>(params: {
 
   let res: Response;
   try {
-    res = await fetch(`https://api.hetzner.cloud/v1${params.path}`, {
+    res = await fetch(`https://api.hetzner.cloud/v1${params.path}${search}`, {
       method: params.method,
       headers: {
         Authorization: `Bearer ${params.token}`,
@@ -143,4 +155,211 @@ export async function ensureHcloudSshKeyId(params: {
   }
 
   throw new Error(`hcloud create ssh key failed: HTTP ${create.status}: ${create.bodyText}`);
+}
+
+export type HcloudFirewallRule = {
+  direction: "in" | "out";
+  protocol: "tcp" | "udp" | "icmp" | "esp" | "gre";
+  port?: string;
+  source_ips?: string[];
+  destination_ips?: string[];
+  description?: string;
+};
+
+type HcloudFirewall = {
+  id: number;
+  name: string;
+  labels: Record<string, string>;
+};
+
+type ListFirewallsResponse = {
+  firewalls: HcloudFirewall[];
+  meta?: { pagination?: { next_page?: number | null } };
+};
+
+type CreateFirewallResponse = {
+  firewall: HcloudFirewall;
+};
+
+async function listAllFirewalls(params: { token: string; labelSelector?: string }): Promise<HcloudFirewall[]> {
+  const out: HcloudFirewall[] = [];
+  let page = 1;
+  while (true) {
+    const res = await hcloudRequest<ListFirewallsResponse>({
+      token: params.token,
+      method: "GET",
+      path: "/firewalls",
+      query: {
+        page,
+        per_page: 50,
+        ...(params.labelSelector ? { label_selector: params.labelSelector } : {}),
+      },
+    });
+    if (!res.ok) throw new Error(`hcloud list firewalls failed: HTTP ${res.status}: ${res.bodyText}`);
+    out.push(...(res.json.firewalls || []));
+    const next = res.json.meta?.pagination?.next_page;
+    if (!next) break;
+    page = next;
+  }
+  return out;
+}
+
+export async function ensureHcloudFirewallId(params: {
+  token: string;
+  name: string;
+  rules: HcloudFirewallRule[];
+  labels?: Record<string, string>;
+}): Promise<string> {
+  const name = params.name.trim();
+  if (!name) throw new Error("firewall name missing");
+  const existing = (await listAllFirewalls({ token: params.token })).find((fw) => fw.name === name);
+  if (existing) return String(existing.id);
+
+  const created = await hcloudRequest<CreateFirewallResponse>({
+    token: params.token,
+    method: "POST",
+    path: "/firewalls",
+    body: {
+      name,
+      rules: params.rules,
+      ...(params.labels ? { labels: params.labels } : {}),
+    },
+  });
+  if (!created.ok) throw new Error(`hcloud create firewall failed: HTTP ${created.status}: ${created.bodyText}`);
+  return String(created.json.firewall.id);
+}
+
+export type HcloudServerStatus =
+  | "initializing"
+  | "starting"
+  | "running"
+  | "stopping"
+  | "off"
+  | "deleting"
+  | "migrating"
+  | "rebuilding"
+  | "unknown";
+
+export type HcloudServer = {
+  id: number;
+  name: string;
+  status: HcloudServerStatus | string;
+  created: string;
+  labels: Record<string, string>;
+  public_net?: {
+    ipv4?: { ip?: string | null };
+  };
+};
+
+type ListServersResponse = {
+  servers: HcloudServer[];
+  meta?: { pagination?: { next_page?: number | null } };
+};
+
+type CreateServerResponse = {
+  server: HcloudServer;
+};
+
+type GetServerResponse = {
+  server: HcloudServer;
+};
+
+async function listAllServers(params: { token: string; labelSelector?: string }): Promise<HcloudServer[]> {
+  const out: HcloudServer[] = [];
+  let page = 1;
+  while (true) {
+    const res = await hcloudRequest<ListServersResponse>({
+      token: params.token,
+      method: "GET",
+      path: "/servers",
+      query: {
+        page,
+        per_page: 50,
+        ...(params.labelSelector ? { label_selector: params.labelSelector } : {}),
+      },
+    });
+    if (!res.ok) throw new Error(`hcloud list servers failed: HTTP ${res.status}: ${res.bodyText}`);
+    out.push(...(res.json.servers || []));
+    const next = res.json.meta?.pagination?.next_page;
+    if (!next) break;
+    page = next;
+  }
+  return out;
+}
+
+export async function listHcloudServers(params: { token: string; labelSelector?: string }): Promise<HcloudServer[]> {
+  return await listAllServers({ token: params.token, labelSelector: params.labelSelector });
+}
+
+export async function createHcloudServer(params: {
+  token: string;
+  name: string;
+  serverType: string;
+  image: string;
+  location: string;
+  userData: string;
+  labels: Record<string, string>;
+  firewallIds?: string[];
+}): Promise<HcloudServer> {
+  const created = await hcloudRequest<CreateServerResponse>({
+    token: params.token,
+    method: "POST",
+    path: "/servers",
+    body: {
+      name: params.name,
+      server_type: params.serverType,
+      image: params.image,
+      location: params.location,
+      user_data: params.userData,
+      labels: params.labels,
+      ...(params.firewallIds && params.firewallIds.length > 0
+        ? { firewalls: params.firewallIds.map((id) => ({ firewall: Number(id) })) }
+        : {}),
+    },
+  });
+  if (!created.ok) throw new Error(`hcloud create server failed: HTTP ${created.status}: ${created.bodyText}`);
+  return created.json.server;
+}
+
+export async function getHcloudServer(params: { token: string; id: string }): Promise<HcloudServer> {
+  const id = String(params.id || "").trim();
+  if (!/^\d+$/.test(id)) throw new Error(`invalid hcloud server id: ${id}`);
+  const res = await hcloudRequest<GetServerResponse>({
+    token: params.token,
+    method: "GET",
+    path: `/servers/${id}`,
+  });
+  if (!res.ok) throw new Error(`hcloud get server failed: HTTP ${res.status}: ${res.bodyText}`);
+  return res.json.server;
+}
+
+export async function waitForHcloudServerStatus(params: {
+  token: string;
+  id: string;
+  want: (status: string) => boolean;
+  timeoutMs?: number;
+  pollMs?: number;
+}): Promise<HcloudServer> {
+  const timeoutMs = params.timeoutMs ?? 180_000;
+  const pollMs = params.pollMs ?? 2_000;
+  const start = Date.now();
+  while (true) {
+    const server = await getHcloudServer({ token: params.token, id: params.id });
+    if (params.want(String(server.status || ""))) return server;
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`timeout waiting for server ${params.id} status (last=${String(server.status || "")})`);
+    }
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+}
+
+export async function deleteHcloudServer(params: { token: string; id: string }): Promise<void> {
+  const id = String(params.id || "").trim();
+  if (!/^\d+$/.test(id)) throw new Error(`invalid hcloud server id: ${id}`);
+  const res = await hcloudRequest<unknown>({
+    token: params.token,
+    method: "DELETE",
+    path: `/servers/${id}`,
+  });
+  if (!res.ok) throw new Error(`hcloud delete server failed: HTTP ${res.status}: ${res.bodyText}`);
 }

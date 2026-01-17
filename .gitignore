@@ -1,4 +1,5 @@
 .DS_Store
+.codex_sandbox.json
 dist/
 node_modules/
 .cache/

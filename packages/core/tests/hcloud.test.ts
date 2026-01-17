@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { ensureHcloudSshKeyId, HCLOUD_REQUEST_TIMEOUT_MS } from "../src/lib/hcloud";
+import {
+  ensureHcloudSshKeyId,
+  ensureHcloudFirewallId,
+  listHcloudServers,
+  createHcloudServer,
+  getHcloudServer,
+  waitForHcloudServerStatus,
+  deleteHcloudServer,
+  HCLOUD_REQUEST_TIMEOUT_MS,
+} from "../src/lib/hcloud";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -154,5 +163,179 @@ describe("ensureHcloudSshKeyId", () => {
         publicKey: "ssh-ed25519 EEE",
       }),
     ).rejects.toThrow(/HTTP 500: boom/);
+  });
+});
+
+describe("ensureHcloudFirewallId", () => {
+  const makeJsonResponse = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+  it("returns existing firewall id by name", async () => {
+    const fetchMock = vi.fn(async () =>
+      makeJsonResponse({
+        firewalls: [{ id: 99, name: "clawdlets-cattle-base", labels: {} }],
+        meta: { pagination: { next_page: null } },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const id = await ensureHcloudFirewallId({
+      token: "token",
+      name: "clawdlets-cattle-base",
+      rules: [{ direction: "in", protocol: "udp", port: "41641", source_ips: ["0.0.0.0/0"] }],
+      labels: { "managed-by": "clawdlets" },
+    });
+
+    expect(id).toBe("99");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("creates firewall when missing", async () => {
+    const fetchMock = vi.fn(async () => makeJsonResponse({ firewalls: [], meta: { pagination: { next_page: null } } }));
+    fetchMock.mockResolvedValueOnce(makeJsonResponse({ firewalls: [], meta: { pagination: { next_page: null } } }));
+    fetchMock.mockResolvedValueOnce(makeJsonResponse({ firewall: { id: 7, name: "fw", labels: {} } }, 201));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const id = await ensureHcloudFirewallId({
+      token: "token",
+      name: "fw",
+      rules: [{ direction: "in", protocol: "udp", port: "41641", source_ips: ["0.0.0.0/0"] }],
+      labels: { "managed-by": "clawdlets" },
+    });
+
+    expect(id).toBe("7");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[1]?.method).toBe("POST");
+  });
+});
+
+describe("hcloud servers", () => {
+  const makeJsonResponse = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+  it("lists servers with pagination", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          servers: [{ id: 1, name: "a", status: "running", created: "2026-01-01T00:00:00Z", labels: {} }],
+          meta: { pagination: { next_page: 2 } },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          servers: [{ id: 2, name: "b", status: "off", created: "2026-01-01T00:00:00Z", labels: {} }],
+          meta: { pagination: { next_page: null } },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const servers = await listHcloudServers({ token: "token" });
+    expect(servers.map((s) => s.id)).toEqual([1, 2]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("creates server with firewalls", async () => {
+    const fetchMock = vi.fn(async () =>
+      makeJsonResponse({
+        server: { id: 3, name: "c", status: "running", created: "2026-01-01T00:00:00Z", labels: {} },
+      }, 201),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const server = await createHcloudServer({
+      token: "token",
+      name: "c",
+      serverType: "cx22",
+      image: "img",
+      location: "nbg1",
+      userData: "#cloud-config\n{}",
+      labels: { "managed-by": "clawdlets" },
+      firewallIds: ["123"],
+    });
+
+    expect(server.id).toBe(3);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body || "{}"));
+    expect(body.firewalls?.[0]?.firewall).toBe(123);
+  });
+
+  it("creates server without firewalls", async () => {
+    const fetchMock = vi.fn(async () =>
+      makeJsonResponse(
+        { server: { id: 4, name: "d", status: "running", created: "2026-01-01T00:00:00Z", labels: {} } },
+        201,
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const server = await createHcloudServer({
+      token: "token",
+      name: "d",
+      serverType: "cx22",
+      image: "img",
+      location: "nbg1",
+      userData: "#cloud-config\n{}",
+      labels: { "managed-by": "clawdlets" },
+    });
+
+    expect(server.id).toBe(4);
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body || "{}"));
+    expect(body.firewalls).toBeUndefined();
+  });
+
+  it("rejects invalid server ids", async () => {
+    await expect(getHcloudServer({ token: "token", id: "abc" })).rejects.toThrow(/invalid hcloud server id/i);
+    await expect(deleteHcloudServer({ token: "token", id: "abc" })).rejects.toThrow(/invalid hcloud server id/i);
+  });
+
+  it("waits for desired status", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(makeJsonResponse({ server: { id: 5, name: "x", status: "starting", created: "2026-01-01T00:00:00Z", labels: {} } }))
+      .mockResolvedValueOnce(makeJsonResponse({ server: { id: 5, name: "x", status: "running", created: "2026-01-01T00:00:00Z", labels: {} } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pending = waitForHcloudServerStatus({
+      token: "token",
+      id: "5",
+      want: (s) => s === "running",
+      pollMs: 1000,
+      timeoutMs: 5000,
+    });
+
+    await vi.advanceTimersByTimeAsync(1000);
+    const server = await pending;
+    expect(server.status).toBe("running");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("times out while waiting for status", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () =>
+      makeJsonResponse({
+        server: { id: 6, name: "x", status: "starting", created: "2026-01-01T00:00:00Z", labels: {} },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pending = waitForHcloudServerStatus({
+      token: "token",
+      id: "6",
+      want: (s) => s === "running",
+      pollMs: 1000,
+      timeoutMs: 1500,
+    });
+
+    const assertion = expect(pending).rejects.toThrow(/timeout waiting for server/i);
+    await vi.advanceTimersByTimeAsync(2000);
+    await assertion;
+  });
+
+  it("surfaces delete server errors with body", async () => {
+    const fetchMock = vi.fn(async () => new Response("boom", { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(deleteHcloudServer({ token: "token", id: "7" })).rejects.toThrow(/HTTP 500: boom/);
   });
 });

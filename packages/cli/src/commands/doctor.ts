@@ -18,7 +18,7 @@ export const doctor = defineCommand({
     host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
     scope: {
       type: "string",
-      description: "Which checks to run: repo | bootstrap | server-deploy | all (default: all).",
+      description: "Which checks to run: repo | bootstrap | server-deploy | cattle | all (default: all).",
       default: "all",
     },
     json: { type: "boolean", description: "Output JSON.", default: false },
@@ -28,10 +28,10 @@ export const doctor = defineCommand({
   async run({ args }) {
     const cwd = process.cwd();
     const scopeRaw = String(args.scope || "all").trim();
-    if (scopeRaw !== "repo" && scopeRaw !== "bootstrap" && scopeRaw !== "server-deploy" && scopeRaw !== "all") {
-      throw new Error(`invalid --scope: ${scopeRaw} (expected repo|bootstrap|server-deploy|all)`);
+    if (scopeRaw !== "repo" && scopeRaw !== "bootstrap" && scopeRaw !== "server-deploy" && scopeRaw !== "cattle" && scopeRaw !== "all") {
+      throw new Error(`invalid --scope: ${scopeRaw} (expected repo|bootstrap|server-deploy|cattle|all)`);
     }
-    const scope = scopeRaw as "repo" | "bootstrap" | "server-deploy" | "all";
+    const scope = scopeRaw as "repo" | "bootstrap" | "server-deploy" | "cattle" | "all";
 
     if (scope === "repo") {
       const repoRoot = findRepoRoot(cwd);
