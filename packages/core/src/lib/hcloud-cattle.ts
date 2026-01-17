@@ -1,4 +1,13 @@
-import { createHcloudServer, deleteHcloudServer, ensureHcloudFirewallId, listHcloudServers, waitForHcloudServerStatus, HcloudHttpError, type HcloudFirewallRule, type HcloudServer } from "./hcloud.js";
+import {
+  createHcloudServer,
+  deleteHcloudServer,
+  ensureHcloudFirewallId,
+  listHcloudServers,
+  waitForHcloudServerStatus,
+  HcloudHttpError,
+  type HcloudFirewallRule,
+  type HcloudServer,
+} from "./hcloud.js";
 
 export type CattleServerStatus = "running" | "starting" | "stopping" | "off" | "unknown";
 
@@ -24,6 +33,11 @@ export const CATTLE_LABEL_TASK_ID = "task-id";
 export const CATTLE_LABEL_EXPIRES_AT = "expires-at";
 export const CATTLE_LABEL_CREATED_AT = "created-at";
 
+type FirewallCacheEntry = { id: string; verifiedAt: number };
+const FIREWALL_CACHE_TTL_MS = 10 * 60_000;
+const firewallCache = new Map<string, FirewallCacheEntry>();
+const firewallInflight = new Map<string, Promise<string>>();
+
 export function buildCattleLabelSelector(extra: Record<string, string> = {}): string {
   const base: Record<string, string> = {
     [CATTLE_LABEL_MANAGED_BY]: CATTLE_LABEL_MANAGED_BY_VALUE,
@@ -39,6 +53,43 @@ export function buildCattleLabelSelector(extra: Record<string, string> = {}): st
     parts.push(`${kk}=${vv}`);
   }
   return parts.join(",");
+}
+
+async function getCattleFirewallId(params: { token: string }): Promise<string> {
+  const cached = firewallCache.get(params.token);
+  const now = Date.now();
+  if (cached && now - cached.verifiedAt < FIREWALL_CACHE_TTL_MS) return cached.id;
+
+  const inflight = firewallInflight.get(params.token);
+  if (inflight) return await inflight;
+
+  const p = (async () => {
+    const fwRules: HcloudFirewallRule[] = [
+      {
+        direction: "in",
+        protocol: "udp",
+        port: "41641",
+        source_ips: ["0.0.0.0/0", "::/0"],
+        description: "Tailscale WireGuard UDP (direct connections)",
+      },
+    ];
+
+    const id = await ensureHcloudFirewallId({
+      token: params.token,
+      name: "clawdlets-cattle-base",
+      rules: fwRules,
+      labels: { [CATTLE_LABEL_MANAGED_BY]: CATTLE_LABEL_MANAGED_BY_VALUE, [CATTLE_LABEL_CATTLE]: CATTLE_LABEL_CATTLE_VALUE },
+    });
+    firewallCache.set(params.token, { id, verifiedAt: Date.now() });
+    return id;
+  })();
+
+  firewallInflight.set(params.token, p);
+  try {
+    return await p;
+  } finally {
+    firewallInflight.delete(params.token);
+  }
 }
 
 function mapStatus(status: string): CattleServerStatus {
@@ -60,12 +111,18 @@ function parseUnixSeconds(value: string | undefined | null): number | null {
 
 function toCattleServer(server: HcloudServer): CattleServer {
   const labels = server.labels || {};
-  const createdAt = labels[CATTLE_LABEL_CREATED_AT]
-    ? new Date((parseUnixSeconds(labels[CATTLE_LABEL_CREATED_AT]) || 0) * 1000)
-    : new Date(server.created);
-  const expiresAt = labels[CATTLE_LABEL_EXPIRES_AT]
-    ? new Date((parseUnixSeconds(labels[CATTLE_LABEL_EXPIRES_AT]) || 0) * 1000)
-    : new Date(0);
+  const createdAtLabel = parseUnixSeconds(labels[CATTLE_LABEL_CREATED_AT]);
+  const createdAtMsFallback = Date.parse(String(server.created || ""));
+  const createdAt =
+    createdAtLabel != null
+      ? new Date(createdAtLabel * 1000)
+      : Number.isFinite(createdAtMsFallback) && createdAtMsFallback > 0
+        ? new Date(createdAtMsFallback)
+        : new Date();
+
+  const expiresAtLabel = parseUnixSeconds(labels[CATTLE_LABEL_EXPIRES_AT]);
+  // If expiresAt is missing/malformed, treat as expired to avoid "never reap" cattle.
+  const expiresAt = expiresAtLabel != null ? new Date(expiresAtLabel * 1000) : createdAt;
   const ttlSeconds = Math.max(0, Math.floor((expiresAt.getTime() - createdAt.getTime()) / 1000));
 
   return {
@@ -91,21 +148,7 @@ export async function createCattleServer(opts: {
   userData: string;
   labels: Record<string, string>;
 }): Promise<CattleServer> {
-  const fwRules: HcloudFirewallRule[] = [
-    {
-      direction: "in",
-      protocol: "udp",
-      port: "41641",
-      source_ips: ["0.0.0.0/0", "::/0"],
-      description: "Tailscale WireGuard UDP (direct connections)",
-    },
-  ];
-  const firewallId = await ensureHcloudFirewallId({
-    token: opts.token,
-    name: "clawdlets-cattle-base",
-    rules: fwRules,
-    labels: { [CATTLE_LABEL_MANAGED_BY]: CATTLE_LABEL_MANAGED_BY_VALUE, [CATTLE_LABEL_CATTLE]: CATTLE_LABEL_CATTLE_VALUE },
-  });
+  const firewallId = await getCattleFirewallId({ token: opts.token });
 
   const server = await createHcloudServer({
     token: opts.token,
@@ -176,12 +219,13 @@ export async function reapExpiredCattle(params: {
   };
 
   const concurrency = Math.max(1, Math.min(10, Math.floor(params.concurrency ?? 4)));
-  const queue = [...expired];
   const deleted = new Set<string>();
+  let idx = 0;
 
-  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
-    while (queue.length > 0) {
-      const s = queue.shift();
+  const workers = Array.from({ length: Math.min(concurrency, expired.length) }, async () => {
+    while (true) {
+      const i = idx++;
+      const s = expired[i];
       if (!s) return;
       await destroyWithRetry(s.id);
       deleted.add(s.id);

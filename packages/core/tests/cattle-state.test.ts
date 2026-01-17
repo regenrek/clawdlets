@@ -85,5 +85,22 @@ describe("cattle-state", () => {
 
     expect(() => openCattleState(dbPath)).toThrow(/unsupported cattle state schema version/i);
   });
-});
 
+  it("secures state directory + db file permissions", async () => {
+    if (process.platform === "win32") return;
+
+    const { openCattleState } = await import("../src/lib/cattle-state");
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clawdlets-cattle-state-"));
+    const insecure = path.join(dir, "state");
+    fs.mkdirSync(insecure);
+    fs.chmodSync(insecure, 0o777);
+    const dbPath = path.join(insecure, "state.sqlite");
+
+    const st = openCattleState(dbPath);
+    st.close();
+
+    expect(fs.statSync(insecure).mode & 0o777).toBe(0o700);
+    expect(fs.statSync(dbPath).mode & 0o777).toBe(0o600);
+  });
+});

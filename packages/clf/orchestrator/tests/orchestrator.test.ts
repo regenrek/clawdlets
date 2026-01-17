@@ -296,3 +296,15 @@ describe("clf-orchestrator cattle-http", () => {
     }
   });
 });
+
+describe("clf-orchestrator worker utils", () => {
+  it("rejects oversized admin authorized keys files", async () => {
+    const { loadAdminAuthorizedKeys } = await import("../src/worker");
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-orchestrator-"));
+    const p = path.join(dir, "authorized_keys");
+    fs.writeFileSync(p, "x".repeat(80 * 1024), "utf8");
+
+    expect(() => loadAdminAuthorizedKeys({ filePath: p, inline: "" })).toThrow(/too large/i);
+  });
+});

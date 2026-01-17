@@ -37,5 +37,38 @@ describe("clf client", () => {
       }
     }
   });
-});
 
+  it("times out stuck requests", async () => {
+    if (process.platform === "win32") return;
+
+    const { createClfClient } = await import("../src/client");
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-client-"));
+    const socketPath = path.join(dir, "orchestrator.sock");
+
+    const server = http.createServer((req, res) => {
+      if (req.url === "/healthz") {
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json");
+        // Intentionally never end.
+        return;
+      }
+      res.statusCode = 404;
+      res.end("not found");
+    });
+
+    await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+
+    try {
+      const client = createClfClient({ socketPath, timeoutMs: 250 });
+      await expect(client.health()).rejects.toThrow(/timeout/i);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      try {
+        fs.unlinkSync(socketPath);
+      } catch {
+        // ignore
+      }
+    }
+  });
+});

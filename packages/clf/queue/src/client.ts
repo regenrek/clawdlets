@@ -15,6 +15,7 @@ import {
 
 export type ClfClientOpts = {
   socketPath: string;
+  timeoutMs?: number;
 };
 
 export type ClfClient = {
@@ -26,6 +27,7 @@ export type ClfClient = {
 };
 
 const MAX_RESPONSE_BYTES = 1024 * 1024; // 1 MiB
+const DEFAULT_TIMEOUT_MS = 10_000;
 
 async function readBody(res: http.IncomingMessage): Promise<string> {
   return await new Promise((resolve, reject) => {
@@ -48,6 +50,7 @@ async function readBody(res: http.IncomingMessage): Promise<string> {
 
 async function requestJson(params: {
   socketPath: string;
+  timeoutMs?: number;
   method: "GET" | "POST";
   path: string;
   query?: Record<string, string | number | undefined>;
@@ -65,50 +68,63 @@ async function requestJson(params: {
 
   const payload = params.body === undefined ? "" : JSON.stringify(params.body);
 
-  const res = await new Promise<http.IncomingMessage>((resolve, reject) => {
-    const req = http.request(
-      {
-        socketPath: params.socketPath,
-        method: params.method,
-        path: u.pathname + u.search,
-        headers: payload
-          ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) }
-          : undefined,
-      },
-      resolve,
-    );
-    req.on("error", reject);
-    if (payload) req.write(payload);
-    req.end();
-  });
+  const timeoutMs = Math.max(250, Math.min(60_000, Math.floor(params.timeoutMs ?? DEFAULT_TIMEOUT_MS)));
+  let reqRef: http.ClientRequest | null = null;
+  const timer = setTimeout(() => {
+    if (!reqRef) return;
+    reqRef.destroy(new Error(`request timeout after ${timeoutMs}ms`));
+  }, timeoutMs);
 
-  const body = await readBody(res);
-  let json: unknown = {};
-  if (body.trim()) {
-    try {
-      json = JSON.parse(body);
-    } catch {
-      json = { error: { message: "invalid json response", body } };
+  try {
+    const res = await new Promise<http.IncomingMessage>((resolve, reject) => {
+      const req = http.request(
+        {
+          socketPath: params.socketPath,
+          method: params.method,
+          path: u.pathname + u.search,
+          headers: payload
+            ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) }
+            : undefined,
+        },
+        resolve,
+      );
+      reqRef = req;
+      req.on("error", reject);
+      if (payload) req.write(payload);
+      req.end();
+    });
+
+    const body = await readBody(res);
+    let json: unknown = {};
+    if (body.trim()) {
+      try {
+        json = JSON.parse(body);
+      } catch {
+        json = { error: { message: "invalid json response", body } };
+      }
     }
-  }
 
-  return { status: res.statusCode || 0, json };
+    return { status: res.statusCode || 0, json };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function createClfClient(opts: ClfClientOpts): ClfClient {
   const socketPath = String(opts.socketPath || "").trim();
   if (!socketPath) throw new Error("socketPath missing");
+  const timeoutMs = opts.timeoutMs;
 
   return {
     health: async () => {
-      const res = await requestJson({ socketPath, method: "GET", path: "/healthz" });
+      const res = await requestJson({ socketPath, timeoutMs, method: "GET", path: "/healthz" });
       if (res.status !== 200) throw new Error(`health failed: HTTP ${res.status}`);
       return { ok: true };
     },
 
     enqueue: async (req) => {
       const parsedReq = ClfJobsEnqueueRequestSchema.parse(req);
-      const res = await requestJson({ socketPath, method: "POST", path: "/v1/jobs/enqueue", body: parsedReq });
+      const res = await requestJson({ socketPath, timeoutMs, method: "POST", path: "/v1/jobs/enqueue", body: parsedReq });
       if (res.status !== 200) throw new Error(`enqueue failed: HTTP ${res.status}: ${JSON.stringify(res.json)}`);
       return ClfJobsEnqueueResponseSchema.parse(res.json);
     },
@@ -116,6 +132,7 @@ export function createClfClient(opts: ClfClientOpts): ClfClient {
     list: async (params) => {
       const res = await requestJson({
         socketPath,
+        timeoutMs,
         method: "GET",
         path: "/v1/jobs",
         query: {
@@ -132,7 +149,7 @@ export function createClfClient(opts: ClfClientOpts): ClfClient {
     show: async (jobId) => {
       const id = String(jobId || "").trim();
       if (!id) throw new Error("jobId missing");
-      const res = await requestJson({ socketPath, method: "GET", path: `/v1/jobs/${encodeURIComponent(id)}` });
+      const res = await requestJson({ socketPath, timeoutMs, method: "GET", path: `/v1/jobs/${encodeURIComponent(id)}` });
       if (res.status !== 200) throw new Error(`show failed: HTTP ${res.status}: ${JSON.stringify(res.json)}`);
       return ClfJobsShowResponseSchema.parse(res.json);
     },
@@ -140,7 +157,7 @@ export function createClfClient(opts: ClfClientOpts): ClfClient {
     cancel: async (jobId) => {
       const id = String(jobId || "").trim();
       if (!id) throw new Error("jobId missing");
-      const res = await requestJson({ socketPath, method: "POST", path: `/v1/jobs/${encodeURIComponent(id)}/cancel` });
+      const res = await requestJson({ socketPath, timeoutMs, method: "POST", path: `/v1/jobs/${encodeURIComponent(id)}/cancel` });
       if (res.status !== 200) throw new Error(`cancel failed: HTTP ${res.status}: ${JSON.stringify(res.json)}`);
       return ClfJobsCancelResponseSchema.parse(res.json);
     },

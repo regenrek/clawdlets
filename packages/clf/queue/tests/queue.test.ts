@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
+import { createRequire } from "node:module";
 
 describe("clf queue", () => {
   it("enqueues + dedupes by (requester,idempotencyKey)", async () => {
@@ -118,6 +119,65 @@ describe("clf queue", () => {
     }
   });
 
+  it("records job_events.attempt consistently for claim/ack/cancel", async () => {
+    const { openClfQueue } = await import("../src/queue");
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-queue-"));
+    const dbPath = path.join(dir, "state.sqlite");
+
+    const q = openClfQueue(dbPath);
+    let claimedJobId = "";
+    let canceledJobId = "";
+    try {
+      const now = 1_700_000_000_000;
+      claimedJobId = q.enqueue({
+        kind: "cattle.reap",
+        payload: { dryRun: true },
+        requester: "maren",
+        runAt: now,
+      }).jobId;
+
+      const canceled = q.enqueue({
+        kind: "cattle.reap",
+        payload: { dryRun: true },
+        requester: "maren",
+      });
+      canceledJobId = canceled.jobId;
+
+      const claimed = q.claimNext({ workerId: "w1", now, leaseMs: 60_000 });
+      expect(claimed?.jobId).toBe(claimedJobId);
+      expect(claimed?.attempt).toBe(1);
+
+      expect(q.ack({ jobId: claimedJobId, workerId: "w1", now: now + 1000, result: { ok: true } })).toBe(true);
+      expect(q.cancel({ jobId: canceledJobId, now: now + 2000 })).toBe(true);
+    } finally {
+      q.close();
+    }
+
+    const require = createRequire(import.meta.url);
+    const BetterSqlite3 = require("better-sqlite3") as typeof import("better-sqlite3");
+    const db = new BetterSqlite3(dbPath, { readonly: true });
+    try {
+      const events = db.prepare(`select type, attempt from job_events where job_id = @job_id`).all({ job_id: claimedJobId }) as Array<{
+        type: string;
+        attempt: number;
+      }>;
+      const byType = new Map(events.map((e) => [e.type, e.attempt] as const));
+      expect(byType.get("enqueue")).toBe(0);
+      expect(byType.get("claim")).toBe(1);
+      expect(byType.get("ack")).toBe(1);
+
+      const cancelEvents = db
+        .prepare(`select type, attempt from job_events where job_id = @job_id`)
+        .all({ job_id: canceledJobId }) as Array<{ type: string; attempt: number }>;
+      const cancelByType = new Map(cancelEvents.map((e) => [e.type, e.attempt] as const));
+      expect(cancelByType.get("enqueue")).toBe(0);
+      expect(cancelByType.get("cancel")).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+
   it("issues and consumes cattle bootstrap tokens (one-time)", async () => {
     const { openClfQueue } = await import("../src/queue");
 
@@ -181,5 +241,23 @@ describe("clf queue", () => {
     } finally {
       q.close();
     }
+  });
+
+  it("secures queue directory + db file permissions", async () => {
+    if (process.platform === "win32") return;
+
+    const { openClfQueue } = await import("../src/queue");
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-queue-"));
+    const insecure = path.join(dir, "state");
+    fs.mkdirSync(insecure);
+    fs.chmodSync(insecure, 0o777);
+    const dbPath = path.join(insecure, "state.sqlite");
+
+    const q = openClfQueue(dbPath);
+    q.close();
+
+    expect(fs.statSync(insecure).mode & 0o777).toBe(0o700);
+    expect(fs.statSync(dbPath).mode & 0o777).toBe(0o600);
   });
 });

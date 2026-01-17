@@ -8,6 +8,7 @@ import { loadClfOrchestratorConfigFromEnv } from "./config.js";
 import { createOrchestratorHttpServer } from "./http.js";
 import { createCattleInternalHttpServer } from "./cattle-http.js";
 import { loadAdminAuthorizedKeys, parseCattleBaseLabels, runClfWorkerLoop, type ClfWorkerRuntime } from "./worker.js";
+import { assertSafeUnixSocketPath, tryChmodUnixSocket } from "./unix-socket-safety.js";
 
 function getSystemdListenFd(): number | null {
   const pid = Number(process.env.LISTEN_PID || "");
@@ -115,6 +116,8 @@ async function main(): Promise<void> {
   process.on("SIGTERM", stop);
 
   await listenHttpServer(server, cfg.socketPath);
+  if (getSystemdListenFd() == null) tryChmodUnixSocket(cfg.socketPath, 0o600);
+  assertSafeUnixSocketPath(cfg.socketPath);
   console.log(`clf-orchestrator: listening (socket=${cfg.socketPath})`);
 
   const cattleListenHost = resolveTailscaleListenHost(cfg.cattle.secretsListenHost);

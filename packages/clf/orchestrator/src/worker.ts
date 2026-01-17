@@ -40,6 +40,8 @@ export type ClfWorkerRuntime = {
   env: NodeJS.ProcessEnv;
 };
 
+const MAX_ADMIN_AUTHORIZED_KEYS_BYTES = 64 * 1024;
+
 function unixSecondsNow(): number {
   return Math.floor(Date.now() / 1000);
 }
@@ -102,7 +104,7 @@ async function handleCattleSpawn(params: {
 }): Promise<{ server: CattleServer }> {
   const p = parseClfJobPayload("cattle.spawn", params.payload);
 
-  const identity = loadIdentity({ repoRoot: "/", identityName: p.identity, identitiesRoot: params.rt.identitiesRoot });
+  const identity = loadIdentity({ identityName: p.identity, identitiesRoot: params.rt.identitiesRoot });
   const model = String(identity.config.model.primary || "").trim();
   if (!model) throw new Error(`identity missing model.primary: ${identity.name}`);
 
@@ -228,6 +230,13 @@ export async function runClfWorkerLoop(params: {
 
 export function loadAdminAuthorizedKeys(params: { filePath: string; inline: string }): string[] {
   if (params.filePath) {
+    const st = fs.statSync(params.filePath);
+    if (!st.isFile()) throw new Error(`admin authorized keys is not a file: ${params.filePath}`);
+    if (st.size > MAX_ADMIN_AUTHORIZED_KEYS_BYTES) {
+      throw new Error(
+        `admin authorized keys file too large: ${params.filePath} (${st.size} bytes; max ${MAX_ADMIN_AUTHORIZED_KEYS_BYTES})`,
+      );
+    }
     const raw = fs.readFileSync(params.filePath, "utf8");
     return raw
       .split("\n")
@@ -235,6 +244,9 @@ export function loadAdminAuthorizedKeys(params: { filePath: string; inline: stri
       .filter((l: string) => l && !l.startsWith("#"));
   }
   if (params.inline) {
+    if (Buffer.byteLength(params.inline, "utf8") > MAX_ADMIN_AUTHORIZED_KEYS_BYTES) {
+      throw new Error(`admin authorized keys inline too large (max ${MAX_ADMIN_AUTHORIZED_KEYS_BYTES} bytes)`);
+    }
     return params.inline
       .split("\n")
       .map((l) => l.trim())

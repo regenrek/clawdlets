@@ -43,17 +43,20 @@ export function getIdentityDir(repoRoot: string, identityName: string): string {
 }
 
 export function loadIdentity(params: {
-  repoRoot: string;
   identityName: string;
+  repoRoot?: string;
   identitiesRoot?: string;
   maxSoulBytes?: number;
   maxConfigBytes?: number;
 }): LoadedIdentity {
-  const repoRoot = params.repoRoot;
   const identityName = String(params.identityName || "").trim();
   assertSafeIdentityName(identityName);
 
   const identitiesRoot = String(params.identitiesRoot || "").trim();
+  const repoRoot = String(params.repoRoot || "").trim();
+  if (!identitiesRoot && !repoRoot) {
+    throw new Error("loadIdentity requires either identitiesRoot or repoRoot");
+  }
   const identityDir = identitiesRoot ? path.join(identitiesRoot, identityName) : getIdentityDir(repoRoot, identityName);
   const soulPath = path.join(identityDir, "SOUL.md");
   const configPath = path.join(identityDir, "config.json");
