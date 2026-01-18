@@ -1,4 +1,4 @@
-# Install (Hetzner + nixos-anywhere + OpenTofu + images)
+# Install (Hetzner + nixos-anywhere + images)
 
 ## Install clawdlets (CLI)
 
@@ -14,12 +14,11 @@ clawdlets --help
 These paths live in the project repo created by `clawdlets project init`.
 
 - `fleet/clawdlets.json` (canonical config: hosts + fleet/bots + optional clawdbot config passthrough)
-- `infra/configs/fleet.nix` (derived fleet config; reads `clawdlets.json`; don’t edit)
+- `flake.nix` / `flake.lock` (build graph; imports clawdlets framework; usually no edits)
 - `secrets/` (committed; sops-encrypted secrets + sops rules)
 - `.clawdlets/` (gitignored runtime: operator keys + nixos-anywhere extra-files + image outputs)
-- `infra/disko/example.nix` (disk layout; device via `clawdlets.diskDevice`)
 - `fleet/workspaces/` (AGENTS/SOUL/TOOLS/IDENTITY/USER/HEARTBEAT seeded into workspaces)
-- `infra/opentofu/terraform.tfstate` (gitignored; keep single-operator policy)
+- `.clawdlets/infra/opentofu/<host>/terraform.tfstate` (gitignored; keep single-operator policy)
 
 ## Hetzner Cloud specifics (non-negotiable)
 
@@ -78,17 +77,21 @@ go install github.com/apricote/hcloud-upload-image@latest
   - optional: `root_password_hash` (console-only; keep root SSH disabled; requires `enableRootPassword = true`)
 - `.clawdlets/extra-files/clawdbot-fleet-host/var/lib/sops-nix/key.txt`
   - host age key installed to `/var/lib/sops-nix/key.txt` during nixos-anywhere
-- `infra/disko/example.nix`
-  - set `clawdlets.diskDevice` (see below)
 
 ## Disk device (required)
 
-`infra/disko/example.nix` uses `config.clawdlets.diskDevice`. Before the first install, set it in `fleet/clawdlets.json` (or via `clawdlets host set --disk-device ...`):
+Disk device is read from `hosts.<host>.diskDevice` in `fleet/clawdlets.json` (or via `clawdlets host set --disk-device ...`).
 
-```nix
-({ ... }: {
-  clawdlets.hostName = "clawdbot-fleet-host";
-})
+Example:
+
+```json
+{
+  "hosts": {
+    "clawdbot-fleet-host": {
+      "diskDevice": "/dev/sda"
+    }
+  }
+}
 ```
 
 ## Getting required values
@@ -171,7 +174,7 @@ just clawdlets-dev-install
 clawdlets --help
 ```
 
-Note: clawdlets uses OpenTofu (`nixpkgs#opentofu`) for Hetzner provisioning.
+Note: provisioning is handled by the CLI; state is stored under `.clawdlets/infra/opentofu/<host>` (gitignored).
 
 Hetzner SSH key: bootstrap ensures the SSH key exists in your Hetzner account and reuses
 it across re-provisions (no "SSH key not unique" failures).
@@ -302,8 +305,7 @@ Fix (pick one):
 - Reduce closure size: don’t enable `"coding-agent"` / Codex during bootstrap (it pulls in heavy Node deps).
   Example: `clawdlets config set --path fleet.bots.maren.profile.skills.allowBundled --value-json '["github","brave-search"]'`
 - Use a bigger Hetzner server type for bootstrap (`SERVER_TYPE=...` in `.env`).
-- Add swap on the target (best long-term anyway). If you want swap during install/bootstrap, add a swap
-  partition in `infra/disko/example.nix` (so it’s available in the installer environment too).
+- Add swap on the target (best long-term anyway). For swap at install time, you need a custom disk layout (advanced; edit `flake.nix`).
 
 If you have `just` installed:
 
@@ -314,8 +316,7 @@ just bootstrap
 just tofu-lockdown
 ```
 
-OpenTofu is modularized. Add a second host by instantiating another `bot_host`
-module in `infra/opentofu/main.tf`.
+Add a second host by adding another host entry in `fleet/clawdlets.json`, then run `clawdlets infra apply --host <host>`.
 
 ## Troubleshooting: SSH host key changed after reinstall
 
@@ -350,7 +351,7 @@ clawdlets host set --ssh-exposure tailnet
 clawdlets server deploy --manifest deploy-manifest.<host>.json
 ```
 
-3) Apply (one-shot helper; OpenTofu only):
+3) Apply (one-shot helper; provisioning only):
 
 ```bash
 clawdlets lockdown

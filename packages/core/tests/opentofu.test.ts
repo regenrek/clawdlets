@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -25,14 +25,15 @@ describe("opentofu", () => {
   it("destroyOpenTofuVars runs init + destroy with vars", async () => {
     const repoRoot = await mkdtemp(path.join(tmpdir(), "clawdlets-opentofu-"));
     try {
-      await mkdir(path.join(repoRoot, "infra", "opentofu"), { recursive: true });
+      const opentofuDir = path.join(repoRoot, ".clawdlets", "infra", "opentofu");
       const sshPubkeyFile = path.join(repoRoot, "id_ed25519.pub");
       await writeFile(sshPubkeyFile, "ssh-ed25519 AAAATEST test\n", "utf8");
 
       const { destroyOpenTofuVars } = await import("../src/lib/opentofu");
       await destroyOpenTofuVars({
-        repoRoot,
+        opentofuDir,
         vars: {
+          hostName: "clawdbot-fleet-host",
           hcloudToken: "token",
           adminCidr: "203.0.113.10/32",
           sshPubkeyFile,
@@ -47,12 +48,12 @@ describe("opentofu", () => {
 
       const [cmd1, args1, opts1] = runMock.mock.calls[0] as any[];
       expect(cmd1).toBe("nix");
-      expect(opts1.cwd).toBe(path.join(repoRoot, "infra", "opentofu"));
+      expect(opts1.cwd).toBe(opentofuDir);
       expect(args1).toEqual(["run", "--impure", "nixpkgs#opentofu", "--", "init", "-input=false"]);
 
       const [cmd2, args2, opts2] = runMock.mock.calls[1] as any[];
       expect(cmd2).toBe("nix");
-      expect(opts2.cwd).toBe(path.join(repoRoot, "infra", "opentofu"));
+      expect(opts2.cwd).toBe(opentofuDir);
       expect(args2.slice(0, 5)).toEqual(["run", "--impure", "nixpkgs#opentofu", "--", "destroy"]);
       expect(args2).toContain("-auto-approve");
       expect(args2).toContain("-input=false");

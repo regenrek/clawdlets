@@ -1,4 +1,3 @@
-import path from "node:path";
 import { z } from "zod";
 import { capture } from "./run.js";
 import type { FleetConfig } from "./fleet-policy.js";
@@ -9,40 +8,33 @@ const FleetConfigSchema = z.object({
   botProfiles: z.record(z.any()).default({}),
 });
 
-function safeRelPath(repoRoot: string, absPath: string): string {
-  const rel = path.relative(repoRoot, absPath).replace(/\\/g, "/");
-  if (rel.startsWith("../") || rel === "..") throw new Error(`path escapes repo: ${absPath}`);
-  return rel;
-}
-
 export async function evalFleetConfig(params: {
   repoRoot: string;
-  fleetFilePath: string;
   nixBin: string;
 }): Promise<FleetConfig> {
-  const repoRoot = params.repoRoot;
-  const abs = path.isAbsolute(params.fleetFilePath)
-    ? params.fleetFilePath
-    : path.resolve(repoRoot, params.fleetFilePath);
-  const rel = safeRelPath(repoRoot, abs);
-  // Pure evaluation forbids reading arbitrary local absolute paths.
-  // Import from the flake source path (store) instead.
   const expr = [
     "let",
     "  flake = builtins.getFlake (toString ./.);",
-    "  lib = flake.inputs.nixpkgs.lib;",
-    `  fleet = import (flake.outPath + "/${rel}") { inherit lib; };`,
-    "in fleet",
+    "  lib = flake.inputs.clawdlets.inputs.nixpkgs.lib;",
+    "  project = {",
+    "    root = flake.outPath;",
+    "    config = builtins.fromJSON (builtins.readFile (flake.outPath + \"/fleet/clawdlets.json\"));",
+    "  };",
+    "  fleet = import (flake.inputs.clawdlets.outPath + \"/nix/lib/fleet-config.nix\") { inherit lib project; };",
+    "in {",
+    "  bots = fleet.bots;",
+    "  botProfiles = fleet.botProfiles;",
+    "}",
   ].join("\n");
 
   const out = await capture(params.nixBin, ["eval", "--impure", "--json", "--expr", expr], {
-    cwd: repoRoot,
+    cwd: params.repoRoot,
     env: withFlakesEnv(process.env),
   });
 
   const parsed = FleetConfigSchema.safeParse(JSON.parse(out));
   if (!parsed.success) {
-    throw new Error(`invalid fleet JSON (${rel}): ${parsed.error.message}`);
+    throw new Error(`invalid fleet JSON (nix eval): ${parsed.error.message}`);
   }
   return parsed.data as FleetConfig;
 }

@@ -24,9 +24,9 @@ If you’re developing inside this monorepo, use the pnpm wrappers (example): `p
 - `clawdlets doctor --scope bootstrap`: bootstrap preflight (fails on missing).
 - `clawdlets doctor --scope server-deploy --strict`: deploy gate (fails on warn/missing).
 - `clawdlets secrets init`: generates operator keys + host key, writes encrypted secrets under `secrets/hosts/<host>/`, and generates `.clawdlets/extra-files/<host>/...` for first install.
-- `clawdlets bootstrap`: runs OpenTofu + `nixos-anywhere` install (prints target IPv4; clears stale `known_hosts`).
-- `clawdlets infra apply`: opentofu apply only (driven by `fleet/clawdlets.json`).
-- `clawdlets lockdown`: reconcile to tailnet-only SSH (OpenTofu only).
+- `clawdlets bootstrap`: runs provisioning + `nixos-anywhere` install (prints target IPv4; clears stale `known_hosts`).
+- `clawdlets infra apply`: provisioning apply only (driven by `fleet/clawdlets.json`).
+- `clawdlets lockdown`: reconcile to tailnet-only SSH (provisioning only).
 - `clawdlets server <cmd>`: run server-side operations over SSH (`status`, `logs`, `restart`, `deploy`).
 
 ## Recommended workflow (new host)

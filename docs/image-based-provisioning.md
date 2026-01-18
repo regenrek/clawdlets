@@ -63,4 +63,4 @@ and risks leaking secrets if you don’t scrub the host first.
 ## Ops notes
 
 - Images are pinned per host via `hosts.<host>.hetzner.image`.
-- `opentofu` will use the pinned image when creating new servers.
+- Provisioning will use the pinned image when creating new servers.

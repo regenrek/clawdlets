@@ -14,7 +14,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node ../../scripts/copy-core-assets.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "pretest": "pnpm -C . build && node ../../scripts/fetch-template-for-tests.mjs",
     "test": "vitest",

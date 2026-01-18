@@ -1,0 +1,16 @@
+# Egress policy (minimal / anti-spam only)
+#
+# This does NOT attempt to prevent data exfiltration or “lock down the internet”.
+# It only blocks outbound SMTP ports to reduce abuse if a bot is compromised.
+#
+# If you need real egress control, design it explicitly (proxy-based domain allowlist, or a
+# well-maintained IP allowlist per provider) and document the threat model.
+
+table inet filter {
+  chain output {
+    type filter hook output priority 0;
+    policy accept;
+
+    tcp dport { 25, 465, 587, 2525 } drop
+  }
+}

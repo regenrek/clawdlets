@@ -69,7 +69,7 @@ const baseHost = {
   flakeHost: "",
   targetHost: "admin@100.64.0.10",
   hetzner: { serverType: "cx43" },
-  opentofu: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
+  provisioning: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
   sshExposure: { mode: "tailnet" },
   tailnet: { mode: "tailscale" },
   operator: { deploy: { enable: true } },
@@ -115,8 +115,8 @@ describe("lockdown command", () => {
         hosts: {
           [hostName]: {
             ...baseHost,
-            opentofu: {
-              ...baseHost.opentofu,
+            provisioning: {
+              ...baseHost.provisioning,
               sshPubkeyFile: keyPath,
             },
           },

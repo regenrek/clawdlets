@@ -24,7 +24,7 @@ Do **not**:
 
 Do:
 
-- change config in the project repo `infra/` + deploy
+- change config in the project repo (`fleet/clawdlets.json`, or `flake.nix` for advanced overrides) + deploy
 - rotate secrets by editing `secrets/hosts/<host>/<secret>.yaml` (sops) then `clawdlets server deploy`
 - use `clawdlets server status|logs|restart|deploy` for day-2 ops
 - run `clawdlets server audit --target-host <host>` after bootstrap/lockdown and after major changes

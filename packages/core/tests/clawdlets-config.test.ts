@@ -169,7 +169,7 @@ describe("clawdlets config schema", () => {
     }
   });
 
-  it("loadClawdletsConfig rejects legacy publicSsh/provisioning keys", async () => {
+  it("loadClawdletsConfig rejects legacy publicSsh key", async () => {
     const { loadClawdletsConfig } = await import("../src/lib/clawdlets-config");
     const repoRoot = await mkdtemp(path.join(tmpdir(), "clawdlets-config-legacy-"));
     try {
@@ -183,7 +183,6 @@ describe("clawdlets config schema", () => {
             diskDevice: "/dev/sda",
             sshAuthorizedKeys: [],
             publicSsh: { enable: false },
-            provisioning: { enable: false },
             tailnet: { mode: "none" },
             agentModelPrimary: "zai/glm-4.7",
           },
@@ -191,6 +190,32 @@ describe("clawdlets config schema", () => {
       };
       await writeFile(path.join(repoRoot, "fleet", "clawdlets.json"), JSON.stringify(legacy, null, 2), "utf8");
       expect(() => loadClawdletsConfig({ repoRoot })).toThrow(/legacy host config key publicSsh/i);
+    } finally {
+      await rm(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("loadClawdletsConfig rejects legacy opentofu key", async () => {
+    const { loadClawdletsConfig } = await import("../src/lib/clawdlets-config");
+    const repoRoot = await mkdtemp(path.join(tmpdir(), "clawdlets-config-legacy-"));
+    try {
+      await mkdir(path.join(repoRoot, "fleet"), { recursive: true });
+      const legacy = {
+        schemaVersion: 7,
+        fleet: { botOrder: ["maren"], bots: { maren: {} } },
+        hosts: {
+          "clawdbot-fleet-host": {
+            enable: false,
+            diskDevice: "/dev/sda",
+            sshAuthorizedKeys: [],
+            opentofu: {},
+            tailnet: { mode: "none" },
+            agentModelPrimary: "zai/glm-4.7",
+          },
+        },
+      };
+      await writeFile(path.join(repoRoot, "fleet", "clawdlets.json"), JSON.stringify(legacy, null, 2), "utf8");
+      expect(() => loadClawdletsConfig({ repoRoot })).toThrow(/legacy host config key opentofu/i);
     } finally {
       await rm(repoRoot, { recursive: true, force: true });
     }

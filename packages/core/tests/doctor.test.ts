@@ -6,17 +6,19 @@ import { sopsPathRegexForDirFiles, sopsPathRegexForPathSuffix } from "../src/lib
 
 let mockFleetMain: any = null;
 let mockFleetTemplate: any = null;
+let mockWheelMain: any = null;
+let mockWheelTemplate: any = null;
 let templateRoot = "";
 
 vi.mock("../src/lib/run.js", () => ({
-  capture: vi.fn(async (_cmd: string, args: string[]) => {
+  capture: vi.fn(async (_cmd: string, args: string[], opts?: any) => {
     if (args.includes("--version")) return "nix (mock) 2.0";
     if (args[0] === "eval" || args.includes("eval")) {
-      const joined = args.join(" ");
-      const templateFleetPath = templateRoot
-        ? path.join(templateRoot, "infra", "configs", "fleet.nix")
-        : "";
-      const isTemplate = templateFleetPath && joined.includes(templateFleetPath);
+      const isTemplate = String(opts?.cwd || "") === templateRoot;
+      const expr = String(args[args.length - 1] || "");
+      if (expr.includes("adminHasWheel") || expr.includes("breakglassHasWheel")) {
+        return JSON.stringify(isTemplate ? mockWheelTemplate : mockWheelMain);
+      }
       return JSON.stringify(isTemplate ? mockFleetTemplate : mockFleetMain);
     }
     return "";
@@ -52,12 +54,7 @@ describe("doctor", () => {
     await mkdir(path.join(templateRoot, "docs"), { recursive: true });
     await mkdir(path.join(templateRoot, "fleet"), { recursive: true });
     await mkdir(path.join(templateRoot, "fleet", "workspaces", "common"), { recursive: true });
-    await mkdir(path.join(templateRoot, "infra", "configs"), { recursive: true });
-    await mkdir(path.join(templateRoot, "infra", "nix", "hosts"), { recursive: true });
-    await mkdir(path.join(repoRoot, "infra", "opentofu"), { recursive: true });
     await mkdir(path.join(repoRoot, "fleet"), { recursive: true });
-    await mkdir(path.join(repoRoot, "infra", "configs"), { recursive: true });
-    await mkdir(path.join(repoRoot, "infra", "nix", "hosts"), { recursive: true });
     await mkdir(path.join(repoRoot, ".clawdlets", "extra-files", "clawdbot-fleet-host", "var", "lib", "sops-nix"), { recursive: true });
 
     const bundledSkillsText = ["[", '  "github",', '  "brave-search",', '  "coding-agent"', "]", ""].join("\n");
@@ -128,7 +125,7 @@ describe("doctor", () => {
           sshAuthorizedKeys: ["ssh-ed25519 AAAATEST test"],
           flakeHost: "",
           hetzner: { serverType: "cx43" },
-          opentofu: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "id_ed25519.pub" },
+          provisioning: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "id_ed25519.pub" },
           sshExposure: { mode: "tailnet" },
           tailnet: { mode: "none" },
           agentModelPrimary: "zai/glm-4.7",
@@ -139,44 +136,6 @@ describe("doctor", () => {
     await writeFile(path.join(repoRoot, "fleet", "clawdlets.json"), JSON.stringify(clawdletsConfig, null, 2) + "\n", "utf8");
     await writeFile(path.join(templateRoot, "fleet", "clawdlets.json"), JSON.stringify(clawdletsConfig, null, 2) + "\n", "utf8");
 
-    await writeFile(
-      path.join(repoRoot, "infra", "configs", "fleet.nix"),
-      [
-        "{ lib }:",
-        "let",
-        "  cfg = builtins.fromJSON (builtins.readFile ../../fleet/clawdlets.json);",
-        "  fleetCfg = cfg.fleet or { };",
-        "in {",
-        "  bots = fleetCfg.botOrder or [ \"alpha\" \"beta\" ];",
-        "  botProfiles = {",
-        "    alpha = { skills = { allowBundled = [ ]; entries = { }; }; github = { }; };",
-        "    beta = { skills = { allowBundled = [ ]; entries = { }; }; github = { }; };",
-        "  };",
-        "}",
-        "",
-      ].join("\n"),
-      "utf8",
-    );
-
-    await writeFile(
-      path.join(templateRoot, "infra", "configs", "fleet.nix"),
-      [
-        "{ lib }:",
-        "let",
-        "  cfg = builtins.fromJSON (builtins.readFile ../../fleet/clawdlets.json);",
-        "  fleetCfg = cfg.fleet or { };",
-        "in {",
-        "  bots = fleetCfg.botOrder or [ \"alpha\" \"beta\" ];",
-        "  botProfiles = {",
-        "    alpha = { skills = { allowBundled = [ ]; entries = { }; }; github = { }; };",
-        "    beta = { skills = { allowBundled = [ ]; entries = { }; }; github = { }; };",
-        "  };",
-        "}",
-        "",
-      ].join("\n"),
-      "utf8",
-    );
-
     mockFleetMain = {
       bots: ["alpha", "beta"],
       botProfiles: {
@@ -185,6 +144,9 @@ describe("doctor", () => {
       },
     };
     mockFleetTemplate = structuredClone(mockFleetMain);
+
+    mockWheelMain = { adminHasWheel: false, breakglassHasWheel: true };
+    mockWheelTemplate = structuredClone(mockWheelMain);
 
     await mkdir(path.join(repoRoot, "secrets", "hosts", "clawdbot-fleet-host"), { recursive: true });
     await mkdir(path.join(repoRoot, "secrets", "keys", "hosts"), { recursive: true });
@@ -225,34 +187,6 @@ describe("doctor", () => {
       "AGE-SECRET-KEY-TEST\n",
       "utf8",
     );
-
-    await writeFile(
-      path.join(repoRoot, "infra", "nix", "hosts", "clawdlets-host.nix"),
-      [
-        "users.users.admin = {",
-        '  openssh.authorizedKeys.keys = [ "ssh-ed25519 AAAATEST test" ];',
-        "};",
-        "users.users.breakglass = { extraGroups = [ \"wheel\" ]; };",
-        "clawdlets.sshExposure.mode = \"tailnet\";",
-        "",
-      ].join("\n"),
-      "utf8",
-    );
-
-    await writeFile(
-      path.join(templateRoot, "infra", "nix", "hosts", "clawdlets-host.nix"),
-      [
-        "{ config, lib, ... }:",
-        "let",
-        "  cfg = builtins.fromJSON (builtins.readFile ../../configs/clawdlets.json);",
-        "  hostCfg = (cfg.hosts.${config.clawdlets.hostName} or { });",
-        "in {",
-        "  _module.args.hostCfg = hostCfg;",
-        "}",
-        "",
-      ].join("\n"),
-      "utf8",
-    );
   });
 
   afterAll(async () => {
@@ -271,6 +205,8 @@ describe("doctor", () => {
       },
     };
     mockFleetTemplate = structuredClone(mockFleetMain);
+    mockWheelMain = { adminHasWheel: false, breakglassHasWheel: true };
+    mockWheelTemplate = structuredClone(mockWheelMain);
     vi.clearAllMocks();
   });
 
@@ -323,48 +259,33 @@ describe("doctor", () => {
   });
 
   it("requires breakglass in wheel and forbids admin in wheel", async () => {
-    const hostPath = path.join(repoRoot, "infra", "nix", "hosts", "clawdlets-host.nix");
-    const originalHost = await readFile(hostPath, "utf8");
-
-    await writeFile(
-      hostPath,
-      [
-        "users.users.admin = {",
-        "  extraGroups = [ \"wheel\" ];",
-        "};",
-        "clawdlets.sshExposure.mode = \"tailnet\";",
-        "",
-      ].join("\n"),
-      "utf8",
-    );
+    mockWheelMain = { adminHasWheel: true, breakglassHasWheel: false };
 
     const { collectDoctorChecks } = await import("../src/doctor");
     const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host" });
     expect(checks.some((c) => c.label === "admin wheel access" && c.status === "missing")).toBe(true);
     expect(checks.some((c) => c.label === "breakglass wheel access" && c.status === "missing")).toBe(true);
-
-    await writeFile(hostPath, originalHost, "utf8");
   });
 
-  it("flags opentofu ssh pubkey file contents as invalid", async () => {
-	    const configPath = path.join(repoRoot, "fleet", "clawdlets.json");
-	    const original = await readFile(configPath, "utf8");
+  it("flags provisioning ssh pubkey file contents as invalid", async () => {
+    const configPath = path.join(repoRoot, "fleet", "clawdlets.json");
+    const original = await readFile(configPath, "utf8");
 
-	    const raw = JSON.parse(original) as any;
-	    raw.hosts["clawdbot-fleet-host"].opentofu.sshPubkeyFile =
-	      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEaaaaaaaaaaaaaaaaaaaaaaa test";
-	    await writeFile(configPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+    const raw = JSON.parse(original) as any;
+    raw.hosts["clawdbot-fleet-host"].provisioning.sshPubkeyFile =
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEaaaaaaaaaaaaaaaaaaaaaaa test";
+    await writeFile(configPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
 
     const { collectDoctorChecks } = await import("../src/doctor");
     const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host" });
-	    expect(
-	      checks.some(
-	        (c) =>
-	          c.label === "opentofu ssh pubkey file" &&
-	          c.status === "missing" &&
-	          String(c.detail || "").includes("must be a path"),
-	      ),
-	    ).toBe(true);
+    expect(
+      checks.some(
+        (c) =>
+          c.label === "provisioning ssh pubkey file" &&
+          c.status === "missing" &&
+          String(c.detail || "").includes("must be a path"),
+      ),
+    ).toBe(true);
 
     await writeFile(configPath, original, "utf8");
   });

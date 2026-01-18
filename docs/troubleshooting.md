@@ -11,12 +11,12 @@ ssh-keygen -R "[<ipv4>]:22" || true
 
 `clawdlets bootstrap` also clears known_hosts entries.
 
-## OpenTofu troubleshooting
+## Provisioning troubleshooting
 
 Run OpenTofu via nix directly (from your project repo, example plan):
 
 ```bash
-nix run --impure nixpkgs#opentofu -- -chdir=infra/opentofu plan
+nix run --impure nixpkgs#opentofu -- -chdir=.clawdlets/infra/opentofu/<host> plan
 ```
 
 ## GitHub flake fetch 404

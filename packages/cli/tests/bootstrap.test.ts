@@ -75,7 +75,7 @@ const baseHost = {
   sshAuthorizedKeys: [],
   flakeHost: "",
   hetzner: { serverType: "cx43" },
-  opentofu: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
+  provisioning: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
   sshExposure: { mode: "bootstrap" },
   tailnet: { mode: "tailscale" },
   agentModelPrimary: "zai/glm-4.7",

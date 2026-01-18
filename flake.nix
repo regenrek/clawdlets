@@ -1,5 +1,5 @@
 {
-  description = "Clawdlets CLI (infra lives in clawdlets-template)";
+  description = "Clawdlets (CLI + infra framework)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
@@ -91,6 +91,23 @@
 
       packages.${system} = {
         inherit clf;
+      };
+
+      nixosModules = {
+        clawdletsProjectHost = import ./nix/hosts/project-host.nix;
+        clawdletsCattleImage = import ./nix/cattle/image.nix;
+
+        # Advanced / reuse. Projects should generally import clawdletsProjectHost only.
+        clawdletsHostMeta = import ./nix/modules/clawdlets-host-meta.nix;
+        clawdletsHostBaseline = import ./nix/modules/clawdlets-host-baseline.nix;
+        clawdletsSelfUpdate = import ./nix/modules/clawdlets-self-update.nix;
+        clawdletsImageFormats = import ./nix/modules/clawdlets-image-formats.nix;
+
+        clawdbotFleet = import ./nix/modules/clawdbot-fleet.nix;
+        clawdbotCattle = import ./nix/modules/clawdbot-cattle.nix;
+        clfOrchestrator = import ./nix/modules/clf-orchestrator.nix;
+
+        diskoHetznerExt4 = import ./nix/disko/hetzner-ext4.nix;
       };
     };
 }

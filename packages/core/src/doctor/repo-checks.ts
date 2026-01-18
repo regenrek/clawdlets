@@ -1,13 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
+import process from "node:process";
 import type { RepoLayout } from "../repo-layout.js";
 import { capture } from "../lib/run.js";
 import { findInlineScriptingViolations } from "../lib/inline-script-ban.js";
 import { validateDocsIndexIntegrity } from "../lib/docs-index.js";
 import { validateFleetPolicy, type FleetConfig } from "../lib/fleet-policy.js";
 import { evalFleetConfig } from "../lib/fleet-nix-eval.js";
+import { withFlakesEnv } from "../lib/nix-flakes.js";
 import { ClawdletsConfigSchema } from "../lib/clawdlets-config.js";
-import { getHostNixPath } from "../repo-layout.js";
 import type { DoctorPush } from "./types.js";
 import { dirHasAnyFile, loadKnownBundledSkills, resolveTemplateRoot } from "./util.js";
 
@@ -22,14 +23,36 @@ function allExist(paths: string[]): { ok: boolean; missing: string[] } {
   return { ok: missing.length === 0, missing };
 }
 
-function nixUserHasWheel(params: { hostText: string; user: string }): boolean {
-  const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const rx = new RegExp(`users\\.users\\.${escapeRegex(params.user)}\\s*=\\s*\\{([\\s\\S]*?)\\};`, "g");
-  const blocks = Array.from(params.hostText.matchAll(rx)).map((m) => String(m[1] ?? ""));
-  for (const block of blocks) {
-    if (/extraGroups\s*=\s*\[[\s\S]*?"wheel"[\s\S]*?\]\s*;/m.test(block)) return true;
+async function evalWheelAccess(params: { repoRoot: string; nixBin: string; host: string }): Promise<{
+  adminHasWheel: boolean;
+  breakglassHasWheel: boolean;
+} | null> {
+  const expr = [
+    "let",
+    "  flake = builtins.getFlake (toString ./.);",
+    `  cfg = flake.nixosConfigurations.${JSON.stringify(params.host)}.config;`,
+    "  admin = cfg.users.users.admin or {};",
+    "  breakglass = cfg.users.users.breakglass or {};",
+    "  adminGroups = admin.extraGroups or [];",
+    "  breakglassGroups = breakglass.extraGroups or [];",
+    "in {",
+    "  adminHasWheel = builtins.elem \"wheel\" adminGroups;",
+    "  breakglassHasWheel = builtins.elem \"wheel\" breakglassGroups;",
+    "}",
+  ].join("\n");
+  try {
+    const out = await capture(params.nixBin, ["eval", "--impure", "--json", "--expr", expr], {
+      cwd: params.repoRoot,
+      env: withFlakesEnv(process.env),
+    });
+    const parsed = JSON.parse(out);
+    return {
+      adminHasWheel: Boolean(parsed?.adminHasWheel),
+      breakglassHasWheel: Boolean(parsed?.breakglassHasWheel),
+    };
+  } catch {
+    return null;
   }
-  return false;
 }
 
 export async function addRepoChecks(params: {
@@ -53,8 +76,8 @@ export async function addRepoChecks(params: {
 
   params.push({
     scope: "repo",
-    status: fs.existsSync(layout.opentofuDir) ? "ok" : "missing",
-    label: "opentofu dir",
+    status: fs.existsSync(layout.opentofuDir) ? "ok" : "warn",
+    label: "provisioning state dir",
     detail: layout.opentofuDir,
   });
 
@@ -228,156 +251,96 @@ export async function addRepoChecks(params: {
       }
     }
 
-    const fleetNixPath = layout.fleetConfigPath;
-    if (fs.existsSync(fleetNixPath)) {
-      const fleetText = fs.readFileSync(fleetNixPath, "utf8");
-      const ok = fleetText.includes("builtins.fromJSON") && fleetText.includes("clawdlets.json");
-      params.push({
-        scope: "repo",
-        status: ok ? "ok" : "missing",
-        label: "fleet reads clawdlets.json",
-        detail: ok ? "(ok)" : `(expected ${path.relative(repoRoot, fleetNixPath)} to read fleet/clawdlets.json)`,
-      });
-    }
   }
 
-  const fleetPath = layout.fleetConfigPath;
-  if (fs.existsSync(fleetPath)) {
-    try {
-      fleet = await evalFleetConfig({ repoRoot, fleetFilePath: fleetPath, nixBin: params.nixBin });
-      fleetBots = fleet.bots;
+  try {
+    fleet = await evalFleetConfig({ repoRoot, nixBin: params.nixBin });
+    fleetBots = fleet.bots;
 
-      params.push({
-        scope: "repo",
-        status: fleet.bots.length > 0 ? "ok" : "missing",
-        label: "fleet config eval",
-        detail: `(bots: ${fleet.bots.length})`,
-      });
+    params.push({
+      scope: "repo",
+      status: fleet.bots.length > 0 ? "ok" : "missing",
+      label: "fleet config eval",
+      detail: `(bots: ${fleet.bots.length})`,
+    });
 
-      params.push({
-        scope: "repo",
-        status: fleet.bots.length > 0 ? "ok" : "warn",
-        label: "fleet bots list",
-        detail: fleet.bots.length > 0 ? fleet.bots.join(", ") : "(empty)",
-      });
+    params.push({
+      scope: "repo",
+      status: fleet.bots.length > 0 ? "ok" : "warn",
+      label: "fleet bots list",
+      detail: fleet.bots.length > 0 ? fleet.bots.join(", ") : "(empty)",
+    });
 
-      {
-        const r = validateFleetPolicy({ filePath: fleetPath, fleet, knownBundledSkills: bundledSkills.skills });
-        if (!r.ok) {
-          const first = r.violations[0]!;
-          params.push({
-            scope: "repo",
-            status: "missing",
-            label: "fleet policy",
-            detail: `${path.relative(repoRoot, first.filePath)} ${first.message}${first.detail ? ` (${first.detail})` : ""}`,
-          });
-        } else {
-          params.push({ scope: "repo", status: "ok", label: "fleet policy", detail: "(ok)" });
-        }
+    {
+      const r = validateFleetPolicy({ filePath: layout.clawdletsConfigPath, fleet, knownBundledSkills: bundledSkills.skills });
+      if (!r.ok) {
+        const first = r.violations[0]!;
+        params.push({
+          scope: "repo",
+          status: "missing",
+          label: "fleet policy",
+          detail: `${path.relative(repoRoot, first.filePath)} ${first.message}${first.detail ? ` (${first.detail})` : ""}`,
+        });
+      } else {
+        params.push({ scope: "repo", status: "ok", label: "fleet policy", detail: "(ok)" });
       }
-
-      if (templateRoot) {
-        const templateFleetPath = path.join(templateRoot, "infra", "configs", "fleet.nix");
-        if (!fs.existsSync(templateFleetPath)) {
-          params.push({ scope: "repo", status: "missing", label: "template fleet config", detail: templateFleetPath });
-        } else {
-          const tplFleet = await evalFleetConfig({ repoRoot, fleetFilePath: templateFleetPath, nixBin: params.nixBin });
-          params.push({
-            scope: "repo",
-            status: tplFleet.bots.length > 0 ? "ok" : "warn",
-            label: "template fleet config eval",
-            detail: `(bots: ${tplFleet.bots.length})`,
-          });
-
-          const r = validateFleetPolicy({ filePath: templateFleetPath, fleet: tplFleet, knownBundledSkills: bundledSkills.skills });
-          if (!r.ok) {
-            const first = r.violations[0]!;
-            params.push({
-              scope: "repo",
-              status: "missing",
-              label: "template fleet policy",
-              detail: `${path.relative(repoRoot, first.filePath)} ${first.message}${first.detail ? ` (${first.detail})` : ""}`,
-            });
-          } else {
-            params.push({ scope: "repo", status: "ok", label: "template fleet policy", detail: "(ok)" });
-          }
-        }
-      }
-    } catch (e) {
-      params.push({
-        scope: "repo",
-        status: "missing",
-        label: "fleet config eval",
-        detail: String((e as Error)?.message || e),
-      });
     }
-  } else {
-    params.push({ scope: "repo", status: "missing", label: "fleet config", detail: fleetPath });
+
+    if (templateRoot) {
+      const tplFleet = await evalFleetConfig({ repoRoot: templateRoot, nixBin: params.nixBin });
+      params.push({
+        scope: "repo",
+        status: tplFleet.bots.length > 0 ? "ok" : "warn",
+        label: "template fleet config eval",
+        detail: `(bots: ${tplFleet.bots.length})`,
+      });
+
+      const r = validateFleetPolicy({ filePath: path.join(templateRoot, "fleet", "clawdlets.json"), fleet: tplFleet, knownBundledSkills: bundledSkills.skills });
+      if (!r.ok) {
+        const first = r.violations[0]!;
+        params.push({
+          scope: "repo",
+          status: "missing",
+          label: "template fleet policy",
+          detail: `${path.relative(repoRoot, first.filePath)} ${first.message}${first.detail ? ` (${first.detail})` : ""}`,
+        });
+      } else {
+        params.push({ scope: "repo", status: "ok", label: "template fleet policy", detail: "(ok)" });
+      }
+    }
+  } catch (e) {
+    params.push({
+      scope: "repo",
+      status: "missing",
+      label: "fleet config eval",
+      detail: String((e as Error)?.message || e),
+    });
   }
 
   {
-    const hostNixFile = getHostNixPath(layout, params.host);
-    if (fs.existsSync(hostNixFile)) {
-      const hostText = fs.readFileSync(hostNixFile, "utf8");
-
-      {
-        const ok = hostText.includes("builtins.fromJSON") && hostText.includes("clawdlets.json") && hostText.includes("hostCfg");
-        params.push({
-          scope: "repo",
-          status: ok ? "ok" : "warn",
-          label: "host reads clawdlets.json",
-          detail: ok ? "(ok)" : `(expected ${path.relative(repoRoot, hostNixFile)} to read fleet/clawdlets.json)`,
-        });
-      }
-
-      if (nixUserHasWheel({ hostText, user: "admin" })) {
-        params.push({
-          scope: "repo",
-          status: "missing",
-          label: "admin wheel access",
-          detail: "(admin is in wheel; violates ops invariants)",
-        });
-      } else {
-        params.push({
-          scope: "repo",
-          status: "ok",
-          label: "admin wheel access",
-          detail: "(admin not in wheel)",
-        });
-      }
-
-      if (nixUserHasWheel({ hostText, user: "breakglass" })) {
-        params.push({
-          scope: "repo",
-          status: "ok",
-          label: "breakglass wheel access",
-          detail: "(breakglass is in wheel)",
-        });
-      } else {
-        params.push({
-          scope: "repo",
-          status: "missing",
-          label: "breakglass wheel access",
-          detail: "(missing breakglass user in wheel; required for recovery without giving admin sudo)",
-        });
-      }
-    } else {
-      params.push({ scope: "repo", status: "missing", label: "host nix config", detail: hostNixFile });
-    }
-  }
-
-  if (templateRoot) {
-    const templateHostNix = path.join(templateRoot, "infra", "nix", "hosts", "clawdlets-host.nix");
-    if (!fs.existsSync(templateHostNix)) {
-      params.push({ scope: "repo", status: "missing", label: "template host nix config", detail: templateHostNix });
-    } else {
-      const hostText = fs.readFileSync(templateHostNix, "utf8");
-      const ok = hostText.includes("builtins.fromJSON") && hostText.includes("clawdlets.json") && hostText.includes("hostCfg");
+    const wheel = await evalWheelAccess({ repoRoot, nixBin: params.nixBin, host: params.host });
+    if (!wheel) {
       params.push({
         scope: "repo",
-        status: ok ? "ok" : "missing",
-        label: "template host reads clawdlets.json",
-        detail: ok ? "(ok)" : "(expected template host config to read fleet/clawdlets.json)",
+        status: "warn",
+        label: "wheel access",
+        detail: "(unable to evaluate nixosConfigurations.<host>.config; skipping wheel checks)",
+      });
+    } else {
+      params.push({
+        scope: "repo",
+        status: wheel.adminHasWheel ? "missing" : "ok",
+        label: "admin wheel access",
+        detail: wheel.adminHasWheel ? "(admin is in wheel; violates ops invariants)" : "(admin not in wheel)",
+      });
+
+      params.push({
+        scope: "repo",
+        status: wheel.breakglassHasWheel ? "ok" : "missing",
+        label: "breakglass wheel access",
+        detail: wheel.breakglassHasWheel
+          ? "(breakglass is in wheel)"
+          : "(missing breakglass user in wheel; required for recovery without giving admin sudo)",
       });
     }
   }

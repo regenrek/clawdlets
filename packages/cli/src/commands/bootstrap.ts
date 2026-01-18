@@ -13,7 +13,7 @@ import { evalFleetConfig } from "@clawdlets/core/lib/fleet-nix-eval";
 import { withFlakesEnv } from "@clawdlets/core/lib/nix-flakes";
 import { getSshExposureMode, getTailnetMode, loadClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config";
 import { resolveBaseFlake } from "@clawdlets/core/lib/base-flake";
-import { getHostExtraFilesDir, getHostExtraFilesKeyPath, getHostExtraFilesSecretsDir } from "@clawdlets/core/repo-layout";
+import { getHostExtraFilesDir, getHostExtraFilesKeyPath, getHostExtraFilesSecretsDir, getHostOpenTofuDir } from "@clawdlets/core/repo-layout";
 import { requireDeployGate } from "../lib/deploy-gate.js";
 import { resolveHostNameOrExit } from "../lib/host-resolve.js";
 
@@ -87,7 +87,7 @@ export const bootstrap = defineCommand({
 	    const githubToken = String(deployCreds.values.GITHUB_TOKEN || "").trim();
 
 	    const nixBin = String(deployCreds.values.NIX_BIN || "nix").trim() || "nix";
-	    const opentofuDir = layout.opentofuDir;
+	    const opentofuDir = getHostOpenTofuDir(layout, hostName);
 
 	    const serverType = String(hostCfg.hetzner.serverType || "").trim();
 	    if (!serverType) throw new Error(`missing hetzner.serverType for ${hostName} (set via: clawdlets host set --server-type ...)`);
@@ -97,11 +97,11 @@ export const bootstrap = defineCommand({
 	      throw new Error(`missing hetzner.image for ${hostName} (set via: clawdlets host set --hetzner-image <image_id>)`);
 	    }
 
-	    const adminCidr = String(hostCfg.opentofu.adminCidr || "").trim();
-	    if (!adminCidr) throw new Error(`missing opentofu.adminCidr for ${hostName} (set via: clawdlets host set --admin-cidr ...)`);
+	    const adminCidr = String(hostCfg.provisioning.adminCidr || "").trim();
+	    if (!adminCidr) throw new Error(`missing provisioning.adminCidr for ${hostName} (set via: clawdlets host set --admin-cidr ...)`);
 
-	    const sshPubkeyFileRaw = String(hostCfg.opentofu.sshPubkeyFile || "").trim();
-	    if (!sshPubkeyFileRaw) throw new Error(`missing opentofu.sshPubkeyFile for ${hostName} (set via: clawdlets host set --ssh-pubkey-file ...)`);
+	    const sshPubkeyFileRaw = String(hostCfg.provisioning.sshPubkeyFile || "").trim();
+	    if (!sshPubkeyFileRaw) throw new Error(`missing provisioning.sshPubkeyFile for ${hostName} (set via: clawdlets host set --ssh-pubkey-file ...)`);
 	    const sshPubkeyFileExpanded = expandPath(sshPubkeyFileRaw);
 	    const sshPubkeyFile = path.isAbsolute(sshPubkeyFileExpanded) ? sshPubkeyFileExpanded : path.resolve(repoRoot, sshPubkeyFileExpanded);
 	    if (!fs.existsSync(sshPubkeyFile)) throw new Error(`ssh pubkey file not found: ${sshPubkeyFile}`);
@@ -111,8 +111,9 @@ export const bootstrap = defineCommand({
 	    }
 
 	    await applyOpenTofuVars({
-	      repoRoot,
+	      opentofuDir,
 	      vars: {
+          hostName,
 	        hcloudToken,
 	        adminCidr,
 	        sshPubkeyFile,
@@ -217,8 +218,7 @@ export const bootstrap = defineCommand({
 	      throw new Error(`missing extra-files key: ${requiredKey} (run: clawdlets secrets init)`);
 	    }
 
-    const fleetPath = path.join(repoRoot, "infra", "configs", "fleet.nix");
-    const bots = (await evalFleetConfig({ repoRoot, fleetFilePath: fleetPath, nixBin })).bots;
+    const bots = (await evalFleetConfig({ repoRoot, nixBin })).bots;
 
     const requiredSecrets = [
       ...(tailnetMode === "tailscale" ? ["tailscale_auth_key"] : []),

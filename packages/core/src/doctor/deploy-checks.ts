@@ -199,27 +199,27 @@ export async function addDeployChecks(params: {
         }
       }
 
-      const adminCidr = String(clawdletsHostCfg.opentofu?.adminCidr || "").trim();
+      const adminCidr = String(clawdletsHostCfg.provisioning?.adminCidr || "").trim();
       push({
         status: adminCidr ? "ok" : "missing",
-        label: "opentofu.adminCidr",
+        label: "provisioning.adminCidr",
         detail: adminCidr || "(unset)",
       });
 
       {
-        const raw = String(clawdletsHostCfg.opentofu?.sshPubkeyFile || "").trim();
+        const raw = String(clawdletsHostCfg.provisioning?.sshPubkeyFile || "").trim();
         if (!raw) {
-          push({ status: "missing", label: "opentofu ssh pubkey file", detail: "(unset)" });
+          push({ status: "missing", label: "provisioning ssh pubkey file", detail: "(unset)" });
         } else if (looksLikeSshKeyContents(raw)) {
           push({
             status: "missing",
-            label: "opentofu ssh pubkey file",
+            label: "provisioning ssh pubkey file",
             detail: "(must be a path, not key contents)",
           });
         } else {
           const expanded = expandPath(raw);
           const abs = path.isAbsolute(expanded) ? expanded : path.resolve(params.repoRoot, expanded);
-          push({ status: fs.existsSync(abs) ? "ok" : "missing", label: "opentofu ssh pubkey file", detail: abs });
+          push({ status: fs.existsSync(abs) ? "ok" : "missing", label: "provisioning ssh pubkey file", detail: abs });
 
           const sshKey = fs.existsSync(abs) ? normalizeSshPublicKey(fs.readFileSync(abs, "utf8")) : null;
           if (sshKey) {

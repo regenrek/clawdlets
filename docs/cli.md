@@ -39,7 +39,7 @@ Related
 
 ## Infra ops
 
-- opentofu apply: `clawdlets infra apply`
+- provisioning apply: `clawdlets infra apply`
 
 ## Justfile shortcuts
 

@@ -24,24 +24,26 @@ let
   flake = builtins.getFlake (toString ./.);
   system = "x86_64-linux";
   hostName = "clawdbot-fleet-host";
-  nixpkgs = flake.inputs.nixpkgs;
+  nixpkgs = flake.inputs.clawdlets.inputs.nixpkgs;
   lib = nixpkgs.lib;
-  pkgs = import nixpkgs { inherit system; };
-  cfg = (nixpkgs.lib.nixosSystem {
+  project = {
+    root = flake.outPath;
+    config = builtins.fromJSON (builtins.readFile (flake.outPath + "/fleet/clawdlets.json"));
+  };
+  cfg = (lib.nixosSystem {
     inherit system;
     specialArgs = {
-      inherit (flake.inputs) nix-clawdbot;
+      clawdlets = flake.inputs.clawdlets;
+      nix-clawdbot = flake.inputs.clawdlets.inputs.nix-clawdbot;
+      inherit project;
       flakeInfo = { clawdlets = { rev = null; lastModifiedDate = null; }; };
     };
     modules = [
-      flake.inputs.disko.nixosModules.disko
-      flake.inputs.nixos-generators.nixosModules.all-formats
-      flake.inputs.sops-nix.nixosModules.sops
-      ./infra/nix/modules/clawdlets-host-meta.nix
+      flake.inputs.clawdlets.inputs.disko.nixosModules.disko
+      flake.inputs.clawdlets.inputs.nixos-generators.nixosModules.all-formats
+      flake.inputs.clawdlets.inputs.sops-nix.nixosModules.sops
+      flake.inputs.clawdlets.nixosModules.clawdletsProjectHost
       ({ ... }: { clawdlets.hostName = hostName; })
-      ./infra/disko/example.nix
-      ./infra/nix/modules/clawdlets-image-formats.nix
-      ./infra/nix/hosts/clawdlets-host.nix
       ({ ... }: { clawdlets.operator.deploy.enable = lib.mkForce ${deployEnabled ? "true" : "false"}; })
     ];
   }).config;

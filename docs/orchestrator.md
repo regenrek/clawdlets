@@ -26,8 +26,8 @@ No public ingress by default.
 
 ## Deployment (Pet host, NixOS)
 
-Project repo (from template) includes:
-- module: `infra/nix/modules/clf-orchestrator.nix`
+Clawdlets framework provides:
+- module: `nix/modules/clf-orchestrator.nix`
 
 Enable in your host config (project repo):
 

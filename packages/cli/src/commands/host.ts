@@ -80,7 +80,7 @@ const add = defineCommand({
       flakeHost: "",
       targetHost: undefined,
       hetzner: { serverType: "cx43", image: "", location: "nbg1" },
-      opentofu: { adminCidr: "", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
+      provisioning: { adminCidr: "", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
       sshExposure: { mode: "tailnet" },
       tailnet: { mode: "tailscale" },
       cache: {
@@ -220,8 +220,8 @@ const set = defineCommand({
     if ((args as any)["server-type"] !== undefined) next.hetzner.serverType = String((args as any)["server-type"]).trim();
     if ((args as any)["hetzner-image"] !== undefined) next.hetzner.image = String((args as any)["hetzner-image"]).trim();
     if ((args as any)["hetzner-location"] !== undefined) next.hetzner.location = String((args as any)["hetzner-location"]).trim();
-    if ((args as any)["admin-cidr"] !== undefined) next.opentofu.adminCidr = String((args as any)["admin-cidr"]).trim();
-    if ((args as any)["ssh-pubkey-file"] !== undefined) next.opentofu.sshPubkeyFile = String((args as any)["ssh-pubkey-file"]).trim();
+    if ((args as any)["admin-cidr"] !== undefined) next.provisioning.adminCidr = String((args as any)["admin-cidr"]).trim();
+    if ((args as any)["ssh-pubkey-file"] !== undefined) next.provisioning.sshPubkeyFile = String((args as any)["ssh-pubkey-file"]).trim();
 
     if (args.tailnet !== undefined) {
       const mode = String(args.tailnet).trim();

@@ -4,7 +4,7 @@ Clawdlets = Hetzner + NixOS fleet tooling for Clawdbot.
 
 Repo model
 - **CLI repo** (this repo): `clawdlets` + `clf` + docs.
-- **Project repo** (from `clawdlets project init`): `infra/` + `fleet/` + `secrets/` + identities.
+- **Project repo** (from `clawdlets project init`): `flake.nix` + `fleet/` + `secrets/` + identities.
 
 Start here
 - `docs/overview.md`: mental model (pet vs cattle, where things live).
