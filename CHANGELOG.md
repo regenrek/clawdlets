@@ -5,16 +5,7 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 
 ## Unreleased
 
-### Added
-- Cattle mode (Hetzner): `clawdlets cattle spawn|list|destroy|reap|logs|ssh` (ephemeral single-task VMs).
-- ClawdletFleet control plane (`clf`): sqlite-backed jobs queue + unix-socket orchestrator + CLI for bot-driven orchestration.
-- Cattle secrets channel: one-time bootstrap token + tailnet-only HTTP endpoint to fetch runtime env (no long-lived LLM keys in Hetzner user_data).
-
-### Fixed
-- Nix build for `packages.x86_64-linux.clf` (layout + symlinks) so Garnix packaging succeeds.
-- Orchestrator hardening: safer bearer parsing, no cleartext env logging, no stacktrace exposure in error responses.
-
-## [0.1.1] - 2026-01-16
+## [0.1.1] - 2026-01-18
 
 ### Added
 - Base flake resolution: `fleet/clawdlets.json.baseFlake` (fallback: `git remote origin`) used by deploy commands (`bootstrap`, `lockdown`).
@@ -35,6 +26,9 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 - Image pipeline: `nixos-generators` outputs (`<host>-image`), `clawdlets image build|upload`, and `bootstrap --mode image`.
 - Hetzner image/location config fields (`hosts.<host>.hetzner.image/location`).
 - Separate template repo (`regenrek/clawdlets-template`) with CI checks for generated projects.
+- Cattle mode (Hetzner): `clawdlets cattle spawn|list|destroy|reap|logs|ssh` (ephemeral single-task VMs).
+- ClawdletFleet control plane (`clf`): sqlite-backed jobs queue + unix-socket orchestrator + CLI for bot-driven orchestration.
+- Cattle secrets channel: one-time bootstrap token + tailnet-only HTTP endpoint to fetch runtime env (no long-lived LLM keys in Hetzner user_data).
 
 ### Changed
 - Workflow automation: `nix-clawdbot` bump PRs are created using a GitHub App token (so normal PR checks run) and are compatible with strict branch protection.
@@ -51,6 +45,10 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 - Garnix config now explicitly builds `packages.x86_64-linux.*-system`.
 - Secrets tar digest is now deterministic (canonical tar+gzip).
 - Project init now pulls templates from `regenrek/clawdlets-template` (no embedded template dist in this repo).
+
+### Fixed
+- Nix build for `packages.x86_64-linux.clf` (layout + symlinks) so Garnix packaging succeeds.
+- Orchestrator hardening: safer bearer parsing, no cleartext env logging, no stacktrace exposure in error responses.
 
 ### Removed
 - Stack concept + `clawdlets stack` command.
