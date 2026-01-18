@@ -20,9 +20,15 @@ docs:
   - path: docs/config.md
     when: editing fleet/clawdlets.json
     summary: schema/fields/example
+  - path: docs/clawdbot-config.md
+    when: configuring channels/routing/tools
+    summary: clawdbot schema passthrough (inline vs json5, merge order, secrets)
   - path: docs/agent-config.md
-    when: routing, skills, workspaces
-    summary: fleet.nix knobs; per-bot routing/skills/codex/github app
+    when: skills, workspaces, per-bot profiles
+    summary: clawdlets profile knobs + docs/skills seeding
+  - path: docs/gateway.md
+    when: multiple gateways per host
+    summary: per-bot gateways, ports, auth token, isolation invariants
   - path: docs/runtime-layout.md
     when: paths, state dirs, credentials
     summary: canonical runtime paths on the host

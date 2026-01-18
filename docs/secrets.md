@@ -56,8 +56,8 @@ Fast fix: re-run `clawdlets secrets init` (it regenerates/upgrades `.sops.yaml`)
 
 - `tailscale_auth_key` (required when using Tailscale auto-join)
 - `garnix_netrc` (netrc for private Garnix cache access; installed at `/etc/nix/netrc` when enabled)
-- `discord_token_<bot>`
-- LLM API keys (configured via `fleet.envSecrets` in `fleet/clawdlets.json`):
+- `discord_token_<bot>` (template default for `DISCORD_BOT_TOKEN` via `fleet.bots.<bot>.profile.envSecrets`)
+- LLM API keys (configured via `fleet.envSecrets` and per-bot overrides in `fleet.bots.<bot>.profile.envSecrets`):
   - `z_ai_api_key` (Z.AI; env: `ZAI_API_KEY` + `Z_AI_API_KEY`)
   - `anthropic_api_key` (Anthropic; env: `ANTHROPIC_API_KEY`)
   - `openai_api_key` (OpenAI; env: `OPENAI_API_KEY` + `OPEN_AI_APIKEY`)
@@ -67,7 +67,7 @@ via systemd `EnvironmentFile`.
 
 Optional:
 
-- skill secrets referenced by `fleet.botOverrides.<bot>.skills.entries.*.envSecrets/*Secret`
-- hook secrets referenced by `fleet.botOverrides.<bot>.hooks.*Secret`
-- GitHub App private key PEM referenced by `fleet.botOverrides.<bot>.github.privateKeySecret`
+- skill secrets referenced by `fleet.bots.<bot>.profile.skills.entries.*.envSecrets/*Secret`
+- hook secrets referenced by `fleet.bots.<bot>.profile.hooks.*Secret`
+- GitHub App private key PEM referenced by `fleet.bots.<bot>.profile.github.privateKeySecret`
 - restic secrets (`restic_password`, optional `restic_env`)

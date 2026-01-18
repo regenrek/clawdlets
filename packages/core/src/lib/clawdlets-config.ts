@@ -8,8 +8,6 @@ import { isValidTargetHost } from "./ssh-remote.js";
 import { TtlStringSchema } from "./ttl.js";
 import { HcloudLabelsSchema, validateHcloudLabelsAtPath } from "./hcloud-labels.js";
 
-export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 7 as const;
-
 export const SSH_EXPOSURE_MODES = ["tailnet", "bootstrap", "public"] as const;
 export const SshExposureModeSchema = z.enum(SSH_EXPOSURE_MODES);
 export type SshExposureMode = z.infer<typeof SshExposureModeSchema>;
@@ -18,75 +16,83 @@ export const TAILNET_MODES = ["none", "tailscale"] as const;
 export const TailnetModeSchema = z.enum(TAILNET_MODES);
 export type TailnetMode = z.infer<typeof TailnetModeSchema>;
 
+export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 7 as const;
+
 const JsonObjectSchema: z.ZodType<Record<string, unknown>> = z.record(z.any());
 
-function validateEnvSecretsAtPath(params: { value: unknown; ctx: z.RefinementCtx; path: (string | number)[] }): void {
-  if (params.value == null) return;
-  if (typeof params.value !== "object" || Array.isArray(params.value)) {
-    params.ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: params.path,
-      message: "envSecrets must be an object mapping ENV_VAR -> secretName",
-    });
-    return;
-  }
+const FleetBotProfileSchema = z
+  .object({
+    envSecrets: z.record(EnvVarNameSchema, SecretNameSchema).default({}),
+  })
+  .passthrough()
+  .default({ envSecrets: {} });
 
-  for (const [rawK, rawV] of Object.entries(params.value as Record<string, unknown>)) {
-    const k = String(rawK ?? "").trim();
-    const v = typeof rawV === "string" ? rawV.trim() : rawV == null ? "" : String(rawV).trim();
+const FleetBotSchema = z
+  .object({
+    profile: FleetBotProfileSchema.default({ envSecrets: {} }),
+    clawdbot: JsonObjectSchema.default({}),
+    clf: JsonObjectSchema.default({}),
+  })
+  .passthrough()
+  .default({});
 
-    const kOk = EnvVarNameSchema.safeParse(k);
-    if (!kOk.success) {
-      params.ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: [...params.path, rawK],
-        message: kOk.error.issues[0]?.message || "invalid env var name",
-      });
-    }
+const FleetSchema = z
+  .object({
+    envSecrets: z.record(EnvVarNameSchema, SecretNameSchema).default({}),
+    botOrder: z.array(BotIdSchema).default([]),
+    bots: z.record(BotIdSchema, FleetBotSchema).default({}),
+    codex: z
+      .object({
+        enable: z.boolean().default(false),
+        bots: z.array(BotIdSchema).default([]),
+      })
+      .default({ enable: false, bots: [] }),
+    backups: z
+      .object({
+        restic: z
+          .object({
+            enable: z.boolean().default(false),
+            repository: z.string().trim().default(""),
+          })
+          .default({ enable: false, repository: "" }),
+      })
+      .default({ restic: { enable: false, repository: "" } }),
+  })
+  .superRefine((fleet, ctx) => {
+    const botIds = Object.keys(fleet.bots || {});
+    const botOrder = fleet.botOrder || [];
 
-    const vOk = SecretNameSchema.safeParse(v);
-    if (!vOk.success) {
-      params.ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: [...params.path, rawK],
-        message: vOk.error.issues[0]?.message || "invalid secret name",
-      });
-    }
-  }
-}
-
-const FleetSchema = z.object({
-  guildId: z.string().trim().default(""),
-  envSecrets: z.record(EnvVarNameSchema, SecretNameSchema).default({}),
-  bots: z
-    .array(BotIdSchema)
-    .default([])
-    .superRefine((bots, ctx) => {
-      const seen = new Set<string>();
-      for (const b of bots) {
-        if (seen.has(b)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `duplicate bot id: ${b}` });
-        seen.add(b);
+    const seen = new Set<string>();
+    for (let i = 0; i < botOrder.length; i++) {
+      const b = botOrder[i]!;
+      if (seen.has(b)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["botOrder", i], message: `duplicate bot id: ${b}` });
+        continue;
       }
-    }),
-  botOverrides: z.record(BotIdSchema, JsonObjectSchema).default({}),
-  routingOverrides: z.record(BotIdSchema, JsonObjectSchema).default({}),
-  codex: z
-    .object({
-      enable: z.boolean().default(false),
-      bots: z.array(BotIdSchema).default([]),
-    })
-    .default({ enable: false, bots: [] }),
-  backups: z
-    .object({
-      restic: z
-        .object({
-          enable: z.boolean().default(false),
-          repository: z.string().trim().default(""),
-        })
-        .default({ enable: false, repository: "" }),
-    })
-    .default({ restic: { enable: false, repository: "" } }),
-});
+      seen.add(b);
+      if (!fleet.bots[b]) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["botOrder", i], message: `unknown bot id: ${b}` });
+      }
+    }
+
+    if (botIds.length > 0 && botOrder.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["botOrder"],
+        message: "botOrder must be set (deterministic order for ports/services)",
+      });
+      return;
+    }
+
+    const missing = botIds.filter((b) => !seen.has(b));
+    if (missing.length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["botOrder"],
+        message: `botOrder missing bots: ${missing.slice(0, 6).join(", ")}${missing.length > 6 ? ` (+${missing.length - 6})` : ""}`,
+      });
+    }
+  });
 
 const HostSchema = z.object({
   enable: z.boolean().default(false),
@@ -241,23 +247,6 @@ export const ClawdletsConfigSchema = z.object({
     });
   }
 
-  validateEnvSecretsAtPath({
-    value: (cfg as any).fleet?.envSecrets,
-    ctx,
-    path: ["fleet", "envSecrets"],
-  });
-
-  const botOverrides = (cfg as any).fleet?.botOverrides;
-  if (botOverrides && typeof botOverrides === "object" && !Array.isArray(botOverrides)) {
-    for (const [botId, overrides] of Object.entries(botOverrides as Record<string, unknown>)) {
-      validateEnvSecretsAtPath({
-        value: (overrides as any)?.envSecrets,
-        ctx,
-        path: ["fleet", "botOverrides", botId, "envSecrets"],
-      });
-    }
-  }
-
   validateHcloudLabelsAtPath({
     value: (cfg as any).cattle?.hetzner?.labels,
     ctx,
@@ -300,19 +289,18 @@ export function getTailnetMode(hostCfg: ClawdletsHostConfig | null | undefined):
 export function createDefaultClawdletsConfig(params: { host: string; bots?: string[] }): ClawdletsConfig {
   const host = params.host.trim() || "clawdbot-fleet-host";
   const bots = (params.bots || ["maren", "sonja", "gunnar", "melinda"]).map((b) => b.trim()).filter(Boolean);
+  const botsRecord = Object.fromEntries(bots.map((b) => [b, {}]));
   return ClawdletsConfigSchema.parse({
     schemaVersion: CLAWDLETS_CONFIG_SCHEMA_VERSION,
     defaultHost: host,
     baseFlake: "",
     fleet: {
-      guildId: "",
       envSecrets: {
         ZAI_API_KEY: "z_ai_api_key",
         Z_AI_API_KEY: "z_ai_api_key",
       },
-      bots,
-      botOverrides: {},
-      routingOverrides: {},
+      botOrder: bots,
+      bots: botsRecord,
       codex: { enable: false, bots: [] },
       backups: { restic: { enable: false, repository: "" } },
     },

@@ -9,7 +9,7 @@ describe("splitDotPath", () => {
   });
 
   it("splits and trims dot paths", () => {
-    expect(splitDotPath(" fleet.guildId ")).toEqual(["fleet", "guildId"]);
+    expect(splitDotPath(" fleet.botOrder ")).toEqual(["fleet", "botOrder"]);
     expect(splitDotPath("a..b")).toEqual(["a", "b"]);
   });
 

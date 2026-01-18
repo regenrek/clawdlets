@@ -22,10 +22,20 @@ Top-level:
 - `defaultHost` (optional): used when `--host` is omitted
 - `baseFlake` (optional): flake URI for remote builds (e.g. `github:<owner>/<repo>`)
   - if empty, CLI falls back to `git remote origin` (recommended)
-- `fleet.*`: bots + routing/skills overrides
-- `fleet.envSecrets`: env var -> sops secret name (used for LLM API keys + other secret env)
+- `fleet.*`: bots + infra policy + raw clawdbot config
 - `cattle.*`: ephemeral agent instances (Hetzner)
 - `hosts.<host>`: host entries keyed by host name
+
+Fleet (`fleet.*`):
+
+- `fleet.envSecrets`: default env var -> sops secret name (merged into every bot profile)
+- `fleet.botOrder`: ordered bot ids (deterministic ports/services)
+- `fleet.bots.<bot>`: per-bot config object
+  - `profile`: clawdlets/template infra knobs (systemd/env/secrets/limits)
+    - `profile.envSecrets`: per-bot env var -> sops secret name (overrides/extends `fleet.envSecrets`)
+    - other keys are forwarded into Nix `services.clawdbotFleet.botProfiles.<bot>` (forward compatible)
+  - `clawdbot`: raw clawdbot config (canonical; channels/routing/agents/tools/etc)
+  - `clf`: clawdlets/clf policy (bot access to orchestrator/queue)
 
 Host entry (`hosts.<host>`):
 
@@ -65,6 +75,16 @@ Cattle (`cattle.*`):
 - `cattle.defaults.autoShutdown`: power off after task completes (recommended)
 - `cattle.defaults.callbackUrl`: optional callback URL for task results
 
+## Migration (schema v6 -> v7)
+
+If you still have a v6 config, migrate once:
+
+```bash
+clawdlets config migrate-v6-to-v7
+```
+
+Writes a `*.v6.<timestamp>.bak` next to your config.
+
 ## Example
 
 ```json
@@ -73,11 +93,22 @@ Cattle (`cattle.*`):
   "defaultHost": "clawdbot-fleet-host",
   "baseFlake": "",
   "fleet": {
-    "guildId": "",
     "envSecrets": { "ZAI_API_KEY": "z_ai_api_key", "Z_AI_API_KEY": "z_ai_api_key" },
-    "bots": ["maren", "sonja", "gunnar", "melinda"],
-    "botOverrides": {},
-    "routingOverrides": {},
+    "botOrder": ["maren"],
+    "bots": {
+      "maren": {
+        "profile": { "envSecrets": { "DISCORD_BOT_TOKEN": "discord_token_maren" } },
+        "clawdbot": {
+          "channels": {
+            "discord": {
+              "enabled": true,
+              "token": "${DISCORD_BOT_TOKEN}",
+              "dm": { "enabled": true, "policy": "pairing" }
+            }
+          }
+        }
+      }
+    },
     "codex": { "enable": false, "bots": [] },
     "backups": { "restic": { "enable": false, "repository": "" } }
   },

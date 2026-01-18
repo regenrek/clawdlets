@@ -14,22 +14,35 @@ function readStringRecord(v: unknown): Record<string, string> {
   return out;
 }
 
-function collectBotModels(params: { botOverride: any; hostDefaultModel: string }): string[] {
+function collectBotModels(params: { clawdbot: any; hostDefaultModel: string }): string[] {
   const models: string[] = [];
 
   const hostDefaultModel = String(params.hostDefaultModel || "").trim();
-  const primaryOverride = params.botOverride?.passthrough?.agents?.defaults?.modelPrimary;
-  if (typeof primaryOverride === "string" && primaryOverride.trim()) models.push(primaryOverride.trim());
-  else if (hostDefaultModel) models.push(hostDefaultModel);
+  const defaults = params.clawdbot?.agents?.defaults;
 
-  const extras = params.botOverride?.passthrough?.agents?.models;
-  if (extras && typeof extras === "object" && !Array.isArray(extras)) {
-    for (const v of Object.values(extras as Record<string, unknown>)) {
-      if (typeof v !== "string") continue;
-      const s = v.trim();
-      if (s) models.push(s);
+  const pushModel = (v: unknown) => {
+    if (typeof v !== "string") return;
+    const s = v.trim();
+    if (s) models.push(s);
+  };
+
+  const readModelSpec = (spec: unknown) => {
+    if (typeof spec === "string") {
+      pushModel(spec);
+      return;
     }
-  }
+    if (!spec || typeof spec !== "object" || Array.isArray(spec)) return;
+    pushModel((spec as any).primary);
+    const fallbacks = (spec as any).fallbacks;
+    if (Array.isArray(fallbacks)) {
+      for (const f of fallbacks) pushModel(f);
+    }
+  };
+
+  readModelSpec(defaults?.model);
+  readModelSpec(defaults?.imageModel);
+
+  if (models.length === 0 && hostDefaultModel) models.push(hostDefaultModel);
 
   return Array.from(new Set(models));
 }
@@ -54,9 +67,9 @@ export function buildFleetEnvSecretsPlan(params: { config: ClawdletsConfig; host
   const hostCfg = (params.config.hosts as any)?.[hostName];
   if (!hostCfg) throw new Error(`missing host in config.hosts: ${hostName}`);
 
-  const bots = params.config.fleet.bots || [];
+  const bots = params.config.fleet.botOrder || [];
   const fleetEnvSecrets = params.config.fleet.envSecrets || {};
-  const botOverrides = (params.config.fleet.botOverrides || {}) as Record<string, unknown>;
+  const botConfigs = (params.config.fleet.bots || {}) as Record<string, unknown>;
 
   const envSecretsByBot: Record<string, Record<string, string>> = {};
   const secretNamesAll = new Set<string>();
@@ -65,8 +78,9 @@ export function buildFleetEnvSecretsPlan(params: { config: ClawdletsConfig; host
   const missingEnvSecretMappings: EnvSecretMappingMissing[] = [];
 
   for (const bot of bots) {
-    const override = (botOverrides as any)?.[bot] || {};
-    const overrideEnvSecrets = readStringRecord((override as any)?.envSecrets);
+    const botCfg = (botConfigs as any)?.[bot] || {};
+    const profile = (botCfg as any)?.profile || {};
+    const overrideEnvSecrets = readStringRecord((profile as any)?.envSecrets);
     const botEnvSecrets = { ...fleetEnvSecrets, ...overrideEnvSecrets } as Record<string, string>;
     envSecretsByBot[bot] = botEnvSecrets;
 
@@ -77,7 +91,7 @@ export function buildFleetEnvSecretsPlan(params: { config: ClawdletsConfig; host
       envVarsBySecretName.set(secretName, set);
     }
 
-    const models = collectBotModels({ botOverride: override, hostDefaultModel: hostCfg.agentModelPrimary });
+    const models = collectBotModels({ clawdbot: (botCfg as any)?.clawdbot || {}, hostDefaultModel: hostCfg.agentModelPrimary });
     const requiredEnvVars = new Set<string>();
     for (const model of models) {
       for (const envVar of getModelRequiredEnvVars(model)) requiredEnvVars.add(envVar);
@@ -107,4 +121,3 @@ export function buildFleetEnvSecretsPlan(params: { config: ClawdletsConfig; host
     missingEnvSecretMappings,
   };
 }
-

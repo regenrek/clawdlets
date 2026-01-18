@@ -95,8 +95,8 @@ export const secretsInit = defineCommand({
 
     const localSecretsDir = getHostSecretsDir(layout, hostName);
 
-    const bots = clawdletsConfig.fleet.bots;
-    if (bots.length === 0) throw new Error("fleet.bots is empty (set bots in fleet/clawdlets.json)");
+    const bots = clawdletsConfig.fleet.botOrder;
+    if (bots.length === 0) throw new Error("fleet.botOrder is empty (set bots in fleet/clawdlets.json)");
 
     const tailnetMode = String(hostCfg.tailnet?.mode || "none");
     const requiresTailscaleAuthKey = tailnetMode === "tailscale";
@@ -112,7 +112,7 @@ export const secretsInit = defineCommand({
       const first = envPlan.missingEnvSecretMappings[0]!;
       const rec = getRecommendedSecretNameForEnvVar(first.envVar);
       throw new Error(
-        `missing envSecrets mapping for ${first.envVar} (bot=${first.bot}); set: clawdlets config set --path fleet.envSecrets.${first.envVar} --value ${rec || "<secret_name>"} (or per-bot override under fleet.botOverrides.${first.bot}.envSecrets.${first.envVar})`,
+        `missing envSecrets mapping for ${first.envVar} (bot=${first.bot}); set: clawdlets config set --path fleet.envSecrets.${first.envVar} --value ${rec || "<secret_name>"} (or per-bot override under fleet.bots.${first.bot}.profile.envSecrets.${first.envVar})`,
       );
     }
 

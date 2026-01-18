@@ -32,14 +32,6 @@ import { sopsDecryptYamlFile } from "../lib/sops.js";
 import { readYamlScalarFromMapping } from "../lib/yaml-scalar.js";
 import type { DoctorPush } from "./types.js";
 
-function routingChannelsFromOverride(v: unknown): string[] {
-  if (!v || typeof v !== "object" || Array.isArray(v)) return [];
-  const channels = (v as any).channels as unknown;
-  if (!Array.isArray(channels)) return [];
-  const xs = channels.map((x) => String(x ?? "").trim()).filter(Boolean);
-  return Array.from(new Set(xs));
-}
-
 export async function addDeployChecks(params: {
   cwd: string;
   repoRoot: string;
@@ -175,48 +167,6 @@ export async function addDeployChecks(params: {
       label: "base flake",
       detail: baseResolved.flake ?? "(unset; inferred from origin if present)",
     });
-
-    {
-      const bots = Array.isArray((clawdletsCfg as any).fleet?.bots) ? ((clawdletsCfg as any).fleet.bots as unknown[]) : [];
-      const botIds = bots.map((b) => String(b ?? "").trim()).filter(Boolean);
-
-      const guildId = String((clawdletsCfg as any).fleet?.guildId || "").trim();
-      const routingOverridesRaw = (clawdletsCfg as any).fleet?.routingOverrides;
-      const routingOverrides =
-        routingOverridesRaw && typeof routingOverridesRaw === "object" && !Array.isArray(routingOverridesRaw) ? (routingOverridesRaw as Record<string, unknown>) : {};
-
-      if (botIds.length > 0) {
-        const botsWithoutChannels = botIds.filter((b) => routingChannelsFromOverride(routingOverrides[b]).length === 0);
-
-        const missingGuildId = !guildId;
-        const missingAllChannels = botsWithoutChannels.length === botIds.length;
-        const someBotsMissing = botsWithoutChannels.length > 0 && botsWithoutChannels.length < botIds.length;
-
-        let status: "ok" | "warn" | "missing" = "ok";
-        if (missingGuildId || missingAllChannels) status = "missing";
-        else if (someBotsMissing) status = "warn";
-
-        const detailParts: string[] = [];
-        if (missingGuildId) detailParts.push(`guildId unset (set: clawdlets config set --path fleet.guildId --value <guild_id>)`);
-        if (missingAllChannels) {
-          detailParts.push(
-            `routing.channels empty for all bots (set: clawdlets config set --path fleet.routingOverrides.<bot>.channels --value-json '[\"bots\"]')`,
-          );
-        } else if (someBotsMissing) {
-          detailParts.push(
-            `routing.channels empty for: ${botsWithoutChannels.slice(0, 6).join(", ")}${botsWithoutChannels.length > 6 ? ` (+${botsWithoutChannels.length - 6})` : ""}`,
-          );
-        } else {
-          detailParts.push("(ok)");
-        }
-
-        push({
-          status,
-          label: "discord routing",
-          detail: detailParts.join("; "),
-        });
-      }
-    }
   }
 
   if (clawdletsHostCfg) {

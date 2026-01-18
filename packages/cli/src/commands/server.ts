@@ -72,7 +72,7 @@ const serverAudit = defineCommand({
     const targetHost = requireTargetHost(String(args.targetHost || hostCfg.targetHost || ""), hostName);
 
     const sudo = needsSudo(targetHost);
-    const bots = config.fleet.bots ?? [];
+    const bots = config.fleet.botOrder ?? [];
 
     const checks: AuditCheck[] = [];
     const add = (c: AuditCheck) => checks.push(c);

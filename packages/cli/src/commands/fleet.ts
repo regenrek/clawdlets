@@ -16,7 +16,6 @@ const show = defineCommand({
 const set = defineCommand({
   meta: { name: "set", description: "Set fleet config fields (in fleet/clawdlets.json)." },
   args: {
-    "guild-id": { type: "string", description: "Discord guild/server id." },
     "codex-enable": { type: "string", description: "Enable codex (true/false)." },
     "restic-enable": { type: "string", description: "Enable restic backups (true/false)." },
     "restic-repository": { type: "string", description: "Restic repository URL/path." },
@@ -26,8 +25,6 @@ const set = defineCommand({
     const { configPath, config } = loadClawdletsConfig({ repoRoot });
 
     const next = structuredClone(config) as typeof config;
-
-    if ((args as any)["guild-id"] !== undefined) next.fleet.guildId = String((args as any)["guild-id"]).trim();
 
     const parseBool = (v: unknown): boolean | undefined => {
       if (v === undefined || v === null) return undefined;

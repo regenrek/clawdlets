@@ -1,13 +1,14 @@
 # Operations
 
-## Update routing / profiles
+## Update clawdbot config (routing/channels)
 
-1) Update `fleet/clawdlets.json` via CLI (example: routing override):
+Clawdlets does not own routing. Configure routing/channels via clawdbot config:
 
-```bash
-clawdlets config set --path fleet.routingOverrides.maren --value-json '{"channels":["dev"],"requireMention":true}'
-```
-2) Deploy:
+Options:
+- file-based (recommended): edit `fleet/workspaces/bots/<bot>/clawdbot.json5`
+- inline (small): edit `fleet/clawdlets.json` → `fleet.bots.<bot>.clawdbot`
+
+Then deploy (pinned):
 
 ```bash
 clawdlets server manifest --host <host> --out deploy-manifest.<host>.json
@@ -35,7 +36,11 @@ clawdlets server deploy --manifest deploy-manifest.<host>.json
 clawdlets bot add --bot <id>
 ```
 
-2) Add secret `secrets/hosts/<host>/discord_token_<id>.yaml` (use `clawdlets secrets init`), then:
+2) Add env/secret mappings + config:
+   - `fleet.bots.<id>.profile.envSecrets.DISCORD_BOT_TOKEN = "discord_token_<id>"`
+   - clawdbot config (`fleet.bots.<id>.clawdbot` or `fleet/workspaces/bots/<id>/clawdbot.json5`) uses `${DISCORD_BOT_TOKEN}`
+
+Then:
 ```bash
 clawdlets secrets sync
 clawdlets server deploy --manifest deploy-manifest.<host>.json
@@ -46,9 +51,9 @@ clawdlets server deploy --manifest deploy-manifest.<host>.json
 1) If bundled: add id to `fleet/bundled-skills.json`
 2) Allow per-bot (example):
 ```bash
-clawdlets config set --path fleet.botOverrides.maren.skills.allowBundled --value-json '["github","brave-search"]'
+clawdlets config set --path fleet.bots.maren.profile.skills.allowBundled --value-json '["github","brave-search"]'
 ```
-3) If it needs secrets: add `secrets/hosts/<host>/<secret>.yaml` and reference in `fleet.botOverrides.<bot>.skills.entries."<skill>".*Secret/envSecrets`
+3) If it needs secrets: add `secrets/hosts/<host>/<secret>.yaml` and reference in `fleet.bots.<bot>.profile.skills.entries.\"<skill>\".*Secret/envSecrets`
 4) Sync + deploy:
 ```bash
 clawdlets secrets sync

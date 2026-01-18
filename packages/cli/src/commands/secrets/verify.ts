@@ -48,8 +48,6 @@ export const secretsVerify = defineCommand({
     const nix = { nixBin: String(deployCreds.values.NIX_BIN || "nix").trim() || "nix", cwd: layout.repoRoot, dryRun: false } as const;
 
     const localDir = getHostSecretsDir(layout, hostName);
-    const bots = config.fleet.bots;
-
     const envPlan = buildFleetEnvSecretsPlan({ config, hostName });
     const requiredEnvSecretNames = new Set<string>(envPlan.secretNamesRequired);
 
@@ -57,7 +55,6 @@ export const secretsVerify = defineCommand({
     const requiredSecrets = Array.from(new Set([
       ...(tailnetMode === "tailscale" ? ["tailscale_auth_key"] : []),
       "admin_password_hash",
-      ...bots.map((b) => `discord_token_${b}`),
     ]));
     const envSecrets = envPlan.secretNamesAll;
     const optionalSecrets = ["root_password_hash"];

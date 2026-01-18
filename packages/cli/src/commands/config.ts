@@ -5,12 +5,14 @@ import { defineCommand } from "citty";
 import { ensureDir } from "@clawdlets/core/lib/fs-safe";
 import { splitDotPath } from "@clawdlets/core/lib/dot-path";
 import { findRepoRoot } from "@clawdlets/core/lib/repo";
+import { getRepoLayout } from "@clawdlets/core/repo-layout";
 import {
   createDefaultClawdletsConfig,
   ClawdletsConfigSchema,
   loadClawdletsConfig,
   writeClawdletsConfig,
 } from "@clawdlets/core/lib/clawdlets-config";
+import { migrateClawdletsConfigV6ToV7 } from "@clawdlets/core/lib/clawdlets-config-migrate";
 
 function getAtPath(obj: any, parts: string[]): unknown {
   let cur: any = obj;
@@ -56,7 +58,7 @@ const init = defineCommand({
   async run({ args }) {
     const repoRoot = findRepoRoot(process.cwd());
     const host = String(args.host || "clawdbot-fleet-host").trim() || "clawdbot-fleet-host";
-    const configPath = path.join(repoRoot, "infra", "configs", "clawdlets.json");
+    const configPath = getRepoLayout(repoRoot).clawdletsConfigPath;
 
     if (fs.existsSync(configPath) && !args.force) {
       throw new Error(`config already exists (pass --force to overwrite): ${configPath}`);
@@ -72,6 +74,45 @@ const init = defineCommand({
     await ensureDir(path.dirname(configPath));
     await writeClawdletsConfig({ configPath, config });
     console.log(`ok: wrote ${path.relative(repoRoot, configPath)}`);
+  },
+});
+
+const migrateV6ToV7 = defineCommand({
+  meta: { name: "migrate-v6-to-v7", description: "Migrate fleet/clawdlets.json schemaVersion 6 -> 7 (one-shot)." },
+  args: {
+    "dry-run": { type: "boolean", description: "Print migrated config without writing.", default: false },
+  },
+  async run({ args }) {
+    const repoRoot = findRepoRoot(process.cwd());
+    const configPath = getRepoLayout(repoRoot).clawdletsConfigPath;
+    if (!fs.existsSync(configPath)) throw new Error(`missing config: ${configPath}`);
+    const rawText = fs.readFileSync(configPath, "utf8");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      throw new Error(`invalid JSON: ${configPath}`);
+    }
+
+    const schemaVersion = (parsed as any)?.schemaVersion;
+    if (schemaVersion === 7) {
+      console.log("ok: already schemaVersion=7");
+      return;
+    }
+    if (schemaVersion !== 6) throw new Error(`expected schemaVersion=6, got: ${schemaVersion}`);
+
+    const migrated = migrateClawdletsConfigV6ToV7(parsed);
+    const validated = ClawdletsConfigSchema.parse(migrated);
+
+    if ((args as any)["dry-run"]) {
+      console.log(JSON.stringify(validated, null, 2));
+      return;
+    }
+
+    const backupPath = `${configPath}.v6.${Date.now()}.bak`;
+    fs.writeFileSync(backupPath, rawText, { mode: 0o600 });
+    await writeClawdletsConfig({ configPath, config: validated });
+    console.log(`ok: migrated to schemaVersion=7 (backup: ${path.relative(repoRoot, backupPath)})`);
   },
 });
 
@@ -100,7 +141,7 @@ const validate = defineCommand({
 const get = defineCommand({
   meta: { name: "get", description: "Get a value from fleet/clawdlets.json (dot path)." },
   args: {
-    path: { type: "string", description: "Dot path (e.g. fleet.guildId)." },
+    path: { type: "string", description: "Dot path (e.g. fleet.botOrder)." },
     json: { type: "boolean", description: "JSON output.", default: false },
   },
   async run({ args }) {
@@ -116,7 +157,7 @@ const get = defineCommand({
 const set = defineCommand({
   meta: { name: "set", description: "Set a value in fleet/clawdlets.json (dot path)." },
   args: {
-    path: { type: "string", description: "Dot path (e.g. fleet.guildId)." },
+    path: { type: "string", description: "Dot path (e.g. fleet.botOrder)." },
     value: { type: "string", description: "String value." },
     "value-json": { type: "string", description: "JSON value (parsed)." },
     delete: { type: "boolean", description: "Delete the key at path.", default: false },
@@ -153,5 +194,5 @@ const set = defineCommand({
 
 export const config = defineCommand({
   meta: { name: "config", description: "Canonical config (fleet/clawdlets.json)." },
-  subCommands: { init, show, validate, get, set },
+  subCommands: { init, show, validate, get, set, "migrate-v6-to-v7": migrateV6ToV7 },
 });

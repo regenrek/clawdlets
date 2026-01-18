@@ -18,8 +18,7 @@ const list = defineCommand({
   async run({ args }) {
     const repoRoot = findRepoRoot(process.cwd());
     const { config } = loadClawdletsConfig({ repoRoot });
-    const bots = config.fleet.bots;
-    console.log(bots.join("\n"));
+    console.log((config.fleet.botOrder || []).join("\n"));
   },
 });
 
@@ -50,15 +49,19 @@ const add = defineCommand({
     const err = validateBotId(botId);
     if (err) throw new Error(err);
 
-    const existingBots = config.fleet.bots;
-    if (existingBots.includes(botId)) {
+    const existingBots = config.fleet.botOrder;
+    if (existingBots.includes(botId) || config.fleet.bots[botId]) {
       console.log(`ok: already present: ${botId}`);
       return;
     }
 
     const next = {
       ...config,
-      fleet: { ...config.fleet, bots: [...existingBots, botId] },
+      fleet: {
+        ...config.fleet,
+        botOrder: [...existingBots, botId],
+        bots: { ...config.fleet.bots, [botId]: {} },
+      },
     };
     const validated = ClawdletsConfigSchema.parse(next);
     await writeClawdletsConfig({ configPath, config: validated });
@@ -76,10 +79,12 @@ const rm = defineCommand({
     const { configPath, config } = loadClawdletsConfig({ repoRoot });
     const botId = String(args.bot || "").trim();
     if (!botId) throw new Error("missing --bot");
-    const existingBots = config.fleet.bots;
-    if (!existingBots.includes(botId)) throw new Error(`bot not found: ${botId}`);
+    const existingBots = config.fleet.botOrder;
+    if (!existingBots.includes(botId) && !config.fleet.bots[botId]) throw new Error(`bot not found: ${botId}`);
     const nextBots = existingBots.filter((b) => b !== botId);
-    const next = { ...config, fleet: { ...config.fleet, bots: nextBots } };
+    const nextBotsRecord = { ...config.fleet.bots };
+    delete (nextBotsRecord as any)[botId];
+    const next = { ...config, fleet: { ...config.fleet, botOrder: nextBots, bots: nextBotsRecord } };
     const validated = ClawdletsConfigSchema.parse(next);
     await writeClawdletsConfig({ configPath, config: validated });
     console.log(`ok: removed bot ${botId}`);

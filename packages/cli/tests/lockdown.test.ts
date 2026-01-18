@@ -83,7 +83,7 @@ function setConfig() {
     config: {
       schemaVersion: 7,
       defaultHost: hostName,
-      fleet: { bots: ["maren"] },
+      fleet: { botOrder: ["maren"], bots: { maren: {} } },
       hosts: {
         [hostName]: baseHost,
       },
@@ -111,7 +111,7 @@ describe("lockdown command", () => {
       config: {
         schemaVersion: 7,
         defaultHost: hostName,
-        fleet: { bots: ["maren"] },
+        fleet: { botOrder: ["maren"], bots: { maren: {} } },
         hosts: {
           [hostName]: {
             ...baseHost,

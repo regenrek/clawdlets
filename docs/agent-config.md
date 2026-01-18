@@ -1,23 +1,79 @@
-# Agent config (routing + skills + workspaces)
+# Agent config (clawdbot-first)
 
 Single source of truth:
 
 - `fleet/clawdlets.json` (canonical fleet + host config)
-- `fleet/bundled-skills.json` (canonical allowlist used by Nix assertions + doctor)
+- `fleet/bundled-skills.json` (canonical allowlist for Nix assertions + doctor)
+- `fleet/workspaces/**` (prompt policy + optional clawdbot.json5)
 
-Rendered per-bot Clawdbot config:
+Rendered per-bot clawdbot config:
 
-- Nix generates `clawdbot-<bot>.json` and injects secrets at activation time.
+- Nix generates `/run/secrets/rendered/clawdbot-<bot>.json`
 
-## Routing (Discord)
+## Canonical bot config (clawdbot schema)
 
-Set values via CLI (no manual Nix edits):
+Two inputs:
 
-- guild id: `clawdlets fleet set --guild-id <id>`
-- routing overrides (example):
-  - `clawdlets config set --path fleet.routingOverrides.maren --value-json '{"channels":["dev"],"requireMention":true}'`
+- inline: `fleet.bots.<bot>.clawdbot` (JSON object)
+- file: `fleet/workspaces/bots/<bot>/clawdbot.json5` (optional)
 
-If you change `bots`, update `secrets/hosts/<host>/discord_token_<name>.yaml`, sync, then deploy.
+Merge order:
+
+1. file config (via `$include`)
+2. inline config overrides file
+3. clawdlets invariants override both (gateway bind/port/auth; workspace path)
+
+### Example: Discord token via env var
+
+```json
+{
+  "fleet": {
+    "bots": {
+      "maren": {
+        "profile": {
+          "envSecrets": {
+            "DISCORD_BOT_TOKEN": "discord_token_maren"
+          }
+        },
+        "clawdbot": {
+          "channels": {
+            "discord": {
+              "enabled": true,
+              "token": "${DISCORD_BOT_TOKEN}"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+## Gateway isolation (multi-gateway)
+
+Design: 1 bot = 1 gateway = 1 unix user.
+
+Per bot:
+
+- system user: `bot-<bot>`
+- state dir: `/srv/clawdbot/<bot>`
+- workspace: `/srv/clawdbot/<bot>/workspace` (default)
+- gateway config: `/run/secrets/rendered/clawdbot-<bot>.json`
+- gateway auth token env: `/srv/clawdbot/<bot>/credentials/gateway.env` (generated; required)
+
+Ports:
+
+- base: `18789`
+- stride: `20` (derived ports won’t collide)
+
+## Secrets -> env vars
+
+Map env vars to sops secret names:
+
+- global defaults: `fleet.envSecrets.<ENV_VAR> = "<secretName>"`
+- per bot: `fleet.bots.<bot>.profile.envSecrets.<ENV_VAR> = "<secretName>"`
+
+Clawdbot config should reference env vars via `${ENV_VAR}` (never plaintext secrets in git).
 
 ## Documents (AGENTS / SOUL / TOOLS / IDENTITY)
 
@@ -46,25 +102,15 @@ Put skill definitions under:
 - per-bot: `fleet/workspaces/bots/<bot>/skills/<skill>/SKILL.md`
 
 The bot config always includes `skills.load.extraDirs = ["<workspace>/skills"]`, so skills in that folder are discoverable without extra per-bot config.
-## Identity (optional)
-
-Set a shared agent identity:
-
-```nix
-identity = {
-  name = "Clawdbot Fleet";
-  # emoji = ":robot:";
-};
-```
 
 ## Gateway ports
 
-Gateway ports are auto-assigned from the `bots` list.
+Gateway ports are auto-assigned from `fleet.botOrder`.
 
 Per-bot override (example):
 
 ```bash
-clawdlets config set --path fleet.botOverrides.melinda.gatewayPort --value 18819
+clawdlets config set --path fleet.bots.melinda.profile.gatewayPort --value 18819
 ```
 
 ## Model defaults (provider/model)
@@ -78,13 +124,13 @@ clawdlets host set --agent-model-primary zai/glm-4.7
 Optional extra model entries (per-bot):
 
 ```bash
-clawdlets config set --path fleet.botOverrides.melinda.passthrough.agents.models.fast --value zai/glm-4.2
+clawdlets config set --path fleet.bots.melinda.clawdbot.agents.defaults.models.fast --value-json '{"alias":"fast"}'
 ```
 
 Per-bot override:
 
 ```bash
-clawdlets config set --path fleet.botOverrides.melinda.passthrough.agents.defaults.modelPrimary --value zai/glm-4.7
+clawdlets config set --path fleet.bots.melinda.clawdbot.agents.defaults.model.primary --value zai/glm-4.7
 ```
 
 Provider API keys (env var -> sops secret name):
@@ -113,8 +159,8 @@ clawdlets config set --path fleet.codex.bots --value-json '["gunnar","maren"]'
 Then allow bundled `coding-agent` for those bots:
 
 ```bash
-clawdlets config set --path fleet.botOverrides.gunnar.skills.allowBundled --value-json '["github","coding-agent"]'
-clawdlets config set --path fleet.botOverrides.maren.skills.allowBundled --value-json '["github","brave-search","coding-agent"]'
+clawdlets config set --path fleet.bots.gunnar.profile.skills.allowBundled --value-json '["github","coding-agent"]'
+clawdlets config set --path fleet.bots.maren.profile.skills.allowBundled --value-json '["github","brave-search","coding-agent"]'
 ```
 
 One-time login (headless):
@@ -136,7 +182,7 @@ Run GitHub inventory sync (on-demand):
 clawdlets server github-sync --target-host admin@<host>
 ```
 
-Requires at least one bot with GitHub App config (`fleet.botOverrides.<bot>.github.*`).
+Requires at least one bot with GitHub App config (`fleet.bots.<bot>.profile.github.*`).
 
 ## Ops snapshots (recommended)
 
@@ -161,31 +207,30 @@ Each bot gets an isolated workspace at:
 
 Override:
 
-- `fleet.botOverrides.<bot>.agent.workspace = "/some/path"`
+- `fleet.bots.<bot>.profile.workspace.dir = "/some/path"`
 
 Optional seed-once:
 
-- `fleet.botOverrides.<bot>.workspace.seedDir = ./workspaces/<bot>`
-- copied only when the workspace is empty.
+- set `documentsDir = ./workspaces` and use `fleet/workspaces/bots/<bot>/` overlays (recommended)
 
 ### Skills
 
 Allowlist bundled skills:
 
-- `fleet.botOverrides.<bot>.skills.allowBundled = [ "github" "brave-search" ... ]`
+- `fleet.bots.<bot>.profile.skills.allowBundled = [ "github" "brave-search" ... ]`
 
 Treat `allowBundled` as required on servers. Avoid `null` (typically means “allow all bundled skills”).
 
 Per-skill secrets (recommended):
 
-- `fleet.botOverrides.<bot>.skills.entries."<skill>".envSecrets.<ENV_VAR> = "<sops_secret_name>"`
-- `fleet.botOverrides.<bot>.skills.entries."<skill>".apiKeySecret = "<sops_secret_name>"`
+- `fleet.bots.<bot>.profile.skills.entries."<skill>".envSecrets.<ENV_VAR> = "<sops_secret_name>"`
+- `fleet.bots.<bot>.profile.skills.entries."<skill>".apiKeySecret = "<sops_secret_name>"`
 
 ### Per-bot service env (provider API keys)
 
 Use this for model provider API keys (e.g. ZAI, OpenAI, etc.).
 
-- `fleet.botOverrides.<bot>.envSecrets.<ENV_VAR> = "<sops_secret_name>"`
+- `fleet.bots.<bot>.profile.envSecrets.<ENV_VAR> = "<sops_secret_name>"`
 
 Note: enabling `"coding-agent"` pulls large packages (Codex CLI + deps) into the NixOS closure and can
 OOM small remote build machines during bootstrap. Prefer enabling it only after the host is up (swap
@@ -195,19 +240,19 @@ enabled) or use a bigger build machine.
 
 Secrets:
 
-- `fleet.botOverrides.<bot>.hooks.tokenSecret = "<sops_secret_name>"`
-- `fleet.botOverrides.<bot>.hooks.gmailPushTokenSecret = "<sops_secret_name>"`
+- `fleet.bots.<bot>.profile.hooks.tokenSecret = "<sops_secret_name>"`
+- `fleet.bots.<bot>.profile.hooks.gmailPushTokenSecret = "<sops_secret_name>"`
 
 Non-secret config:
 
-- `fleet.botOverrides.<bot>.hooks.config = { ... }`
+- set non-secret hook config in raw clawdbot config: `fleet.bots.<bot>.clawdbot.hooks.*`
 
 ### GitHub App auth (maren)
 
 Configure:
 
 ```bash
-clawdlets config set --path fleet.botOverrides.maren.github --value-json '{"appId":123456,"installationId":12345678,"privateKeySecret":"gh_app_private_key_maren","refreshMinutes":45}'
+clawdlets config set --path fleet.bots.maren.profile.github --value-json '{"appId":123456,"installationId":12345678,"privateKeySecret":"gh_app_private_key_maren","refreshMinutes":45}'
 ```
 
 Effect on host:
