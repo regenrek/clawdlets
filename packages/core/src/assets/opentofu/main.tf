@@ -23,6 +23,10 @@ variable "hcloud_token" {
   type = string
 }
 
+variable "host_name" {
+  type = string
+}
+
 variable "ssh_key_id" {
   type = string
 }
@@ -76,7 +80,7 @@ provider "hcloud" {
 
 module "clawdbot_fleet_host" {
   source        = "./modules/bot_host"
-  name          = "clawdbot-fleet-host"
+  name          = var.host_name
   admin_cidr    = var.admin_cidr
   admin_cidr_is_world_open = var.admin_cidr_is_world_open
   ssh_key_id    = var.ssh_key_id

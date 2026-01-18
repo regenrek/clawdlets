@@ -25,6 +25,7 @@ function ensureOpenTofuWorkDir(opentofuDir: string): void {
 }
 
 export type OpenTofuApplyVars = {
+  hostName: string;
   hcloudToken: string;
   adminCidr: string;
   sshPubkeyFile: string;
@@ -44,6 +45,9 @@ export async function applyOpenTofuVars(params: {
 }): Promise<void> {
   const opentofuDir = params.opentofuDir;
   ensureOpenTofuWorkDir(opentofuDir);
+
+  const hostName = String(params.vars.hostName || "").trim();
+  if (!hostName) throw new Error("missing OpenTofu hostName");
 
   const resolvedServerType = params.vars.serverType?.trim() || "";
   const resolvedImage = params.vars.image?.trim() || "";
@@ -91,6 +95,8 @@ export async function applyOpenTofuVars(params: {
     "-auto-approve",
     "-input=false",
     "-var",
+    `host_name=${hostName}`,
+    "-var",
     `hcloud_token=${env.HCLOUD_TOKEN}`,
     "-var",
     `admin_cidr=${env.ADMIN_CIDR}`,
@@ -122,6 +128,9 @@ export async function destroyOpenTofuVars(params: {
 }): Promise<void> {
   const opentofuDir = params.opentofuDir;
   ensureOpenTofuWorkDir(opentofuDir);
+
+  const hostName = String(params.vars.hostName || "").trim();
+  if (!hostName) throw new Error("missing OpenTofu hostName");
 
   const resolvedServerType = params.vars.serverType?.trim() || "";
   const resolvedImage = params.vars.image?.trim() || "";
@@ -168,6 +177,8 @@ export async function destroyOpenTofuVars(params: {
     "destroy",
     "-auto-approve",
     "-input=false",
+    "-var",
+    `host_name=${hostName}`,
     "-var",
     `hcloud_token=${env.HCLOUD_TOKEN}`,
     "-var",

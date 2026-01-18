@@ -8,6 +8,7 @@ import { loadDeployCreds } from "@clawdlets/core/lib/deploy-creds";
 import { expandPath } from "@clawdlets/core/lib/path-expand";
 import { findRepoRoot } from "@clawdlets/core/lib/repo";
 import { getSshExposureMode, getTailnetMode, loadClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config";
+import { getHostOpenTofuDir } from "@clawdlets/core/repo-layout";
 import { resolveHostNameOrExit } from "../lib/host-resolve.js";
 
 const infraApply = defineCommand({
@@ -29,6 +30,7 @@ const infraApply = defineCommand({
     const { layout, config: clawdletsConfig } = loadClawdletsConfig({ repoRoot, runtimeDir: (args as any).runtimeDir });
     const hostCfg = clawdletsConfig.hosts[hostName];
     if (!hostCfg) throw new Error(`missing host in fleet/clawdlets.json: ${hostName}`);
+    const opentofuDir = getHostOpenTofuDir(layout, hostName);
 
     const deployCreds = loadDeployCreds({ cwd, runtimeDir: (args as any).runtimeDir, envFile: (args as any).envFile });
     if (deployCreds.envFile?.status === "invalid") throw new Error(`deploy env file rejected: ${deployCreds.envFile.path} (${deployCreds.envFile.error || "invalid"})`);
@@ -51,8 +53,9 @@ const infraApply = defineCommand({
     const location = String(hostCfg.hetzner.location || "").trim();
 
     await applyOpenTofuVars({
-      opentofuDir: layout.opentofuDir,
+      opentofuDir,
       vars: {
+        hostName,
         hcloudToken,
         adminCidr,
         sshPubkeyFile,
@@ -68,7 +71,7 @@ const infraApply = defineCommand({
     });
 
     console.log(`ok: provisioning applied for ${hostName}`);
-    console.log(`hint: outputs in ${layout.opentofuDir}`);
+    console.log(`hint: outputs in ${opentofuDir}`);
   },
 });
 
@@ -92,6 +95,7 @@ const infraDestroy = defineCommand({
     const { layout, config: clawdletsConfig } = loadClawdletsConfig({ repoRoot, runtimeDir: (args as any).runtimeDir });
     const hostCfg = clawdletsConfig.hosts[hostName];
     if (!hostCfg) throw new Error(`missing host in fleet/clawdlets.json: ${hostName}`);
+    const opentofuDir = getHostOpenTofuDir(layout, hostName);
 
     const deployCreds = loadDeployCreds({ cwd, runtimeDir: (args as any).runtimeDir, envFile: (args as any).envFile });
     if (deployCreds.envFile?.status === "invalid") throw new Error(`deploy env file rejected: ${deployCreds.envFile.path} (${deployCreds.envFile.error || "invalid"})`);
@@ -129,8 +133,9 @@ const infraDestroy = defineCommand({
     }
 
     await destroyOpenTofuVars({
-      opentofuDir: layout.opentofuDir,
+      opentofuDir,
       vars: {
+        hostName,
         hcloudToken,
         adminCidr,
         sshPubkeyFile,
@@ -146,7 +151,7 @@ const infraDestroy = defineCommand({
     });
 
     console.log(`ok: provisioning destroyed for ${hostName}`);
-    console.log(`hint: state in ${layout.opentofuDir}`);
+    console.log(`hint: state in ${opentofuDir}`);
   },
 });
 

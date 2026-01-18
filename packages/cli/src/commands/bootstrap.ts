@@ -13,7 +13,7 @@ import { evalFleetConfig } from "@clawdlets/core/lib/fleet-nix-eval";
 import { withFlakesEnv } from "@clawdlets/core/lib/nix-flakes";
 import { getSshExposureMode, getTailnetMode, loadClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config";
 import { resolveBaseFlake } from "@clawdlets/core/lib/base-flake";
-import { getHostExtraFilesDir, getHostExtraFilesKeyPath, getHostExtraFilesSecretsDir } from "@clawdlets/core/repo-layout";
+import { getHostExtraFilesDir, getHostExtraFilesKeyPath, getHostExtraFilesSecretsDir, getHostOpenTofuDir } from "@clawdlets/core/repo-layout";
 import { requireDeployGate } from "../lib/deploy-gate.js";
 import { resolveHostNameOrExit } from "../lib/host-resolve.js";
 
@@ -87,7 +87,7 @@ export const bootstrap = defineCommand({
 	    const githubToken = String(deployCreds.values.GITHUB_TOKEN || "").trim();
 
 	    const nixBin = String(deployCreds.values.NIX_BIN || "nix").trim() || "nix";
-	    const opentofuDir = layout.opentofuDir;
+	    const opentofuDir = getHostOpenTofuDir(layout, hostName);
 
 	    const serverType = String(hostCfg.hetzner.serverType || "").trim();
 	    if (!serverType) throw new Error(`missing hetzner.serverType for ${hostName} (set via: clawdlets host set --server-type ...)`);
@@ -113,6 +113,7 @@ export const bootstrap = defineCommand({
 	    await applyOpenTofuVars({
 	      opentofuDir,
 	      vars: {
+          hostName,
 	        hcloudToken,
 	        adminCidr,
 	        sshPubkeyFile,

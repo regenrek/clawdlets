@@ -77,6 +77,11 @@ export function getRepoLayout(repoRoot: string, runtimeDir?: string): RepoLayout
   };
 }
 
+export function getHostOpenTofuDir(layout: RepoLayout, host: string): string {
+  assertSafeHostName(host);
+  return path.join(layout.opentofuDir, host);
+}
+
 export function getHostSecretsDir(layout: RepoLayout, host: string): string {
   assertSafeHostName(host);
   return path.join(layout.secretsHostsDir, host);

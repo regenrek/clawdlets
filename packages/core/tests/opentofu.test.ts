@@ -33,6 +33,7 @@ describe("opentofu", () => {
       await destroyOpenTofuVars({
         opentofuDir,
         vars: {
+          hostName: "clawdbot-fleet-host",
           hcloudToken: "token",
           adminCidr: "203.0.113.10/32",
           sshPubkeyFile,
