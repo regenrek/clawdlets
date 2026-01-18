@@ -69,11 +69,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1768563173,
-        "narHash": "sha256-cAs6RrIOdDARUOjEbjdUzt7gTT4oaJYQZDT6nrP0SiA=",
+        "lastModified": 1768732531,
+        "narHash": "sha256-1gVEz4vQUJFFxYKwkj195y3CYT1HcF4tkALtZ8FLqvw=",
         "owner": "clawdbot",
         "repo": "nix-clawdbot",
-        "rev": "c0b61a3e363a8f38527ac28a74887fe53dd40018",
+        "rev": "a4e91adb0fcacb20bfe0f9e8a95340ad5259cd01",
         "type": "github"
       },
       "original": {
@@ -87,11 +87,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1768399770,
-        "narHash": "sha256-PQDfBODJ/CZbodvo+rLVxhq4GYFzGyr5iSYXmzCz8xw=",
+        "lastModified": 1768673601,
+        "narHash": "sha256-n5+aU505rTI1sJGd3PDhfvJS00lLjiARckqjLxdG+XA=",
         "owner": "clawdbot",
         "repo": "nix-steipete-tools",
-        "rev": "7e0aef78a05ef0c51a10278d610b9d14ee840ea9",
+        "rev": "1ab855984e2581e35a76d57cbb97abf0693dad3b",
         "type": "github"
       },
       "original": {
