@@ -9,10 +9,13 @@ let
   bots =
     let
       order = fleetCfg.botOrder or [ ];
+      derived =
+        if builtins.isList order && order != [] then order
+        else if builtins.isAttrs botsById then builtins.attrNames botsById
+        else [ ];
     in
-      if builtins.isList order && order != [] then order
-      else if builtins.isAttrs botsById then builtins.attrNames botsById
-      else [ "maren" "sonja" "gunnar" "melinda" ];
+      if derived == [] then builtins.throw "fleet.bots must define at least one bot id"
+      else derived;
 
   baseBot = {
     envSecrets = fleetCfg.envSecrets or { };

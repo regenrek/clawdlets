@@ -116,6 +116,7 @@ export const bootstrap = defineCommand({
           hostName,
 	        hcloudToken,
 	        adminCidr,
+	        adminCidrIsWorldOpen: Boolean(hostCfg.provisioning.adminCidrAllowWorldOpen),
 	        sshPubkeyFile,
 	        serverType,
 	        image,

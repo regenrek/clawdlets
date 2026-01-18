@@ -115,6 +115,18 @@ function findClawdbotSecretViolations(root: string): { files: string[]; violatio
   return { files, violations };
 }
 
+function findFleetSecretViolations(root: string): { files: string[]; violations: { file: string; label: string }[] } {
+  const configPath = path.join(root, "fleet", "clawdlets.json");
+  if (!fs.existsSync(configPath)) return { files: [], violations: [] };
+  const raw = readFilePrefix(configPath);
+  for (const pattern of CLAWDBOT_SECRET_PATTERNS) {
+    if (pattern.regex.test(raw)) {
+      return { files: [configPath], violations: [{ file: configPath, label: pattern.label }] };
+    }
+  }
+  return { files: [configPath], violations: [] };
+}
+
 async function evalWheelAccess(params: { repoRoot: string; nixBin: string; host: string }): Promise<{
   adminHasWheel: boolean;
   breakglassHasWheel: boolean;
@@ -338,6 +350,47 @@ export async function addRepoChecks(params: {
           label: "template clawdbot config secrets",
           detail:
             scanTemplate.files.length > 0 ? `(scanned ${scanTemplate.files.length} clawdbot.json5)` : "(no clawdbot.json5 found)",
+        });
+      }
+    }
+  }
+
+  {
+    const scan = findFleetSecretViolations(repoRoot);
+    if (scan.violations.length > 0) {
+      const first = scan.violations[0]!;
+      params.push({
+        scope: "repo",
+        status: "missing",
+        label: "fleet config secrets",
+        detail: `${path.relative(repoRoot, first.file)} matched ${first.label}`,
+      });
+    } else {
+      params.push({
+        scope: "repo",
+        status: "ok",
+        label: "fleet config secrets",
+        detail: scan.files.length > 0 ? `(scanned ${scan.files.length} clawdlets.json)` : "(no clawdlets.json found)",
+      });
+    }
+
+    if (templateRoot) {
+      const scanTemplate = findFleetSecretViolations(templateRoot);
+      if (scanTemplate.violations.length > 0) {
+        const first = scanTemplate.violations[0]!;
+        params.push({
+          scope: "repo",
+          status: "missing",
+          label: "template fleet config secrets",
+          detail: `${path.relative(repoRoot, first.file)} matched ${first.label}`,
+        });
+      } else {
+        params.push({
+          scope: "repo",
+          status: "ok",
+          label: "template fleet config secrets",
+          detail:
+            scanTemplate.files.length > 0 ? `(scanned ${scanTemplate.files.length} clawdlets.json)` : "(no clawdlets.json found)",
         });
       }
     }

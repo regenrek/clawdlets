@@ -4,7 +4,12 @@ Clawdlets = Hetzner + NixOS fleet tooling for Clawdbot.
 
 Repo model
 - **CLI repo** (this repo): `clawdlets` + `clf` + docs.
+- **Template repo** (`clawdlets-template`): `templates/default` scaffold + workflows.
 - **Project repo** (from `clawdlets project init`): `flake.nix` + `fleet/` + `secrets/` + identities.
+
+Secret boundary (public-safe):
+- `fleet/clawdlets.json` + `fleet/workspaces/**` + `documentsDir` includes: **no secrets**.
+- Secrets live only in `secrets/` (sops-encrypted) and `.clawdlets/` (gitignored runtime).
 
 Start here
 - `docs/overview.md`: mental model (pet vs cattle, where things live).

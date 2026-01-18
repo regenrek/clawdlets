@@ -114,6 +114,73 @@ describe("clawdlets config schema", () => {
     ).toThrow(/botOrder missing bots/i);
   });
 
+  it("rejects invalid adminCidr values", async () => {
+    const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
+    expect(() =>
+      ClawdletsConfigSchema.parse({
+        schemaVersion: 7,
+        fleet: { botOrder: ["maren"], bots: { maren: {} } },
+        hosts: {
+          "clawdbot-fleet-host": {
+            enable: false,
+            diskDevice: "/dev/sda",
+            sshAuthorizedKeys: [],
+            provisioning: { adminCidr: "not-a-cidr", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
+            sshExposure: { mode: "bootstrap" },
+            tailnet: { mode: "none" },
+            agentModelPrimary: "zai/glm-4.7",
+          },
+        },
+      }),
+    ).toThrow(/adminCidr/i);
+  });
+
+  it("rejects world-open adminCidr unless explicitly allowed", async () => {
+    const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
+    expect(() =>
+      ClawdletsConfigSchema.parse({
+        schemaVersion: 7,
+        fleet: { botOrder: ["maren"], bots: { maren: {} } },
+        hosts: {
+          "clawdbot-fleet-host": {
+            enable: false,
+            diskDevice: "/dev/sda",
+            sshAuthorizedKeys: [],
+            provisioning: { adminCidr: "0.0.0.0/0", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
+            sshExposure: { mode: "bootstrap" },
+            tailnet: { mode: "none" },
+            agentModelPrimary: "zai/glm-4.7",
+          },
+        },
+      }),
+    ).toThrow(/adminCidrAllowWorldOpen/i);
+  });
+
+  it("accepts world-open adminCidr when explicitly allowed", async () => {
+    const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
+    expect(() =>
+      ClawdletsConfigSchema.parse({
+        schemaVersion: 7,
+        fleet: { botOrder: ["maren"], bots: { maren: {} } },
+        hosts: {
+          "clawdbot-fleet-host": {
+            enable: false,
+            diskDevice: "/dev/sda",
+            sshAuthorizedKeys: [],
+            provisioning: {
+              adminCidr: "0.0.0.0/0",
+              adminCidrAllowWorldOpen: true,
+              sshPubkeyFile: "~/.ssh/id_ed25519.pub",
+            },
+            sshExposure: { mode: "bootstrap" },
+            tailnet: { mode: "none" },
+            agentModelPrimary: "zai/glm-4.7",
+          },
+        },
+      }),
+    ).not.toThrow();
+  });
+
   it("createDefaultClawdletsConfig trims and defaults", async () => {
     const { createDefaultClawdletsConfig } = await import("../src/lib/clawdlets-config");
     const cfg = createDefaultClawdletsConfig({ host: "   ", bots: [" maren ", "", "sonja"] });
@@ -124,6 +191,9 @@ describe("clawdlets config schema", () => {
     expect(cfg.fleet.envSecrets.ZAI_API_KEY).toBe("z_ai_api_key");
     expect(cfg.cattle.enabled).toBe(false);
     expect(cfg.cattle.hetzner.defaultTtl).toBe("2h");
+    expect(cfg.hosts["clawdbot-fleet-host"].sshExposure?.mode).toBe("bootstrap");
+    expect(cfg.hosts["clawdbot-fleet-host"].cache?.garnix?.private?.enable).toBe(false);
+    expect(cfg.hosts["clawdbot-fleet-host"].provisioning?.adminCidrAllowWorldOpen).toBe(false);
   });
 
   it("does not share default object references across parses", async () => {

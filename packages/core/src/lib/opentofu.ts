@@ -28,6 +28,7 @@ export type OpenTofuApplyVars = {
   hostName: string;
   hcloudToken: string;
   adminCidr: string;
+  adminCidrIsWorldOpen: boolean;
   sshPubkeyFile: string;
   serverType?: string;
   image?: string;
@@ -100,6 +101,8 @@ export async function applyOpenTofuVars(params: {
     `hcloud_token=${env.HCLOUD_TOKEN}`,
     "-var",
     `admin_cidr=${env.ADMIN_CIDR}`,
+    "-var",
+    `admin_cidr_is_world_open=${params.vars.adminCidrIsWorldOpen ? "true" : "false"}`,
     "-var",
     `ssh_key_id=${sshKeyId}`,
     "-var",
@@ -183,6 +186,8 @@ export async function destroyOpenTofuVars(params: {
     `hcloud_token=${env.HCLOUD_TOKEN}`,
     "-var",
     `admin_cidr=${env.ADMIN_CIDR}`,
+    "-var",
+    `admin_cidr_is_world_open=${params.vars.adminCidrIsWorldOpen ? "true" : "false"}`,
     "-var",
     `ssh_key_id=${sshKeyId}`,
     "-var",

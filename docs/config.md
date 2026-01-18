@@ -49,6 +49,7 @@ Host entry (`hosts.<host>`):
 - `hetzner.image`: custom image ID/name (optional; used for image-based bootstrap)
 - `hetzner.location`: e.g. `nbg1` (used by provisioning + image upload helpers)
 - `provisioning.adminCidr`: CIDR allowed to SSH during bootstrap (e.g. `203.0.113.10/32`)
+- `provisioning.adminCidrAllowWorldOpen`: allow `0.0.0.0/0` or `::/0` (default: `false`)
 - `provisioning.sshPubkeyFile`: local path to `.pub` used for provisioning
 - `operator.deploy.enable`: allow `admin` to run constrained deploy entrypoints (switch-system/install-secrets). Default: `false`.
 - `sshExposure.mode`: `tailnet|bootstrap|public` (single SSH exposure policy)
@@ -122,18 +123,22 @@ Cattle (`cattle.*`):
       "sshKnownHosts": [],
       "flakeHost": "",
       "hetzner": { "serverType": "cx43", "image": "", "location": "nbg1" },
-      "provisioning": { "adminCidr": "", "sshPubkeyFile": "~/.ssh/id_ed25519.pub" },
+      "provisioning": {
+        "adminCidr": "",
+        "adminCidrAllowWorldOpen": false,
+        "sshPubkeyFile": "~/.ssh/id_ed25519.pub"
+      },
       "cache": {
         "garnix": {
           "private": {
-            "enable": true,
+            "enable": false,
             "netrcSecret": "garnix_netrc",
             "netrcPath": "/etc/nix/netrc",
             "narinfoCachePositiveTtl": 3600
           }
         }
       },
-      "sshExposure": { "mode": "tailnet" },
+      "sshExposure": { "mode": "bootstrap" },
       "tailnet": { "mode": "tailscale" },
       "selfUpdate": {
         "enable": false,

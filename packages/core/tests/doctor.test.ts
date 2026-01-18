@@ -305,6 +305,25 @@ describe("doctor", () => {
     await rm(botDir, { recursive: true, force: true });
   });
 
+  it("flags secrets in fleet/clawdlets.json", async () => {
+    const configPath = path.join(repoRoot, "fleet", "clawdlets.json");
+    const original = await readFile(configPath, "utf8");
+
+    const raw = JSON.parse(original) as any;
+    raw.fleet.bots.alpha = raw.fleet.bots.alpha || {};
+    raw.fleet.bots.alpha.clawdbot = {
+      channels: { discord: { enabled: true, token: "SUPER_SECRET_1234567890" } },
+    };
+    await writeFile(configPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+
+    const { collectDoctorChecks } = await import("../src/doctor");
+    const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host", scope: "repo" });
+    const check = checks.find((c) => c.label === "fleet config secrets");
+    expect(check?.status).toBe("missing");
+
+    await writeFile(configPath, original, "utf8");
+  });
+
   it("fails when diskDevice is left as CHANGE_ME placeholder", async () => {
     const configPath = path.join(repoRoot, "fleet", "clawdlets.json");
     const original = await readFile(configPath, "utf8");

@@ -36,6 +36,7 @@ describe("opentofu", () => {
           hostName: "clawdbot-fleet-host",
           hcloudToken: "token",
           adminCidr: "203.0.113.10/32",
+          adminCidrIsWorldOpen: false,
           sshPubkeyFile,
           serverType: "cx43",
           sshExposureMode: "tailnet",
@@ -59,6 +60,7 @@ describe("opentofu", () => {
       expect(args2).toContain("-input=false");
       expect(args2).toContain("hcloud_token=token");
       expect(args2).toContain("admin_cidr=203.0.113.10/32");
+      expect(args2).toContain("admin_cidr_is_world_open=false");
       expect(args2).toContain("ssh_key_id=123");
       expect(args2).toContain("ssh_exposure_mode=tailnet");
       expect(args2).toContain("tailnet_mode=tailscale");

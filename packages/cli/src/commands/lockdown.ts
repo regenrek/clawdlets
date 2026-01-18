@@ -74,6 +74,7 @@ export const lockdown = defineCommand({
           hostName,
           hcloudToken,
           adminCidr,
+          adminCidrIsWorldOpen: Boolean(hostCfg.provisioning.adminCidrAllowWorldOpen),
           sshPubkeyFile,
           serverType: hostCfg.hetzner.serverType,
           image,

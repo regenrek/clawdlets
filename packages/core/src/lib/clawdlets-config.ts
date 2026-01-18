@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import net from "node:net";
 import { z } from "zod";
 import { writeFileAtomic } from "./fs-safe.js";
 import type { RepoLayout } from "../repo-layout.js";
@@ -19,6 +20,24 @@ export type TailnetMode = z.infer<typeof TailnetModeSchema>;
 export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 7 as const;
 
 const JsonObjectSchema: z.ZodType<Record<string, unknown>> = z.record(z.any());
+
+function parseCidr(value: string): { ip: string; prefix: number; family: 4 | 6 } | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const [ip, prefixRaw] = trimmed.split("/");
+  if (!ip || !prefixRaw) return null;
+  const prefix = Number(prefixRaw);
+  if (!Number.isInteger(prefix)) return null;
+  const family = net.isIP(ip);
+  if (family === 4 && prefix >= 0 && prefix <= 32) return { ip, prefix, family: 4 };
+  if (family === 6 && prefix >= 0 && prefix <= 128) return { ip, prefix, family: 6 };
+  return null;
+}
+
+function isWorldOpenCidr(parsed: { ip: string; prefix: number; family: 4 | 6 }): boolean {
+  if (parsed.family === 4) return parsed.ip === "0.0.0.0" && parsed.prefix === 0;
+  return (parsed.ip === "::" || parsed.ip === "0:0:0:0:0:0:0:0") && parsed.prefix === 0;
+}
 
 const FleetBotProfileSchema = z
   .object({
@@ -118,14 +137,35 @@ const HostSchema = z.object({
   provisioning: z
     .object({
       adminCidr: z.string().trim().default(""),
+      adminCidrAllowWorldOpen: z.boolean().default(false),
       sshPubkeyFile: z.string().trim().default("~/.ssh/id_ed25519.pub"),
     })
-    .default(() => ({ adminCidr: "", sshPubkeyFile: "~/.ssh/id_ed25519.pub" })),
+    .superRefine((value, ctx) => {
+      const adminCidr = value.adminCidr.trim();
+      if (!adminCidr) return;
+      const parsed = parseCidr(adminCidr);
+      if (!parsed) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "provisioning.adminCidr must be a valid CIDR (e.g. 203.0.113.10/32)",
+          path: ["adminCidr"],
+        });
+        return;
+      }
+      if (isWorldOpenCidr(parsed) && !value.adminCidrAllowWorldOpen) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "provisioning.adminCidr cannot be world-open unless adminCidrAllowWorldOpen is true",
+          path: ["adminCidr"],
+        });
+      }
+    })
+    .default(() => ({ adminCidr: "", adminCidrAllowWorldOpen: false, sshPubkeyFile: "~/.ssh/id_ed25519.pub" })),
   sshExposure: z
     .object({
-      mode: SshExposureModeSchema.default("tailnet"),
+      mode: SshExposureModeSchema.default("bootstrap"),
     })
-    .default(() => ({ mode: "tailnet" as const })),
+    .default(() => ({ mode: "bootstrap" as const })),
   tailnet: z
     .object({
       mode: TailnetModeSchema.default("tailscale"),
@@ -324,13 +364,13 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
         sshKnownHosts: [],
         flakeHost: "",
         hetzner: { serverType: "cx43", image: "", location: "nbg1" },
-        provisioning: { adminCidr: "", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
-        sshExposure: { mode: "tailnet" },
+        provisioning: { adminCidr: "", adminCidrAllowWorldOpen: false, sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
+        sshExposure: { mode: "bootstrap" },
         tailnet: { mode: "tailscale" },
         cache: {
           garnix: {
             private: {
-              enable: true,
+              enable: false,
               netrcSecret: "garnix_netrc",
               netrcPath: "/etc/nix/netrc",
               narinfoCachePositiveTtl: 3600,

@@ -2,6 +2,23 @@
 
 This document describes the end-to-end lifecycle of a Clawdlets project, from initialization through ongoing maintenance.
 
+## Repo layers + secret boundaries
+
+- **clawdlets (CLI repo):** `clawdlets` + `clf` + docs (no project secrets).
+- **clawdlets-template:** scaffold + workflows used by `project init`.
+- **Project repo:** `flake.nix`, `fleet/`, `secrets/`, identities (public-safe).
+- **Runtime (`.clawdlets/`):** gitignored state + keys + provisioning artifacts.
+
+Rules of thumb:
+- `fleet/clawdlets.json` and `fleet/workspaces/**` (documentsDir/includes) must not contain secrets.
+- Secrets live only in `secrets/` (sops-encrypted) and `.clawdlets/` (runtime).
+
+## Defaults worth knowing
+
+- Template defaults `sshExposure.mode=bootstrap` (public SSH only for day-0).
+- `cache.garnix.private.enable` defaults to `false` (opt-in).
+- `provisioning.adminCidr` must be a CIDR; world-open requires `adminCidrAllowWorldOpen=true`.
+
 ## E2E Lifecycle Diagram
 
 ```
