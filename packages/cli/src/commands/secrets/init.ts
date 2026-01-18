@@ -20,6 +20,7 @@ import { expandPath } from "@clawdlets/core/lib/path-expand";
 import { cancelFlow, navOnCancel, NAV_EXIT } from "../../lib/wizard.js";
 import { loadHostContextOrExit } from "../../lib/context.js";
 import { upsertYamlScalarLine } from "./common.js";
+import { getDiscordTokenPromptBots } from "../../lib/discord-token-prompts.js";
 
 function wantsInteractive(flag: boolean | undefined): boolean {
   if (flag) return true;
@@ -298,9 +299,10 @@ export const secretsInit = defineCommand({
         | { kind: "tailscaleAuthKey" }
         | { kind: "garnixNetrcFile"; secretName: string; netrcPath: string }
         | { kind: "secret"; secretName: string }
-        | { kind: "discordToken"; bot: string };
+        | { kind: "discordToken"; bot: string; secretName: string };
 
       const requiredExtraSecrets = Array.from(requiredExtraSecretNames).sort();
+      const discordTokenBots = getDiscordTokenPromptBots({ bots, envPlan, requiredExtraSecretNames });
 
       const allSteps: Step[] = [
         { kind: "adminPassword" },
@@ -310,7 +312,7 @@ export const secretsInit = defineCommand({
             ? ({ kind: "garnixNetrcFile", secretName, netrcPath: garnixNetrcPath || "/etc/nix/netrc" } as const)
             : ({ kind: "secret", secretName } as const),
         ),
-        ...bots.map((b) => ({ kind: "discordToken", bot: b }) as const),
+        ...discordTokenBots.map((b) => ({ kind: "discordToken", bot: b.bot, secretName: b.secretName }) as const),
       ];
 
       for (let i = 0; i < allSteps.length;) {
@@ -332,7 +334,7 @@ export const secretsInit = defineCommand({
           const hint = envVars.length > 0 ? ` (env: ${envVars.join(", ")})` : "";
           v = await p.password({ message: `Secret value (${step.secretName})${hint} (required by configured models)` });
         } else {
-          v = await p.password({ message: `Discord token for ${step.bot} (discord_token_${step.bot}) (optional now, required to run)` });
+          v = await p.password({ message: `Discord token for ${step.bot} (${step.secretName}) (optional now, required to run)` });
         }
 
         if (p.isCancel(v)) {
@@ -363,7 +365,10 @@ export const secretsInit = defineCommand({
           }
         }
         else if (step.kind === "secret") values.secrets[step.secretName] = s;
-        else values.discordTokens[step.bot] = s;
+        else {
+          values.discordTokens[step.bot] = s;
+          values.secrets[step.secretName] = s;
+        }
         i += 1;
       }
     } else {
@@ -409,7 +414,7 @@ export const secretsInit = defineCommand({
 
       if (secretName.startsWith("discord_token_")) {
         const bot = secretName.slice("discord_token_".length);
-        const vv = values.discordTokens[bot]?.trim() || "";
+        const vv = values.discordTokens[bot]?.trim() || values.secrets?.[secretName]?.trim() || "";
         if (vv) resolvedValues[secretName] = vv;
         else if (existing) resolvedValues[secretName] = existing;
         else if (a.allowPlaceholders) resolvedValues[secretName] = "<FILL_ME>";
