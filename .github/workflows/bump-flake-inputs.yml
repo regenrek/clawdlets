@@ -1,0 +1,70 @@
+name: Bump flake inputs
+
+on:
+  schedule:
+    - cron: "0 */6 * * *" # every 6 hours (UTC)
+  workflow_dispatch: {}
+
+concurrency:
+  group: bump-flake-inputs
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify bump token configured
+        env:
+          BUMP_FLAKE_INPUTS_TOKEN: ${{ secrets.BUMP_FLAKE_INPUTS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BUMP_FLAKE_INPUTS_TOKEN}" ]; then
+            echo "error: missing required secret: BUMP_FLAKE_INPUTS_TOKEN"
+            echo "hint: create a fine-grained PAT with repo access + contents:read/write + pull requests:read/write"
+            exit 1
+          fi
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31.9.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Update flake inputs
+        id: update
+        run: |
+          set -euo pipefail
+          nix flake update \
+            --update-input disko \
+            --update-input sops-nix \
+            --update-input nixos-generators \
+            --update-input nix-clawdbot
+          if git diff --quiet flake.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create PR
+        uses: peter-evans/create-pull-request@98357b18bf14b5342f975ff684046ec3b2a07725 # v6
+        if: ${{ steps.update.outputs.changed == 'true' }}
+        with:
+          token: ${{ secrets.BUMP_FLAKE_INPUTS_TOKEN }}
+          branch: chore/bump-flake-inputs
+          delete-branch: true
+          add-paths: |
+            flake.lock
+          commit-message: "chore: bump flake inputs"
+          title: "chore: bump flake inputs"
+          body: |
+            Automated update of flake.lock for core inputs.
