@@ -132,6 +132,17 @@ describe("secrets-init JSON + non-interactive validation", () => {
     ).toBe("./secrets.json");
   });
 
+  it("resolveSecretsInitFromJsonArg rejects explicit value that looks like a flag", async () => {
+    const { resolveSecretsInitFromJsonArg } = await import("../src/lib/secrets-init");
+    expect(() =>
+      resolveSecretsInitFromJsonArg({
+        fromJsonRaw: "--oops",
+        argv: [],
+        stdinIsTTY: true,
+      }),
+    ).toThrow(/missing --from-json value/i);
+  });
+
   it("resolveSecretsInitFromJsonArg accepts --from-json - only when explicitly present in argv", async () => {
     const { resolveSecretsInitFromJsonArg } = await import("../src/lib/secrets-init");
     expect(
@@ -143,6 +154,17 @@ describe("secrets-init JSON + non-interactive validation", () => {
     ).toBe("-");
   });
 
+  it("resolveSecretsInitFromJsonArg accepts inline --from-json=<path>", async () => {
+    const { resolveSecretsInitFromJsonArg } = await import("../src/lib/secrets-init");
+    expect(
+      resolveSecretsInitFromJsonArg({
+        fromJsonRaw: true,
+        argv: ["node", "cli.js", "secrets", "init", "--from-json=./secrets.json"],
+        stdinIsTTY: true,
+      }),
+    ).toBe("./secrets.json");
+  });
+
   it("resolveSecretsInitFromJsonArg rejects missing value when parsed as boolean flag", async () => {
     const { resolveSecretsInitFromJsonArg } = await import("../src/lib/secrets-init");
     expect(() =>
@@ -152,6 +174,17 @@ describe("secrets-init JSON + non-interactive validation", () => {
         stdinIsTTY: false,
       }),
     ).toThrow(/missing --from-json value/i);
+  });
+
+  it("resolveSecretsInitFromJsonArg rejects TTY stdin for boolean flag with --from-json -", async () => {
+    const { resolveSecretsInitFromJsonArg } = await import("../src/lib/secrets-init");
+    expect(() =>
+      resolveSecretsInitFromJsonArg({
+        fromJsonRaw: true,
+        argv: ["node", "cli.js", "secrets", "init", "--from-json", "-"],
+        stdinIsTTY: true,
+      }),
+    ).toThrow(/tty/i);
   });
 
   it("resolveSecretsInitFromJsonArg rejects TTY stdin for --from-json -", async () => {
