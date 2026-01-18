@@ -5,6 +5,8 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 
 ## Unreleased
 
+## [0.2.0] - 2026-01-18
+
 ### Breaking
 - Remove `envSecrets` indirection. Secrets now live in `fleet.modelSecrets` (provider → secret) and `fleet.bots.<bot>.profile.discordTokenSecret`. Config schema bumped to v8.
 - Drop `fleet/workspaces/bots/<bot>/clawdbot.json5` `$include` path; clawdbot config is inline only.
