@@ -29,8 +29,11 @@ const CLAWDBOT_SECRET_PATTERNS: { label: string; regex: RegExp }[] = [
   { label: "github fine-grained token", regex: /\bgithub_pat_[A-Za-z0-9_]{20,}\b/ },
   { label: "slack token", regex: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/ },
   { label: "google api key", regex: /\bAIza[0-9A-Za-z_-]{20,}\b/ },
-  { label: "literal token assignment", regex: /\"token\"\\s*:\\s*\"(?!\\$\\{)(?!CHANGE_ME)(?!REDACTED)[^\"]{16,}\"/ },
+  { label: "literal token assignment", regex: /"token"\s*:\s*"(?!\$\{)(?!CHANGE_ME)(?!REDACTED)[^"]{16,}"/ },
 ];
+
+const INCLUDE_PATTERN = /["']?\$include["']?\s*:\s*(['"])([^'"]+)\1/g;
+const MAX_SCAN_BYTES = 128 * 1024;
 
 function listClawdbotConfigFiles(root: string): string[] {
   const botsDir = path.join(root, "fleet", "workspaces", "bots");
@@ -45,18 +48,70 @@ function listClawdbotConfigFiles(root: string): string[] {
   return files;
 }
 
+function readFilePrefix(filePath: string): string {
+  const fd = fs.openSync(filePath, "r");
+  try {
+    const buf = Buffer.alloc(MAX_SCAN_BYTES);
+    const bytes = fs.readSync(fd, buf, 0, MAX_SCAN_BYTES, 0);
+    return buf.subarray(0, bytes).toString("utf8");
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function extractIncludePaths(raw: string): string[] {
+  const matches: string[] = [];
+  for (const match of raw.matchAll(INCLUDE_PATTERN)) {
+    const value = String(match[2] || "").trim();
+    if (value) matches.push(value);
+  }
+  return matches;
+}
+
+function resolveIncludePath(params: { root: string; baseDir: string; includePath: string }): string | null {
+  const raw = params.includePath.trim();
+  if (!raw || raw.includes("${")) return null;
+  if (path.isAbsolute(raw)) {
+    const full = path.resolve(raw);
+    if (!full.startsWith(params.root + path.sep)) return null;
+    return fs.existsSync(full) ? full : null;
+  }
+  const full = path.resolve(params.baseDir, raw);
+  if (!full.startsWith(params.root + path.sep)) return null;
+  return fs.existsSync(full) ? full : null;
+}
+
 function findClawdbotSecretViolations(root: string): { files: string[]; violations: { file: string; label: string }[] } {
-  const files = listClawdbotConfigFiles(root);
+  const initial = listClawdbotConfigFiles(root);
+  const files: string[] = [];
   const violations: { file: string; label: string }[] = [];
-  for (const filePath of files) {
-    const raw = fs.readFileSync(filePath, "utf8");
+  const visited = new Set<string>();
+
+  const scanFile = (filePath: string) => {
+    const fullPath = path.resolve(filePath);
+    if (visited.has(fullPath)) return;
+    visited.add(fullPath);
+    files.push(fullPath);
+
+    const raw = readFilePrefix(fullPath);
     for (const pattern of CLAWDBOT_SECRET_PATTERNS) {
       if (pattern.regex.test(raw)) {
-        violations.push({ file: filePath, label: pattern.label });
-        break;
+        violations.push({ file: fullPath, label: pattern.label });
+        return;
       }
     }
-  }
+
+    const includes = extractIncludePaths(raw);
+    if (includes.length === 0) return;
+    const baseDir = path.dirname(fullPath);
+    for (const includePath of includes) {
+      const resolved = resolveIncludePath({ root, baseDir, includePath });
+      if (!resolved) continue;
+      scanFile(resolved);
+    }
+  };
+
+  for (const filePath of initial) scanFile(filePath);
   return { files, violations };
 }
 

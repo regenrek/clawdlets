@@ -290,6 +290,21 @@ describe("doctor", () => {
     await writeFile(configPath, original, "utf8");
   });
 
+  it("flags secrets in clawdbot.json5 and includes", async () => {
+    const botDir = path.join(repoRoot, "fleet", "workspaces", "bots", "maren");
+    const includeDir = path.join(botDir, "includes");
+    await mkdir(includeDir, { recursive: true });
+    await writeFile(path.join(includeDir, "extra.json5"), '{ "token": "SUPER_SECRET_1234567890" }\n', "utf8");
+    await writeFile(path.join(botDir, "clawdbot.json5"), '{ "$include": "./includes/extra.json5" }\n', "utf8");
+
+    const { collectDoctorChecks } = await import("../src/doctor");
+    const checks = await collectDoctorChecks({ cwd: repoRoot, host: "clawdbot-fleet-host", scope: "repo" });
+    const check = checks.find((c) => c.label === "clawdbot config secrets");
+    expect(check?.status).toBe("missing");
+
+    await rm(botDir, { recursive: true, force: true });
+  });
+
   it("fails when diskDevice is left as CHANGE_ME placeholder", async () => {
     const configPath = path.join(repoRoot, "fleet", "clawdlets.json");
     const original = await readFile(configPath, "utf8");
