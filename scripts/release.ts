@@ -82,7 +82,9 @@ function ensureChangelogHasVersion(version: string): void {
   const p = path.resolve("CHANGELOG.md");
   if (!fs.existsSync(p)) die("missing CHANGELOG.md");
   const text = fs.readFileSync(p, "utf8");
-  if (!new RegExp(`^## \\[${version.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}\\]`, "m").test(text)) {
+  const marker = `## [${version}]`;
+  const hasVersion = text.split(/\r?\n/).some((line) => line.startsWith(marker));
+  if (!hasVersion) {
     die(`CHANGELOG.md missing section: ## [${version}] - YYYY-MM-DD`);
   }
 }
