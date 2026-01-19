@@ -9,13 +9,13 @@
     "gate": "pnpm -r build && pnpm -r typecheck && pnpm -C packages/cli test && pnpm -C packages/core run coverage",
     "template:smoke": "node scripts/template-smoke.mjs",
     "clawdlets:build": "pnpm -C packages/cli build",
-    "clawdlets:doctor": "node packages/cli/dist/main.js doctor",
-    "clawdlets:bootstrap": "node packages/cli/dist/main.js bootstrap",
-    "clawdlets:lockdown": "node packages/cli/dist/main.js lockdown",
-    "clawdlets:server": "node packages/cli/dist/main.js server",
-    "clawdlets:secrets": "node packages/cli/dist/main.js secrets",
-    "clawdlets:infra": "node packages/cli/dist/main.js infra",
-    "clawdlets:help": "node packages/cli/dist/main.js --help"
+    "clawdlets:doctor": "node packages/cli/dist/main.mjs doctor",
+    "clawdlets:bootstrap": "node packages/cli/dist/main.mjs bootstrap",
+    "clawdlets:lockdown": "node packages/cli/dist/main.mjs lockdown",
+    "clawdlets:server": "node packages/cli/dist/main.mjs server",
+    "clawdlets:secrets": "node packages/cli/dist/main.mjs secrets",
+    "clawdlets:infra": "node packages/cli/dist/main.mjs infra",
+    "clawdlets:help": "node packages/cli/dist/main.mjs --help"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

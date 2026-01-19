@@ -5,7 +5,7 @@
   "type": "module",
   "description": "CLI for clawdlets (NixOS fleet + bot operations)",
   "bin": {
-    "clawdlets": "dist/main.js"
+    "clawdlets": "dist/main.mjs"
   },
   "files": [
     "dist",
@@ -13,17 +13,18 @@
     "LICENSE"
   ],
   "scripts": {
-    "dev": "tsc -w --preserveWatchOutput",
-    "build": "tsc -p tsconfig.json && node ../../scripts/copy-cli-config.mjs",
+    "dev": "tsdown --watch",
+    "build": "tsdown && node ../../scripts/copy-cli-config.mjs",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
-    "help": "node dist/main.js --help",
-    "bootstrap": "node dist/main.js bootstrap",
-    "doctor": "node dist/main.js doctor",
-    "lockdown": "node dist/main.js lockdown",
-    "server": "node dist/main.js server",
-    "secrets": "node dist/main.js secrets",
-    "infra": "node dist/main.js infra"
+    "coverage": "vitest run --coverage",
+    "help": "node dist/main.mjs --help",
+    "bootstrap": "node dist/main.mjs bootstrap",
+    "doctor": "node dist/main.mjs doctor",
+    "lockdown": "node dist/main.mjs lockdown",
+    "server": "node dist/main.mjs server",
+    "secrets": "node dist/main.mjs secrets",
+    "infra": "node dist/main.mjs infra"
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",
@@ -36,6 +37,8 @@
   },
   "devDependencies": {
     "@types/node": "^25.0.9",
+    "@vitest/coverage-v8": "^4.0.17",
+    "tsdown": "^0.20.0-beta.3",
     "typescript": "^5.6.3",
     "vitest": "^4.0.17"
   },

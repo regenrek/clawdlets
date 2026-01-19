@@ -13,7 +13,7 @@ pnpm -C "$repo_root" -r build >/dev/null
 cat >"$wrapper" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
-node "$repo_root/packages/cli/dist/main.js" "\$@"
+node "$repo_root/packages/cli/dist/main.mjs" "\$@"
 EOF
 
 chmod +x "$wrapper"

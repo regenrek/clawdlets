@@ -110,10 +110,10 @@ jobs:
         run: |
           set -euo pipefail
           tmpdir="$(mktemp -d)"
-          node "${GITHUB_WORKSPACE}/packages/cli/dist/main.js" project init \
+          node "${GITHUB_WORKSPACE}/packages/cli/dist/main.mjs" project init \
             --dir "${tmpdir}/clawdlets-project" \
             --git-init false \
             --template "${{ steps.template.outputs.repo }}" \
             --template-path "${{ steps.template.outputs.path }}" \
             --template-ref "${{ steps.template.outputs.ref }}"
-          (cd "${tmpdir}/clawdlets-project" && node "${GITHUB_WORKSPACE}/packages/cli/dist/main.js" doctor --scope repo)
+          (cd "${tmpdir}/clawdlets-project" && node "${GITHUB_WORKSPACE}/packages/cli/dist/main.mjs" doctor --scope repo)

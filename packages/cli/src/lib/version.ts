@@ -3,8 +3,19 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export function resolvePackageRoot(fromUrl: string = import.meta.url): string {
-  const dir = path.dirname(fileURLToPath(fromUrl));
-  return path.resolve(dir, "..");
+  let dir = path.dirname(fileURLToPath(fromUrl));
+  for (let i = 0; i < 5; i += 1) {
+    const candidate = path.join(dir, "package.json");
+    if (fs.existsSync(candidate)) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+  return path.dirname(fileURLToPath(fromUrl));
 }
 
 export function readCliVersion(rootDir: string = resolvePackageRoot()): string {
