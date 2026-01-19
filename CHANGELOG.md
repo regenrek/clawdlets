@@ -5,6 +5,10 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 
 ## Unreleased
 
+## [0.2.4] - 2026-01-19
+### Fixed
+- Resolve CLI package root so `clawdlets --version` works after global installs.
+
 ## [0.2.3] - 2026-01-19
 ### Fixed
 - Include bash in the gateway-token systemd unit path so the helper script runs on hosts.
