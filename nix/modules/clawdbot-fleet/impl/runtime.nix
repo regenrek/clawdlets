@@ -62,7 +62,7 @@ let
           if s == "" || keys == []
           then [ ]
           else map (k: { name = k; value = config.sops.placeholder.${s}; }) keys
-      ) (modelSecrets or {}));
+      ) (if modelSecrets == null then {} else modelSecrets));
     in
       builtins.listToAttrs pairs;
 
