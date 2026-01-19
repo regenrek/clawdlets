@@ -11,7 +11,7 @@ let
       {
         "clawdbot-gateway-token-${b}" = {
           description = "Ensure Gateway auth token for bot ${b}";
-          path = [ pkgs.coreutils pkgs.openssl ];
+          path = [ pkgs.bash pkgs.coreutils pkgs.openssl ];
           environment = {
             CLAWDLETS_GATEWAY_ENV_FILE = envFile;
             CLAWDLETS_BOT_USER = "bot-${b}";
