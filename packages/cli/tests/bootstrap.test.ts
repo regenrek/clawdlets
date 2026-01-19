@@ -154,4 +154,93 @@ describe("bootstrap command", () => {
     expect(output).toMatch(/--ssh-exposure tailnet/i);
     expect(output).toMatch(/clawdlets lockdown/i);
   });
+
+  it("rejects invalid bootstrap mode", async () => {
+    setConfig({});
+    const { bootstrap } = await import("../src/commands/bootstrap.ts");
+    await expect(
+      bootstrap.run({
+        args: { host: hostName, mode: "nope", flake: "github:owner/repo", force: true, dryRun: true } as any,
+      }),
+    ).rejects.toThrow(/invalid --mode/i);
+  });
+
+  it("rejects when HCLOUD_TOKEN is missing", async () => {
+    setConfig({});
+    loadDeployCredsMock.mockReturnValueOnce({
+      envFile: { status: "ok", path: "/repo/.clawdlets/env" },
+      values: { HCLOUD_TOKEN: "", GITHUB_TOKEN: "", NIX_BIN: "nix" },
+    });
+    const { bootstrap } = await import("../src/commands/bootstrap.ts");
+    await expect(
+      bootstrap.run({
+        args: { host: hostName, flake: "github:owner/repo", force: true, dryRun: true } as any,
+      }),
+    ).rejects.toThrow(/missing HCLOUD_TOKEN/i);
+  });
+
+  it("rejects image mode without hetzner image", async () => {
+    setConfig({ hetzner: { serverType: "cx43", image: "", location: "nbg1" } });
+    const { bootstrap } = await import("../src/commands/bootstrap.ts");
+    await expect(
+      bootstrap.run({
+        args: { host: hostName, mode: "image", flake: "github:owner/repo", force: true, dryRun: true } as any,
+      }),
+    ).rejects.toThrow(/missing hetzner\.image/i);
+  });
+
+  it("rejects when both --rev and --ref are provided", async () => {
+    resolveBaseFlakeMock.mockResolvedValueOnce({ flake: "github:owner/repo" });
+    setConfig({});
+    const { bootstrap } = await import("../src/commands/bootstrap.ts");
+    await expect(
+      bootstrap.run({
+        args: { host: hostName, rev: "HEAD", ref: "main", force: true, dryRun: true } as any,
+      }),
+    ).rejects.toThrow(/either --rev or --ref/i);
+  });
+
+  it("rejects missing adminCidr", async () => {
+    setConfig({ provisioning: { adminCidr: "", sshPubkeyFile: "~/.ssh/id_ed25519.pub" } });
+    const { bootstrap } = await import("../src/commands/bootstrap.ts");
+    await expect(
+      bootstrap.run({ args: { host: hostName, flake: "github:owner/repo", force: true, dryRun: true } as any }),
+    ).rejects.toThrow(/missing provisioning\.adminCidr/i);
+  });
+
+  it("rejects missing ssh pubkey file", async () => {
+    setConfig({ provisioning: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "missing.pub" } });
+    existsSpy.mockImplementation((p: fs.PathLike) => !String(p).includes("missing.pub"));
+    const { bootstrap } = await import("../src/commands/bootstrap.ts");
+    await expect(
+      bootstrap.run({ args: { host: hostName, flake: "github:owner/repo", force: true, dryRun: true } as any }),
+    ).rejects.toThrow(/ssh pubkey file not found/i);
+  });
+
+  it("rejects missing base flake", async () => {
+    resolveBaseFlakeMock.mockResolvedValueOnce({ flake: "" });
+    setConfig({});
+    const { bootstrap } = await import("../src/commands/bootstrap.ts");
+    await expect(
+      bootstrap.run({ args: { host: hostName, force: true, dryRun: true } as any }),
+    ).rejects.toThrow(/missing base flake/i);
+  });
+
+  it("rejects flake host mismatch", async () => {
+    setConfig({});
+    const { bootstrap } = await import("../src/commands/bootstrap.ts");
+    await expect(
+      bootstrap.run({ args: { host: hostName, flake: "github:owner/repo#other", force: true, dryRun: true } as any }),
+    ).rejects.toThrow(/flake host mismatch/i);
+  });
+
+  it("rejects private base flake without GITHUB_TOKEN", async () => {
+    setConfig({});
+    tryParseGithubFlakeUriMock.mockReturnValueOnce({ owner: "owner", repo: "repo" });
+    checkGithubRepoVisibilityMock.mockResolvedValueOnce({ ok: true, status: "private-or-missing" });
+    const { bootstrap } = await import("../src/commands/bootstrap.ts");
+    await expect(
+      bootstrap.run({ args: { host: hostName, flake: "github:owner/repo", force: true, dryRun: false } as any }),
+    ).rejects.toThrow(/base flake repo appears private/i);
+  });
 });

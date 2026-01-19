@@ -66,4 +66,40 @@ describe("unix socket safety", () => {
       }
     }
   });
+
+  it("rejects invalid socket paths", async () => {
+    const { assertSafeUnixSocketPath } = await import("../src/unix-socket-safety");
+    expect(() => assertSafeUnixSocketPath("")).toThrow(/socketPath missing/i);
+    expect(() => assertSafeUnixSocketPath("relative.sock")).toThrow(/must be absolute/i);
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-socket-"));
+    const notDir = path.join(dir, "not-dir");
+    fs.writeFileSync(notDir, "x", "utf8");
+    expect(() => assertSafeUnixSocketPath(path.join(notDir, "sock"))).toThrow(/socket directory is not a directory/i);
+
+    const filePath = path.join(dir, "file.sock");
+    fs.writeFileSync(filePath, "x", "utf8");
+    expect(() => assertSafeUnixSocketPath(filePath)).toThrow(/not a unix socket/i);
+  });
+
+  it("rejects sockets missing owner-rw", async () => {
+    if (process.platform === "win32") return;
+    const { assertSafeUnixSocketPath } = await import("../src/unix-socket-safety");
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-socket-"));
+    const socketPath = path.join(dir, "orchestrator.sock");
+    const server = http.createServer((_req, res) => res.end("ok"));
+    await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+    try {
+      fs.chmodSync(socketPath, 0o400);
+      expect(() => assertSafeUnixSocketPath(socketPath)).toThrow(/owner-rw/i);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      try {
+        fs.unlinkSync(socketPath);
+      } catch {
+        // ignore
+      }
+    }
+  });
 });

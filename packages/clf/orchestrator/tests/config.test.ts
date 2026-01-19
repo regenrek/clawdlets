@@ -22,5 +22,47 @@ describe("clf-orchestrator config", () => {
     } as any);
     expect(max.cattle.bootstrapTtlMs).toBe(60 * 60_000);
   });
-});
 
+  it("rejects invalid secrets base url", async () => {
+    const { loadClfOrchestratorConfigFromEnv } = await import("../src/config");
+    expect(() =>
+      loadClfOrchestratorConfigFromEnv({
+        HCLOUD_TOKEN: "token",
+        TAILSCALE_AUTH_KEY: "tskey-auth-123",
+        CLF_CATTLE_IMAGE: "img",
+        CLF_CATTLE_SECRETS_BASE_URL: "ftp://bad",
+      } as any),
+    ).toThrow(/invalid CLF_CATTLE_SECRETS_BASE_URL/i);
+  });
+
+  it("rejects missing required env vars", async () => {
+    const { loadClfOrchestratorConfigFromEnv } = await import("../src/config");
+    expect(() => loadClfOrchestratorConfigFromEnv({} as any)).toThrow(/missing HCLOUD_TOKEN/i);
+  });
+
+  it("rejects invalid bool env values", async () => {
+    const { loadClfOrchestratorConfigFromEnv } = await import("../src/config");
+    expect(() =>
+      loadClfOrchestratorConfigFromEnv({
+        HCLOUD_TOKEN: "token",
+        TAILSCALE_AUTH_KEY: "tskey-auth-123",
+        CLF_CATTLE_IMAGE: "img",
+        CLF_CATTLE_SECRETS_BASE_URL: "",
+        CLF_CATTLE_AUTO_SHUTDOWN: "maybe",
+      } as any),
+    ).toThrow(/invalid bool env value/i);
+  });
+
+  it("rejects invalid int env values", async () => {
+    const { loadClfOrchestratorConfigFromEnv } = await import("../src/config");
+    expect(() =>
+      loadClfOrchestratorConfigFromEnv({
+        HCLOUD_TOKEN: "token",
+        TAILSCALE_AUTH_KEY: "tskey-auth-123",
+        CLF_CATTLE_IMAGE: "img",
+        CLF_CATTLE_SECRETS_BASE_URL: "",
+        CLF_CATTLE_MAX_INSTANCES: "x",
+      } as any),
+    ).toThrow(/invalid int env value/i);
+  });
+});

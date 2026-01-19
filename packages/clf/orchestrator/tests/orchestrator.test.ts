@@ -184,6 +184,9 @@ describe("clf-orchestrator cattle-http", () => {
       const missing = await fetch(`${base}/v1/cattle/env`);
       expect(missing.status).toBe(401);
 
+      const malformed = await fetch(`${base}/v1/cattle/env`, { headers: { Authorization: "BearerNope" } });
+      expect(malformed.status).toBe(401);
+
       const invalid = await fetch(`${base}/v1/cattle/env`, { headers: { Authorization: "Bearer nope" } });
       expect(invalid.status).toBe(401);
 
@@ -201,6 +204,11 @@ describe("clf-orchestrator cattle-http", () => {
       const okJson = (await ok.json()) as any;
       expect(okJson.ok).toBe(true);
       expect(okJson.env).toEqual({ CLAWDLETS_CATTLE_AUTO_SHUTDOWN: "0", OPENAI_API_KEY: "secret" });
+
+      const okWithTab = await fetch(`${base}/v1/cattle/env`, { headers: { Authorization: `bearer\t${token}` } });
+      expect(okWithTab.status).toBe(401);
+      const okWithTabJson = (await okWithTab.json()) as any;
+      expect(okWithTabJson.error?.message).toMatch(/invalid\/expired token/i);
 
       const reused = await fetch(`${base}/v1/cattle/env`, { headers: { Authorization: `Bearer ${token}` } });
       expect(reused.status).toBe(401);
@@ -293,6 +301,77 @@ describe("clf-orchestrator cattle-http", () => {
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       q.close();
+    }
+  });
+
+  it("rejects invalid env var names and missing env vars", async () => {
+    const { createCattleInternalHttpServer } = await import("../src/cattle-http");
+
+    const q = {
+      consumeCattleBootstrapToken: ({ token }: { token: string }) => {
+        if (token === "bad-name") {
+          return {
+            jobId: "j1",
+            requester: "maren",
+            cattleName: "c1",
+            envKeys: [],
+            publicEnv: { "BAD-NAME": "1" },
+            createdAt: Date.now(),
+            expiresAt: Date.now() + 60_000,
+            usedAt: null,
+          };
+        }
+        if (token === "missing-env") {
+          return {
+            jobId: "j2",
+            requester: "maren",
+            cattleName: "c2",
+            envKeys: ["MISSING_KEY"],
+            publicEnv: {},
+            createdAt: Date.now(),
+            expiresAt: Date.now() + 60_000,
+            usedAt: null,
+          };
+        }
+        return null;
+      },
+    } as any;
+
+    const server = createCattleInternalHttpServer({
+      queue: q,
+      env: { OPENAI_API_KEY: "secret" },
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const addr = server.address() as { port: number };
+    const base = `http://127.0.0.1:${addr.port}`;
+
+    try {
+      const badNameRes = await fetch(`${base}/v1/cattle/env`, { headers: { Authorization: "Bearer bad-name" } });
+      expect(badNameRes.status).toBe(400);
+
+      const missingEnvRes = await fetch(`${base}/v1/cattle/env`, { headers: { Authorization: "Bearer missing-env" } });
+      expect(missingEnvRes.status).toBe(500);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("serves healthz and rejects unknown paths", async () => {
+    const { createCattleInternalHttpServer } = await import("../src/cattle-http");
+    const server = createCattleInternalHttpServer({
+      queue: { consumeCattleBootstrapToken: () => null } as any,
+      env: {},
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const addr = server.address() as { port: number };
+    const base = `http://127.0.0.1:${addr.port}`;
+    try {
+      const health = await fetch(`${base}/healthz`);
+      expect(health.status).toBe(200);
+      const notFound = await fetch(`${base}/nope`);
+      expect(notFound.status).toBe(404);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
 });

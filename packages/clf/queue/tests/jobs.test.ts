@@ -14,4 +14,15 @@ describe("clf jobs", () => {
     expect(payload.task.taskId).toBe("t1");
     expect(payload.ttl).toBe("2h");
   });
+
+  it("parses cattle.reap payload with defaults", async () => {
+    const { parseClfJobPayload } = await import("../src/jobs");
+    const payload = parseClfJobPayload("cattle.reap", {});
+    expect(payload.dryRun).toBe(false);
+  });
+
+  it("rejects unsupported job kinds", async () => {
+    const { parseClfJobPayload } = await import("../src/jobs");
+    expect(() => parseClfJobPayload("unknown" as any, {})).toThrow(/unsupported job kind/i);
+  });
 });

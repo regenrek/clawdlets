@@ -33,6 +33,21 @@ describe("clf queue", () => {
     }
   });
 
+  it("rejects missing enqueue params and claim workerId", async () => {
+    const { openClfQueue } = await import("../src/queue");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-queue-"));
+    const dbPath = path.join(dir, "state.sqlite");
+
+    const q = openClfQueue(dbPath);
+    try {
+      expect(() => q.enqueue({ kind: "", payload: {}, requester: "maren" })).toThrow(/enqueue\.kind missing/i);
+      expect(() => q.enqueue({ kind: "cattle.spawn", payload: {}, requester: "" })).toThrow(/enqueue\.requester missing/i);
+      expect(() => q.claimNext({ workerId: "", leaseMs: 1000 })).toThrow(/workerId missing/i);
+    } finally {
+      q.close();
+    }
+  });
+
   it("claims jobs, retries with backoff, and terminal-fails", async () => {
     const { openClfQueue } = await import("../src/queue");
 
@@ -41,7 +56,7 @@ describe("clf queue", () => {
 
     const q = openClfQueue(dbPath);
     try {
-      const now = 1_700_000_000_000;
+      const now = Date.now();
       const { jobId } = q.enqueue({
         kind: "cattle.spawn",
         payload: { persona: "rex", task: { schemaVersion: 1, taskId: "t1", type: "clawdbot.gateway.agent", message: "m", callbackUrl: "" } },
@@ -178,6 +193,93 @@ describe("clf queue", () => {
     }
   });
 
+  it("handles list filters, ack/cancel false cases, and prune", async () => {
+    const { openClfQueue } = await import("../src/queue");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-queue-"));
+    const dbPath = path.join(dir, "state.sqlite");
+
+    const q = openClfQueue(dbPath);
+    try {
+      const now = 1_700_000_000_000;
+      const a = q.enqueue({
+        kind: "cattle.spawn",
+        payload: { persona: "rex", task: { schemaVersion: 1, taskId: "t1", type: "clawdbot.gateway.agent", message: "m", callbackUrl: "" } },
+        requester: "maren",
+        runAt: now,
+      }).jobId;
+      const b = q.enqueue({
+        kind: "cattle.reap",
+        payload: { dryRun: true },
+        requester: "sonja",
+        runAt: now,
+      }).jobId;
+
+      const claim = q.claimNext({ workerId: "w1", now, leaseMs: 60_000 });
+      expect(claim?.jobId).toBeTruthy();
+      const claimedId = claim?.jobId as string;
+      const otherId = claimedId === a ? b : a;
+      expect(q.ack({ jobId: claimedId, workerId: "w1", now: now + 1000 })).toBe(true);
+      expect(q.cancel({ jobId: otherId, now: now + 2000 })).toBe(true);
+
+      const byRequester = q.list({ requester: "maren" });
+      expect(byRequester.length).toBe(1);
+      const byStatus = q.list({ statuses: ["canceled"] });
+      expect(byStatus.some((j) => j.jobId === otherId)).toBe(true);
+      const byKind = q.list({ kinds: ["cattle.spawn"], limit: 1 });
+      expect(byKind.length).toBe(1);
+
+      expect(q.ack({ jobId: "nope", workerId: "w1", now })).toBe(false);
+      expect(q.cancel({ jobId: "nope", now })).toBe(false);
+
+      const require = createRequire(import.meta.url);
+      const BetterSqlite3 = require("better-sqlite3") as typeof import("better-sqlite3");
+      const db = new BetterSqlite3(dbPath);
+      try {
+        const old = now - 10 * 86400_000;
+        db.prepare(`update jobs set created_at = @old, updated_at = @old where job_id = @job_id`).run({ old, job_id: a });
+        db.prepare(`update jobs set created_at = @old, updated_at = @old where job_id = @job_id`).run({ old, job_id: b });
+      } finally {
+        db.close();
+      }
+
+      const pruned = q.prune({ now, keepDays: 1 });
+      expect(pruned).toBeGreaterThan(0);
+      expect(q.get(a)).toBeNull();
+      expect(q.get(b)).toBeNull();
+    } finally {
+      q.close();
+    }
+  });
+
+  it("handles extendLease and ack/cancel mismatch", async () => {
+    const { openClfQueue } = await import("../src/queue");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-queue-"));
+    const dbPath = path.join(dir, "state.sqlite");
+
+    const q = openClfQueue(dbPath);
+    try {
+      const now = 1_700_000_000_000;
+      const jobId = q.enqueue({
+        kind: "cattle.reap",
+        payload: { dryRun: true },
+        requester: "maren",
+        runAt: now,
+      }).jobId;
+
+      const claimed = q.claimNext({ workerId: "w1", now, leaseMs: 60_000 });
+      expect(claimed?.jobId).toBe(jobId);
+
+      expect(q.extendLease({ jobId: "", workerId: "w1", leaseUntil: now + 1000 })).toBe(false);
+      expect(q.extendLease({ jobId, workerId: "", leaseUntil: now + 1000 })).toBe(false);
+      expect(q.extendLease({ jobId, workerId: "w2", leaseUntil: now + 1000 })).toBe(false);
+
+      expect(q.ack({ jobId, workerId: "w2", now })).toBe(false);
+      expect(q.cancel({ jobId: "", now })).toBe(false);
+    } finally {
+      q.close();
+    }
+  });
+
   it("issues and consumes cattle bootstrap tokens (one-time)", async () => {
     const { openClfQueue } = await import("../src/queue");
 
@@ -259,5 +361,51 @@ describe("clf queue", () => {
 
     expect(fs.statSync(insecure).mode & 0o777).toBe(0o700);
     expect(fs.statSync(dbPath).mode & 0o777).toBe(0o600);
+  });
+
+  it("opens queue with relative paths", async () => {
+    const { openClfQueue } = await import("../src/queue");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-queue-"));
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      const q = openClfQueue("state.sqlite");
+      q.close();
+      expect(fs.existsSync(path.join(dir, "state.sqlite"))).toBe(true);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  it("returns null when failing with wrong worker", async () => {
+    const { openClfQueue } = await import("../src/queue");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clf-queue-"));
+    const dbPath = path.join(dir, "state.sqlite");
+
+    const q = openClfQueue(dbPath);
+    try {
+      const now = Date.now();
+      const retryJobId = q.enqueue({
+        kind: "cattle.reap",
+        payload: { dryRun: true },
+        requester: "maren",
+        runAt: now,
+        maxAttempts: 2,
+      }).jobId;
+      q.claimNext({ workerId: "w1", now, leaseMs: 60_000 });
+      expect(q.fail({ jobId: retryJobId, workerId: "w2", now: now + 1000, error: "nope" })).toBeNull();
+
+      const terminalJobId = q.enqueue({
+        kind: "cattle.reap",
+        payload: { dryRun: true },
+        requester: "maren",
+        runAt: now,
+        maxAttempts: 1,
+      }).jobId;
+      q.claimNext({ workerId: "w1", now: now + 2000, leaseMs: 60_000 });
+      expect(q.fail({ jobId: terminalJobId, workerId: "w2", now: now + 3000, error: "nope" })).toBeNull();
+    } finally {
+      q.close();
+    }
   });
 });
