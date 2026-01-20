@@ -5,6 +5,15 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 
 ## Unreleased
 
+## [0.3.1] - 2026-01-20
+### Fixed
+- Auto-repair stale operator age public keys during `clawdlets secrets init` to prevent recipient drift.
+- Recover host age key from extra-files when encrypted host key cannot be decrypted.
+- Add `secrets verify`/doctor preflight checks for operator recipient mismatch with a clear fix hint.
+
+### Docs
+- Add troubleshooting guidance for secrets init/verify when age keys drift.
+
 ## [0.3.0] - 2026-01-20
 ### Breaking
 - Move cattle commands into the `@clawdlets/plugin-cattle` plugin. Install via `clawdlets plugin add cattle`.
