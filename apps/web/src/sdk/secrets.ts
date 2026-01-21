@@ -1,21 +1,30 @@
 import fs from "node:fs/promises"
+import fsSync from "node:fs"
 import path from "node:path"
 
 import { createServerFn } from "@tanstack/react-start"
 import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets"
 import {
   buildSecretsInitTemplate,
+  isPlaceholderSecretValue,
   type SecretsInitJson,
 } from "@clawdlets/core/lib/secrets-init"
 import { loadClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config"
 import {
   getRepoLayout,
   getHostRemoteSecretsDir,
+  getHostExtraFilesKeyPath,
+  getHostExtraFilesSecretsDir,
+  getHostEncryptedAgeKeyFile,
+  getHostSecretFile,
   getHostSecretsDir,
 } from "@clawdlets/core/repo-layout"
 import { writeFileAtomic } from "@clawdlets/core/lib/fs-safe"
 import { mkpasswdYescryptHash } from "@clawdlets/core/lib/mkpasswd"
 import { createSecretsTar } from "@clawdlets/core/lib/secrets-tar"
+import { sopsDecryptYamlFile, sopsEncryptYamlToFile } from "@clawdlets/core/lib/sops"
+import { readYamlScalarFromMapping, upsertYamlScalarLine } from "@clawdlets/core/lib/yaml-scalar"
+import { loadDeployCreds } from "@clawdlets/core/lib/deploy-creds"
 
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
@@ -68,8 +77,17 @@ export const getSecretsTemplate = createServerFn({ method: "POST" })
       return secretName && requiredSecretNames.has(secretName)
     })
 
+    const discordSecretNames = new Set<string>(Object.values(secretsPlan.discordSecretsByBot).filter(Boolean))
+    const fleetModelSecretNames = new Set<string>(
+      Object.values((config.fleet.modelSecrets || {}) as Record<string, string>)
+        .map((s) => String(s || "").trim())
+        .filter(Boolean),
+    )
+
     const templateExtraSecrets: Record<string, string> = {}
     for (const secretName of secretsPlan.secretNamesAll) {
+      if (discordSecretNames.has(secretName)) continue
+      if (fleetModelSecretNames.has(secretName)) continue
       templateExtraSecrets[secretName] = requiredSecretNames.has(secretName)
         ? "<REPLACE_WITH_SECRET>"
         : "<OPTIONAL>"
@@ -139,6 +157,7 @@ export const secretsInitExecute = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const client = createConvexClient()
     const repoRoot = await getRepoRoot(client, data.projectId)
+    const layout = getRepoLayout(repoRoot)
 
     const baseRedactions = await readClawdletsEnvTokens(repoRoot)
     const extraRedactions = [
@@ -177,7 +196,30 @@ export const secretsInitExecute = createServerFn({ method: "POST" })
         redact: [data.adminPassword],
       })
     }
-    if (!adminPasswordHash) throw new Error("adminPasswordHash required (or provide adminPassword)")
+    if (!adminPasswordHash) {
+      const loaded = loadDeployCreds({ cwd: repoRoot })
+      const ageKeyFile = String(loaded.values.SOPS_AGE_KEY_FILE || "").trim()
+      if (!ageKeyFile) throw new Error("missing SOPS_AGE_KEY_FILE (needed to read existing admin_password_hash)")
+
+      const hostSecretPath = getHostSecretFile(layout, data.host, "admin_password_hash")
+      const nix = { nixBin: String(loaded.values.NIX_BIN || "nix").trim() || "nix", cwd: repoRoot, dryRun: false } as const
+      try {
+        const decrypted = await sopsDecryptYamlFile({
+          filePath: hostSecretPath,
+          ageKeyFile,
+          nix,
+        })
+        const existing = readYamlScalarFromMapping({ yamlText: decrypted, key: "admin_password_hash" })?.trim() || ""
+        if (existing && !isPlaceholderSecretValue(existing)) adminPasswordHash = existing
+      } catch {
+        // ignore; fall through to placeholder handling below
+      }
+
+      if (!adminPasswordHash) {
+        if (data.allowPlaceholders) adminPasswordHash = "<FILL_ME>"
+        else throw new Error("admin password required (set Admin password or allow placeholders)")
+      }
+    }
 
     const payload: SecretsInitJson = {
       adminPasswordHash,
@@ -430,4 +472,72 @@ export const secretsSyncExecute = createServerFn({ method: "POST" })
       })
       return { ok: false as const, message }
     }
+  })
+
+export const writeHostSecrets = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    if (!data || typeof data !== "object") throw new Error("invalid input")
+    const d = data as Record<string, unknown>
+    if (!d["secrets"] || typeof d["secrets"] !== "object" || Array.isArray(d["secrets"])) {
+      throw new Error("invalid secrets")
+    }
+    const secrets: Record<string, string> = {}
+    for (const [k, v] of Object.entries(d["secrets"] as Record<string, unknown>)) {
+      if (typeof v !== "string") continue
+      const key = String(k || "").trim()
+      const value = v.trim()
+      if (!key || !value) continue
+      secrets[key] = value
+    }
+    return {
+      projectId: d["projectId"] as Id<"projects">,
+      host: String(d["host"] || ""),
+      secrets,
+    }
+  })
+  .handler(async ({ data }) => {
+    const host = data.host.trim()
+    if (!host) throw new Error("missing host")
+
+    const client = createConvexClient()
+    const repoRoot = await getRepoRoot(client, data.projectId)
+    const { config } = loadClawdletsConfig({ repoRoot })
+    if (!config.hosts[host]) throw new Error(`unknown host: ${host}`)
+
+    const layout = getRepoLayout(repoRoot)
+    if (!fsSync.existsSync(layout.sopsConfigPath)) {
+      throw new Error("missing sops config (run Secrets → Init for this host first)")
+    }
+    if (!fsSync.existsSync(getHostEncryptedAgeKeyFile(layout, host))) {
+      throw new Error("missing host age key (run Secrets → Init for this host first)")
+    }
+    if (!fsSync.existsSync(getHostExtraFilesKeyPath(layout, host))) {
+      throw new Error("missing extra-files key (run Secrets → Init for this host first)")
+    }
+
+    const loaded = loadDeployCreds({ cwd: repoRoot })
+    const nix = { nixBin: String(loaded.values.NIX_BIN || "nix").trim() || "nix", cwd: repoRoot, dryRun: false } as const
+
+    const extraFilesSecretsDir = getHostExtraFilesSecretsDir(layout, host)
+    const updated: string[] = []
+
+    for (const [secretName, secretValue] of Object.entries(data.secrets)) {
+      const outPath = getHostSecretFile(layout, host, secretName)
+      const plaintextYaml = upsertYamlScalarLine({ text: "\n", key: secretName, value: secretValue }) + "\n"
+      await sopsEncryptYamlToFile({ plaintextYaml, outPath, configPath: layout.sopsConfigPath, nix })
+      const encrypted = await fs.readFile(outPath, "utf8")
+      await writeFileAtomic(path.join(extraFilesSecretsDir, `${secretName}.yaml`), encrypted, { mode: 0o400 })
+      updated.push(secretName)
+    }
+
+    if (updated.length > 0) {
+      await client.mutation(api.auditLogs.append, {
+        projectId: data.projectId,
+        action: "secrets.write",
+        target: { host },
+        data: { secrets: updated },
+      })
+    }
+
+    return { ok: true as const, updated }
   })

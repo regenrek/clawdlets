@@ -1,4 +1,4 @@
-import { getLlmProviderFromModelId } from "./llm-provider-env.js";
+import { getLlmProviderFromModelId, getLlmProviderInfo } from "./llm-provider-env.js";
 import type { ClawdletsConfig } from "./clawdlets-config.js";
 
 function readStringRecord(v: unknown): Record<string, string> {
@@ -111,6 +111,9 @@ export function buildFleetSecretsPlan(params: { config: ClawdletsConfig; hostNam
     }
 
     for (const provider of Array.from(providers).sort()) {
+      const providerInfo = getLlmProviderInfo(provider);
+      const requiresSecret = providerInfo ? providerInfo.secretEnvVars.length > 0 : true;
+      if (!requiresSecret) continue;
       const secretName = effectiveModelSecrets[provider] || "";
       if (!secretName) {
         const model = models.find((m) => getLlmProviderFromModelId(m) === provider) || "";

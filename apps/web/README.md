@@ -10,14 +10,21 @@ Self-hosted web UI for bootstrapping + operating Clawdlets projects.
 pnpm install
 ```
 
-2) Create `apps/web/.env.local` from `apps/web/.env.local.example` and run Convex dev once:
+2) Login to Convex (if needed):
+
+```sh
+cd apps/web
+npx convex login
+```
+
+3) Create `apps/web/.env.local` from `apps/web/.env.local.example` and run Convex dev once:
 
 ```sh
 cd apps/web
 npx convex dev --once
 ```
 
-3) Set Convex env vars for Better Auth (local dev deployment):
+4) Set Convex env vars for Better Auth (local dev deployment):
 
 ```sh
 cd apps/web
@@ -25,7 +32,7 @@ npx convex env set SITE_URL http://localhost:3000
 npx convex env set BETTER_AUTH_SECRET "<generate-a-random-secret>"
 ```
 
-4) Run:
+5) Run:
 
 ```sh
 cd apps/web
@@ -50,4 +57,11 @@ npx convex env set CLAWDLETS_AUTH_DISABLED true
 ```sh
 cd apps/web
 pnpm build
+```
+
+## Test
+
+```sh
+cd apps/web
+pnpm test
 ```

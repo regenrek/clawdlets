@@ -1,24 +1,16 @@
+import { convexQuery } from "@convex-dev/react-query"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import type { Id } from "../../../../../convex/_generated/dataModel"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "~/components/ui/alert-dialog"
+import { api } from "../../../../../convex/_generated/api"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { LabelWithHelp } from "~/components/ui/label-help"
 import { setupFieldHelp } from "~/lib/setup-field-help"
-import { getClawdletsConfig, addBot, removeBot } from "~/sdk/config"
+import { BotRoster } from "~/components/fleet/bot-roster"
+import { getClawdletsConfig, addBot } from "~/sdk/config"
 
 export const Route = createFileRoute("/projects/$projectId/setup/bots")({
   component: BotsSetup,
@@ -27,6 +19,12 @@ export const Route = createFileRoute("/projects/$projectId/setup/bots")({
 function BotsSetup() {
   const { projectId } = Route.useParams()
   const queryClient = useQueryClient()
+
+  const project = useQuery({
+    ...convexQuery(api.projects.get, { projectId: projectId as Id<"projects"> }),
+    gcTime: 5_000,
+  })
+  const canEdit = project.data?.role === "admin"
 
   const cfg = useQuery({
     queryKey: ["clawdletsConfig", projectId],
@@ -42,14 +40,6 @@ function BotsSetup() {
     onSuccess: () => {
       toast.success("Bot added")
       setNewBot("")
-      void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", projectId] })
-    },
-  })
-
-  const rmBotMutation = useMutation({
-    mutationFn: async (bot: string) => await removeBot({ data: { projectId: projectId as Id<"projects">, bot } }),
-    onSuccess: () => {
-      toast.success("Bot removed")
       void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", projectId] })
     },
   })
@@ -76,15 +66,30 @@ function BotsSetup() {
                 <LabelWithHelp htmlFor="newBot" help={setupFieldHelp.bots.botId}>
                   Bot id
                 </LabelWithHelp>
-                <Input id="newBot" value={newBot} onChange={(e) => setNewBot(e.target.value)} placeholder="maren" />
+                <Input
+                  id="newBot"
+                  value={newBot}
+                  onChange={(e) => setNewBot(e.target.value)}
+                  placeholder="maren"
+                  disabled={!canEdit}
+                />
               </div>
-              <Button type="button" disabled={addBotMutation.isPending || !newBot.trim()} onClick={() => addBotMutation.mutate()}>
+              <Button
+                type="button"
+                disabled={!canEdit || addBotMutation.isPending || !newBot.trim()}
+                onClick={() => addBotMutation.mutate()}
+              >
                 Add
               </Button>
             </div>
             <div className="text-xs text-muted-foreground">
               Stored in <code>fleet.botOrder</code> and <code>fleet.bots</code>.
             </div>
+            {!canEdit ? (
+              <div className="text-xs text-muted-foreground">
+                Read-only: project role <code>{project.data?.role || "…"}</code>.
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-lg border bg-card p-6 space-y-4">
@@ -103,51 +108,7 @@ function BotsSetup() {
               </Button>
             </div>
 
-            {bots.length === 0 ? (
-              <div className="text-muted-foreground">No bots yet.</div>
-            ) : (
-              <div className="divide-y rounded-md border">
-                {bots.map((botId) => {
-                  const discordSecret = (config.fleet.bots as any)?.[botId]?.profile?.discordTokenSecret || ""
-                  return (
-                    <div key={botId} className="p-4 flex items-start justify-between gap-4">
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{botId}</div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          discordTokenSecret: <code>{discordSecret || "(unset)"}</code>
-                        </div>
-                      </div>
-                      <AlertDialog>
-                        <AlertDialogTrigger
-                          render={
-                            <Button size="sm" variant="destructive" type="button">
-                              Remove
-                            </Button>
-                          }
-                        />
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Remove bot?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This removes <code>{botId}</code> from the roster and config.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              variant="destructive"
-                              onClick={() => rmBotMutation.mutate(botId)}
-                            >
-                              Remove
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+            <BotRoster projectId={projectId} bots={bots} config={config} canEdit={canEdit} />
           </div>
         </div>
       )}

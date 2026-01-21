@@ -34,9 +34,16 @@ export const setupFieldHelp = {
   },
   providers: {
     guildId: "Discord guild/server ID used by the Discord provider.",
-    discordTokenSecret: "Name of the secret that stores this bot’s Discord token (tokens never stored in Convex).",
-    modelProviderKey: "Provider key (lowercase, digits, `_`/`-`) used to look up a model secret.",
-    modelProviderSecret: "Secret name containing the provider API key/token for the given provider key.",
+    discordTokenSecret: "Secret name for this bot’s Discord token (stored on disk; never in Convex). Default: `discord_token_<bot>`.",
+  },
+  models: {
+    providerKey: "Model provider key prefix used in model ids (e.g. `openai`, `anthropic`, `minimax`).",
+    secretName: "Secret name that stores the API key/token for this provider (values live in sops-encrypted host secrets).",
+    apiKey: "API key/token value to write into host secrets (never stored in Convex). Leave blank to keep existing.",
+    writeApiKeysHost: "Host whose encrypted secrets will receive the model provider API keys you enter here.",
+    primaryModel: "Primary model id for this bot (format: `provider/model`). Overrides host default model.",
+    botSelect: "Select which bot you’re editing advanced model provider config for.",
+    modelsJson5: "Raw JSON5 for `clawdbot.models` (providers, routing, costs, etc). Do not embed secrets; use env via modelSecrets.",
   },
   secrets: {
     host: "Host whose encrypted secrets you’re initializing/verifying/syncing.",

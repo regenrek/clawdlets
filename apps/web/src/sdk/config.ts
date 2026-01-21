@@ -247,7 +247,7 @@ export const addBot = createServerFn({ method: "POST" })
     next.fleet.bots = next.fleet.bots && typeof next.fleet.bots === "object" && !Array.isArray(next.fleet.bots) ? next.fleet.bots : {}
     if (next.fleet.botOrder.includes(botId) || next.fleet.bots[botId]) return { ok: true as const }
     next.fleet.botOrder = [...next.fleet.botOrder, botId]
-    next.fleet.bots[botId] = {}
+    next.fleet.bots[botId] = { profile: { discordTokenSecret: `discord_token_${botId}` } }
 
     const validated = ClawdletsConfigSchema.parse(next)
     const { runId } = await client.mutation(api.runs.create, {

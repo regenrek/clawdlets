@@ -45,6 +45,26 @@ describe("fleet secrets plan", () => {
     expect(plan.missingSecretConfig.some((m) => m.kind === "model" && m.provider === "openai")).toBe(true);
   });
 
+  it("does not require modelSecrets entry for OAuth providers", async () => {
+    const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
+    const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets");
+
+    const cfg = ClawdletsConfigSchema.parse({
+      schemaVersion: 8,
+      fleet: {
+        botOrder: ["maren"],
+        bots: { maren: {} },
+        modelSecrets: {},
+      },
+      hosts: {
+        "clawdbot-fleet-host": { tailnet: { mode: "none" }, agentModelPrimary: "openai-codex/gpt-5" },
+      },
+    });
+
+    const plan = buildFleetSecretsPlan({ config: cfg, hostName: "clawdbot-fleet-host" });
+    expect(plan.missingSecretConfig.some((m) => m.kind === "model" && m.provider === "openai-codex")).toBe(false);
+  });
+
   it("includes per-bot modelSecrets overrides for mixed providers", async () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets");

@@ -1,0 +1,87 @@
+{
+  "openai": {
+    "auth": "apiKey",
+    "secretEnvVars": ["OPENAI_API_KEY"]
+  },
+  "anthropic": {
+    "auth": "apiKey",
+    "secretEnvVars": ["ANTHROPIC_API_KEY"]
+  },
+  "openai-codex": {
+    "auth": "oauth",
+    "secretEnvVars": []
+  },
+  "opencode": {
+    "auth": "apiKey",
+    "secretEnvVars": ["OPENCODE_API_KEY", "OPENCODE_ZEN_API_KEY"]
+  },
+  "google": {
+    "auth": "apiKey",
+    "secretEnvVars": ["GEMINI_API_KEY"]
+  },
+  "google-vertex": {
+    "auth": "oauth",
+    "secretEnvVars": []
+  },
+  "google-antigravity": {
+    "auth": "oauth",
+    "secretEnvVars": []
+  },
+  "google-gemini-cli": {
+    "auth": "oauth",
+    "secretEnvVars": []
+  },
+  "zai": {
+    "auth": "apiKey",
+    "secretEnvVars": ["ZAI_API_KEY"],
+    "aliases": ["z.ai", "z-ai"]
+  },
+  "vercel-ai-gateway": {
+    "auth": "apiKey",
+    "secretEnvVars": ["AI_GATEWAY_API_KEY"]
+  },
+  "openrouter": {
+    "auth": "apiKey",
+    "secretEnvVars": ["OPENROUTER_API_KEY"]
+  },
+  "xai": {
+    "auth": "apiKey",
+    "secretEnvVars": ["XAI_API_KEY"]
+  },
+  "groq": {
+    "auth": "apiKey",
+    "secretEnvVars": ["GROQ_API_KEY"]
+  },
+  "cerebras": {
+    "auth": "apiKey",
+    "secretEnvVars": ["CEREBRAS_API_KEY"]
+  },
+  "mistral": {
+    "auth": "apiKey",
+    "secretEnvVars": ["MISTRAL_API_KEY"]
+  },
+  "github-copilot": {
+    "auth": "oauth",
+    "secretEnvVars": []
+  },
+  "moonshot": {
+    "auth": "apiKey",
+    "secretEnvVars": ["MOONSHOT_API_KEY"]
+  },
+  "kimi-code": {
+    "auth": "apiKey",
+    "secretEnvVars": ["KIMICODE_API_KEY"]
+  },
+  "qwen-portal": {
+    "auth": "oauth",
+    "secretEnvVars": []
+  },
+  "synthetic": {
+    "auth": "apiKey",
+    "secretEnvVars": ["SYNTHETIC_API_KEY"]
+  },
+  "minimax": {
+    "auth": "apiKey",
+    "secretEnvVars": ["MINIMAX_API_KEY"]
+  }
+}

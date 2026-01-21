@@ -15,6 +15,7 @@ import {
   PuzzlePieceIcon,
   RocketLaunchIcon,
   ServerStackIcon,
+  SparklesIcon,
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline"
 import {
@@ -114,6 +115,12 @@ function AppSidebarContent() {
           tooltip: "Edit fleet config (bots, providers, skills, workspaces).",
         },
         {
+          to: `${projectBase}/setup/settings`,
+          label: "Project Settings",
+          icon: Cog6ToothIcon,
+          tooltip: "Local operator creds: HCLOUD_TOKEN, GITHUB_TOKEN, SOPS_AGE_KEY_FILE, NIX_BIN.",
+        },
+        {
           to: `${projectBase}/setup/hosts`,
           label: "Hosts",
           icon: ServerStackIcon,
@@ -130,6 +137,12 @@ function AppSidebarContent() {
           label: "Providers",
           icon: PuzzlePieceIcon,
           tooltip: "Configure external providers (e.g. Discord) used by the fleet.",
+        },
+        {
+          to: `${projectBase}/setup/models`,
+          label: "Models",
+          icon: SparklesIcon,
+          tooltip: "Model providers, API key mapping, and per-bot defaults.",
         },
         {
           to: `${projectBase}/setup/secrets`,

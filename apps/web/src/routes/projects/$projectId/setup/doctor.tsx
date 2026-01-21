@@ -25,6 +25,7 @@ function pickFixLink(
 
   const toFleet = () => ({ to: `/projects/${projectId}/setup/fleet`, label: "Open Fleet" })
   const toHosts = () => ({ to: `/projects/${projectId}/setup/hosts`, label: "Open Hosts" })
+  const toSettings = () => ({ to: `/projects/${projectId}/setup/settings`, label: "Open Project Settings" })
   const toSecrets = () => ({ to: `/projects/${projectId}/setup/secrets`, label: "Open Secrets" })
   const toDeploy = () => ({ to: `/projects/${projectId}/operate/deploy`, label: "Open Deploy" })
   const toAudit = () => ({ to: `/projects/${projectId}/operate/audit`, label: "Open Audit" })
@@ -33,7 +34,7 @@ function pickFixLink(
   if (label.includes("fleet policy") || label.includes("fleet bots") || label.includes("services.clawdbotfleet.enable")) return toFleet()
   if (label.includes("host config") || label.includes("targethost") || label.includes("sshexposure") || label.includes("diskdevice")) return toHosts()
   if (label.includes("provisioning") || label.includes("admin cidr") || label.includes("ssh pubkey")) return toHosts()
-  if (label.includes("hcloud_token") || label.includes("github_token") || label.includes("sops_age_key_file")) return toSecrets()
+  if (label.includes("hcloud_token") || label.includes("github_token") || label.includes("sops_age_key_file")) return toSettings()
   if (label.includes("sops") || label.includes("secrets")) return toSecrets()
   if (scope === "server-deploy") return toDeploy()
   if (label.includes("tailscale")) return toAudit()

@@ -26,51 +26,59 @@ function ProvidersSetup() {
   const bots = useMemo(() => (config?.fleet?.botOrder as string[]) || [], [config])
 
   const [guildId, setGuildId] = useState("")
-  const [botDiscordSecrets, setBotDiscordSecrets] = useState<Record<string, string>>({})
-  const [modelSecrets, setModelSecrets] = useState<Array<{ key: string; secret: string }>>([])
 
   useEffect(() => {
     if (!config) return
     setGuildId(config.fleet.guildId || "")
-    const nextBotSecrets: Record<string, string> = {}
-    for (const botId of bots) {
-      nextBotSecrets[botId] = (config.fleet.bots as any)?.[botId]?.profile?.discordTokenSecret || ""
-    }
-    setBotDiscordSecrets(nextBotSecrets)
-    const entries = Object.entries((config.fleet.modelSecrets || {}) as Record<string, string>)
-    setModelSecrets(entries.map(([key, secret]) => ({ key, secret })))
   }, [bots, config])
+
+  const missingDiscordTokenSecret = useMemo(() => {
+    if (!config) return [] as string[]
+    const botConfigs = (config.fleet?.bots || {}) as Record<string, any>
+    return bots.filter((botId) => !String(botConfigs?.[botId]?.profile?.discordTokenSecret || "").trim())
+  }, [bots, config])
+
+  const fixDiscordTokenSecrets = useMutation({
+    mutationFn: async () => {
+      if (!config) throw new Error("config not loaded")
+      if (missingDiscordTokenSecret.length === 0) return { ok: true as const }
+
+      const next = structuredClone(config) as any
+      next.fleet = next.fleet || {}
+      next.fleet.bots = next.fleet.bots || {}
+      for (const botId of missingDiscordTokenSecret) {
+        const existing = next.fleet.bots[botId] || {}
+        next.fleet.bots[botId] = {
+          ...existing,
+          profile: {
+            ...(existing.profile || {}),
+            discordTokenSecret: `discord_token_${botId}`,
+          },
+        }
+      }
+
+      return await writeClawdletsConfigFile({
+        data: { projectId: projectId as Id<"projects">, next, title: "Fix discord token secret names" },
+      })
+    },
+    onSuccess: (res) => {
+      if (res.ok) {
+        toast.success("Updated discord token secret names")
+        void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", projectId] })
+      } else toast.error("Validation failed")
+    },
+  })
 
   const save = useMutation({
     mutationFn: async () => {
       if (!config) throw new Error("config not loaded")
 
-      const nextModelSecrets: Record<string, string> = {}
-      for (const row of modelSecrets) {
-        const k = row.key.trim()
-        const v = row.secret.trim()
-        if (!k) continue
-        nextModelSecrets[k] = v
-      }
-
       const nextBots: Record<string, any> = { ...(config.fleet.bots as any) }
-      for (const botId of bots) {
-        const existing = nextBots[botId] || {}
-        nextBots[botId] = {
-          ...existing,
-          profile: {
-            ...(existing.profile || {}),
-            discordTokenSecret: (botDiscordSecrets[botId] || "").trim(),
-          },
-        }
-      }
-
       const next = {
         ...config,
         fleet: {
           ...config.fleet,
           guildId: guildId.trim(),
-          modelSecrets: nextModelSecrets,
           bots: nextBots,
         },
       }
@@ -117,103 +125,49 @@ function ProvidersSetup() {
             </div>
             <div className="space-y-2">
               <div className="flex items-center gap-1 text-sm font-medium">
-                <span>Per-bot discordTokenSecret</span>
+                <span>Per-bot Discord token</span>
                 <HelpTooltip title="discordTokenSecret" side="top">
                   {setupFieldHelp.providers.discordTokenSecret}
                 </HelpTooltip>
               </div>
               <div className="text-xs text-muted-foreground">
-                Secret names only. Tokens stay on disk.
+                Tokens are stored as encrypted host secrets. Secret names are auto-managed as <code>discord_token_&lt;bot&gt;</code>.
               </div>
-              <div className="grid gap-3">
+              {missingDiscordTokenSecret.length > 0 ? (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm space-y-2">
+                  <div className="font-medium">Missing discord token secret names</div>
+                  <div className="text-xs text-muted-foreground">
+                    These bots are missing <code>profile.discordTokenSecret</code>: <code>{missingDiscordTokenSecret.join(", ")}</code>
+                  </div>
+                  <div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={fixDiscordTokenSecrets.isPending}
+                      onClick={() => fixDiscordTokenSecrets.mutate()}
+                    >
+                      Set defaults
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              <div className="grid gap-2 md:grid-cols-2">
                 {bots.length === 0 ? (
                   <div className="text-muted-foreground">No bots.</div>
                 ) : (
                   bots.map((botId) => (
-                    <div key={botId} className="grid gap-2 md:grid-cols-[180px_1fr] items-center">
-                      <div className="flex items-center gap-1 text-sm font-medium">
-                        <span>{botId}</span>
-                        <HelpTooltip title={`${botId} discordTokenSecret`} side="top">
-                          {setupFieldHelp.providers.discordTokenSecret}
-                        </HelpTooltip>
+                    <div key={botId} className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium">{botId}</div>
+                        <div className="text-xs text-muted-foreground">
+                          secret <code>discord_token_{botId}</code>
+                        </div>
                       </div>
-                      <Input
-                        value={botDiscordSecrets[botId] || ""}
-                        onChange={(e) =>
-                          setBotDiscordSecrets((prev) => ({ ...prev, [botId]: e.target.value }))
-                        }
-                        aria-label={`${botId} discordTokenSecret`}
-                        placeholder={`discord_token_${botId}`}
-                      />
+                      <div className="text-xs text-muted-foreground">managed</div>
                     </div>
                   ))
                 )}
               </div>
-            </div>
-          </div>
-
-          <div className="rounded-lg border bg-card p-6 space-y-4">
-            <div className="font-medium">Model providers</div>
-            <div className="text-xs text-muted-foreground">
-              Stored as <code>fleet.modelSecrets</code> (provider key → secret name).
-            </div>
-            <div className="hidden md:grid md:grid-cols-[1fr_1fr_auto] gap-2 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <span>Provider key</span>
-                <HelpTooltip title="Provider key" side="top">
-                  {setupFieldHelp.providers.modelProviderKey}
-                </HelpTooltip>
-              </div>
-              <div className="flex items-center gap-1">
-                <span>Secret name</span>
-                <HelpTooltip title="Secret name" side="top">
-                  {setupFieldHelp.providers.modelProviderSecret}
-                </HelpTooltip>
-              </div>
-              <div />
-            </div>
-            <div className="grid gap-3">
-              {modelSecrets.length === 0 ? (
-                <div className="text-muted-foreground">No model secrets configured.</div>
-              ) : null}
-              {modelSecrets.map((row, idx) => (
-                <div key={`${idx}-${row.key}`} className="grid gap-2 md:grid-cols-[1fr_1fr_auto] items-center">
-                  <Input
-                    value={row.key}
-                    onChange={(e) =>
-                      setModelSecrets((prev) =>
-                        prev.map((r, i) => (i === idx ? { ...r, key: e.target.value } : r)),
-                      )
-                    }
-                    aria-label={`model provider key ${idx + 1}`}
-                    placeholder="zai"
-                  />
-                  <Input
-                    value={row.secret}
-                    onChange={(e) =>
-                      setModelSecrets((prev) =>
-                        prev.map((r, i) => (i === idx ? { ...r, secret: e.target.value } : r)),
-                      )
-                    }
-                    aria-label={`model provider secret ${idx + 1}`}
-                    placeholder="z_ai_api_key"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setModelSecrets((prev) => prev.filter((_, i) => i !== idx))}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              ))}
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setModelSecrets((prev) => [...prev, { key: "", secret: "" }])}
-              >
-                Add provider secret
-              </Button>
             </div>
           </div>
 

@@ -3,18 +3,11 @@ import path from "node:path";
 import process from "node:process";
 import { defineCommand } from "citty";
 import { writeFileAtomic } from "@clawdlets/core/lib/fs-safe";
-import { formatDotenvValue, parseDotenv } from "@clawdlets/core/lib/dotenv-file";
+import { parseDotenv } from "@clawdlets/core/lib/dotenv-file";
 import { expandPath } from "@clawdlets/core/lib/path-expand";
 import { findRepoRoot } from "@clawdlets/core/lib/repo";
-import { loadDeployCreds } from "@clawdlets/core/lib/deploy-creds";
+import { loadDeployCreds, renderDeployCredsEnvFile, type DeployCredsEnvFileKeys } from "@clawdlets/core/lib/deploy-creds";
 import { getRepoLayout } from "@clawdlets/core/repo-layout";
-
-type EnvInitKeys = {
-  HCLOUD_TOKEN: string;
-  GITHUB_TOKEN: string;
-  NIX_BIN: string;
-  SOPS_AGE_KEY_FILE: string;
-};
 
 function resolveEnvFilePath(params: { cwd: string; runtimeDir?: string; envFileArg?: unknown }): { path: string; origin: "default" | "explicit" } {
   const repoRoot = findRepoRoot(params.cwd);
@@ -26,20 +19,6 @@ function resolveEnvFilePath(params: { cwd: string; runtimeDir?: string; envFileA
   }
   const layout = getRepoLayout(repoRoot, params.runtimeDir);
   return { path: layout.envFilePath, origin: "default" };
-}
-
-function renderEnvFile(keys: EnvInitKeys): string {
-  const lines = [
-    "# clawdlets deploy creds (local-only; never commit)",
-    "# Used by: bootstrap, infra, lockdown, doctor",
-    "",
-    `HCLOUD_TOKEN=${formatDotenvValue(keys.HCLOUD_TOKEN)}`,
-    `GITHUB_TOKEN=${formatDotenvValue(keys.GITHUB_TOKEN)}`,
-    `NIX_BIN=${formatDotenvValue(keys.NIX_BIN)}`,
-    `SOPS_AGE_KEY_FILE=${formatDotenvValue(keys.SOPS_AGE_KEY_FILE)}`,
-    "",
-  ];
-  return lines.join("\n");
 }
 
 function readEnvFileOrEmpty(filePath: string): { text: string; parsed: Record<string, string> } {
@@ -77,14 +56,14 @@ export const envInit = defineCommand({
     }
 
     const existing = readEnvFileOrEmpty(resolved.path).parsed;
-    const keys: EnvInitKeys = {
+    const keys: DeployCredsEnvFileKeys = {
       HCLOUD_TOKEN: String(existing.HCLOUD_TOKEN || "").trim(),
       GITHUB_TOKEN: String(existing.GITHUB_TOKEN || "").trim(),
       NIX_BIN: String(existing.NIX_BIN || "nix").trim() || "nix",
       SOPS_AGE_KEY_FILE: String(existing.SOPS_AGE_KEY_FILE || "").trim(),
     };
 
-    await writeFileAtomic(resolved.path, renderEnvFile(keys), { mode: 0o600 });
+    await writeFileAtomic(resolved.path, renderDeployCredsEnvFile(keys), { mode: 0o600 });
 
     console.log(`ok: wrote ${path.relative(repoRoot, resolved.path) || resolved.path}`);
     if (resolved.origin === "explicit") {

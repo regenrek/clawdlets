@@ -16,15 +16,11 @@ let
     builtins.filter (s: s != null && s != "") (builtins.attrValues modelSecrets);
   modelEnv =
     let
-      providers = {
-        anthropic = [ "ANTHROPIC_API_KEY" ];
-        openai = [ "OPENAI_API_KEY" "OPEN_AI_APIKEY" ];
-        zai = [ "ZAI_API_KEY" "Z_AI_API_KEY" ];
-      };
+      llmProviderInfo = builtins.fromJSON (builtins.readFile (project.root + "/packages/core/src/assets/llm-providers.json"));
       pairs = lib.concatLists (lib.mapAttrsToList (provider: secretName:
         let
           s = toString secretName;
-          keys = providers.${lib.toLower provider} or [];
+          keys = ((llmProviderInfo.${lib.toLower provider} or { }).secretEnvVars or []);
         in
           if s == "" || keys == []
           then [ ]

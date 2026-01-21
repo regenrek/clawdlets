@@ -7,14 +7,18 @@ describe("llm provider env", () => {
     expect(getLlmProviderFromModelId("glm-4.7")).toBe(null);
     expect(getLlmProviderFromModelId("/glm-4.7")).toBe(null);
     expect(getLlmProviderFromModelId("ZAI/glm-4.7")).toBe("zai");
+    expect(getLlmProviderFromModelId("z.ai/glm-4.7")).toBe("zai");
+    expect(getLlmProviderFromModelId("z-ai/glm-4.7")).toBe("zai");
   });
 
   it("returns required env vars for known providers and empty for unknown", async () => {
-    const { getProviderRequiredEnvVars, getModelRequiredEnvVars } = await import("../src/lib/llm-provider-env");
+    const { getLlmProviderInfo, getProviderRequiredEnvVars, getModelRequiredEnvVars } = await import("../src/lib/llm-provider-env");
     expect(getProviderRequiredEnvVars("unknown")).toEqual([]);
-    expect(getProviderRequiredEnvVars("openai")).toEqual(["OPENAI_API_KEY", "OPEN_AI_APIKEY"]);
+    expect(getProviderRequiredEnvVars("openai")).toEqual(["OPENAI_API_KEY"]);
+    expect(getProviderRequiredEnvVars("minimax")).toEqual(["MINIMAX_API_KEY"]);
     expect(getModelRequiredEnvVars("anthropic/claude")).toEqual(["ANTHROPIC_API_KEY"]);
     expect(getModelRequiredEnvVars("nope")).toEqual([]);
+    expect(getLlmProviderInfo("openai-codex")?.auth).toBe("oauth");
   });
 
 });

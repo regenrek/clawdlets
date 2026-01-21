@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { createFileRoute } from "@tanstack/react-router"
+import { Link, createFileRoute } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import type { Id } from "../../../../../convex/_generated/dataModel"
@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import { Textarea } from "~/components/ui/textarea"
 import { setupFieldHelp } from "~/lib/setup-field-help"
 import { getClawdletsConfig } from "~/sdk/config"
-import { getDeployCredsStatus } from "~/sdk/deploy-creds"
 import {
   getSecretsTemplate,
   secretsInitExecute,
@@ -47,12 +46,6 @@ function SecretsSetup() {
     setHost(config.defaultHost || hosts[0] || "")
   }, [config, host, hosts])
 
-  const creds = useQuery({
-    queryKey: ["deployCreds", projectId],
-    queryFn: async () =>
-      await getDeployCredsStatus({ data: { projectId: projectId as Id<"projects"> } }),
-  })
-
   const template = useMutation({
     mutationFn: async () =>
       await getSecretsTemplate({ data: { projectId: projectId as Id<"projects">, host } }),
@@ -60,17 +53,31 @@ function SecretsSetup() {
 
   const [allowPlaceholders, setAllowPlaceholders] = useState(false)
   const [adminPassword, setAdminPassword] = useState("")
-  const [adminPasswordHash, setAdminPasswordHash] = useState("")
   const [tailscaleAuthKey, setTailscaleAuthKey] = useState("")
   const [discordTokens, setDiscordTokens] = useState<Record<string, string>>({})
   const [extraSecrets, setExtraSecrets] = useState<Record<string, string>>({})
+  const [extraSecretTemplate, setExtraSecretTemplate] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (!template.data) return
     try {
       const parsed = JSON.parse(template.data.templateJson) as any
-      setDiscordTokens(parsed.discordTokens || {})
-      setExtraSecrets(parsed.secrets || {})
+      const parsedDiscordTokens = (parsed.discordTokens || {}) as Record<string, string>
+      const parsedSecrets = (parsed.secrets || {}) as Record<string, string>
+
+      setExtraSecretTemplate(parsedSecrets)
+
+      setDiscordTokens((prev) => {
+        const out: Record<string, string> = {}
+        for (const botId of Object.keys(parsedDiscordTokens)) out[botId] = prev[botId] || ""
+        return out
+      })
+
+      setExtraSecrets((prev) => {
+        const out: Record<string, string> = {}
+        for (const name of Object.keys(parsedSecrets)) out[name] = prev[name] || ""
+        return out
+      })
     } catch {
       // ignore
     }
@@ -88,10 +95,11 @@ function SecretsSetup() {
           host,
           allowPlaceholders,
           adminPassword,
-          adminPasswordHash,
           tailscaleAuthKey,
           discordTokens,
-          secrets: extraSecrets,
+          secrets: Object.fromEntries(
+            Object.entries(extraSecrets).map(([k, v]) => [k, String(v || "")]).filter(([, v]) => v.trim()),
+          ),
         },
       })
       toast.info("Secrets init started")
@@ -146,6 +154,31 @@ function SecretsSetup() {
         <div className="text-muted-foreground">Missing config.</div>
       ) : (
         <div className="space-y-6">
+          <div className="rounded-lg border bg-card p-6 space-y-3">
+            <div className="font-medium">Related setup</div>
+            <div className="text-xs text-muted-foreground">
+              Deploy creds live in Project Settings. Model provider API keys are set on Models.
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                nativeButton={false}
+                render={<Link to="/projects/$projectId/setup/settings" params={{ projectId }} />}
+              >
+                Project Settings
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                nativeButton={false}
+                render={<Link to="/projects/$projectId/setup/models" params={{ projectId }} />}
+              >
+                Models
+              </Button>
+            </div>
+          </div>
+
           <div className="rounded-lg border bg-card p-6 space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -175,75 +208,6 @@ function SecretsSetup() {
                 <Switch checked={allowPlaceholders} onCheckedChange={setAllowPlaceholders} />
               </div>
             </div>
-          </div>
-
-          <div className="rounded-lg border bg-card p-6 space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="font-medium">Deploy credentials</div>
-                <div className="text-xs text-muted-foreground">
-                  Loaded from <code>.clawdlets/env</code> (preferred) or process env. Values are never shown.
-                </div>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={creds.isFetching}
-                onClick={() => void creds.refetch()}
-              >
-                Refresh
-              </Button>
-            </div>
-
-            {creds.isPending ? (
-              <div className="text-muted-foreground text-sm">Loading…</div>
-            ) : creds.error ? (
-              <div className="text-sm text-destructive">{String(creds.error)}</div>
-            ) : (
-              <div className="space-y-3">
-                <div className="text-sm">
-                  Env file:{" "}
-                  {creds.data?.envFile ? (
-                    <>
-                      <code>{creds.data.envFile.path}</code>{" "}
-                      <span className="text-muted-foreground">
-                        ({creds.data.envFile.status})
-                        {creds.data.envFile.error ? ` · ${creds.data.envFile.error}` : ""}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <code>{creds.data?.defaultEnvPath}</code>{" "}
-                      <span className="text-muted-foreground">(missing)</span>
-                    </>
-                  )}
-                </div>
-
-                <div className="grid gap-2 md:grid-cols-2">
-                  {(creds.data?.keys || []).map((k: any) => (
-                    <div key={k.key} className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium">{k.key}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {k.status} · {k.source}
-                          {k.value ? ` · ${k.value}` : ""}
-                        </div>
-                      </div>
-                      <div className={k.status === "set" ? "text-xs text-emerald-600" : "text-xs text-destructive"}>
-                        {k.status}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="text-xs text-muted-foreground">
-                  If missing, run <code>clawdlets env init</code> and fill values (local-only).
-                </div>
-
-                <Textarea readOnly className="font-mono min-h-[120px]" value={creds.data?.template || ""} />
-              </div>
-            )}
           </div>
 
           <Tabs defaultValue="init">
@@ -278,23 +242,14 @@ function SecretsSetup() {
                       </div>
                     ) : null}
 
-                    <div className="grid gap-4 md:grid-cols-2">
+                    <div className="grid gap-4">
                       <div className="space-y-2">
                         <LabelWithHelp htmlFor="adminPass" help={setupFieldHelp.secrets.adminPassword}>
                           Admin password (optional)
                         </LabelWithHelp>
                         <Input id="adminPass" type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} />
                         <div className="text-xs text-muted-foreground">
-                          If set, the server will generate a yescrypt hash via Nix mkpasswd.
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <LabelWithHelp htmlFor="adminHash" help={setupFieldHelp.secrets.adminPasswordHash}>
-                          Admin password hash
-                        </LabelWithHelp>
-                        <Input id="adminHash" value={adminPasswordHash} onChange={(e) => setAdminPasswordHash(e.target.value)} placeholder="$y$…" />
-                        <div className="text-xs text-muted-foreground">
-                          Stored as <code>admin_password_hash</code> secret.
+                          If set, the server will generate a yescrypt hash via Nix mkpasswd. If left blank, the existing secret is kept (or placeholders are used when enabled).
                         </div>
                       </div>
                     </div>
@@ -361,7 +316,7 @@ function SecretsSetup() {
                                   setExtraSecrets((prev) => ({ ...prev, [name]: e.target.value }))
                                 }
                                 aria-label={`extra secret ${name}`}
-                                placeholder={extraSecrets[name] || "<REPLACE_WITH_SECRET>"}
+                                placeholder={extraSecretTemplate[name] || "<REPLACE_WITH_SECRET>"}
                               />
                             </div>
                           ))

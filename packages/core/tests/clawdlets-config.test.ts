@@ -188,13 +188,14 @@ describe("clawdlets config schema", () => {
     expect(cfg.defaultHost).toBe("clawdbot-fleet-host");
     expect(cfg.fleet.botOrder).toEqual(["maren", "sonja"]);
     expect(Object.keys(cfg.fleet.bots)).toEqual(["maren", "sonja"]);
-    expect(cfg.fleet.modelSecrets.zai).toBe("z_ai_api_key");
+    expect(cfg.fleet.modelSecrets).toEqual({});
     expect(cfg.fleet.bots.maren.profile.discordTokenSecret).toBe("discord_token_maren");
     expect(cfg.cattle.enabled).toBe(false);
     expect(cfg.cattle.hetzner.defaultTtl).toBe("2h");
     expect(cfg.hosts["clawdbot-fleet-host"].sshExposure?.mode).toBe("bootstrap");
     expect(cfg.hosts["clawdbot-fleet-host"].cache?.garnix?.private?.enable).toBe(false);
     expect(cfg.hosts["clawdbot-fleet-host"].provisioning?.adminCidrAllowWorldOpen).toBe(false);
+    expect(cfg.hosts["clawdbot-fleet-host"].agentModelPrimary).toBe("anthropic/claude-opus-4-5");
   });
 
   it("does not share default object references across parses", async () => {

@@ -2,6 +2,7 @@ export const RUN_KINDS = [
   "project_init",
   "project_import",
   "config_write",
+  "workspace_write",
   "doctor",
   "secrets_init",
   "secrets_verify",
@@ -18,4 +19,3 @@ export const RUN_KINDS = [
 export const RUN_STATUSES = ["queued", "running", "succeeded", "failed", "canceled"] as const;
 
 export const RUN_EVENT_LEVELS = ["debug", "info", "warn", "error"] as const;
-

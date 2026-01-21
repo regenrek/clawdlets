@@ -17,8 +17,10 @@ import { Route as ProjectsImportRouteImport } from './routes/projects/import'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects/$projectId/index'
 import { Route as ProjectsProjectIdRunsRouteImport } from './routes/projects/$projectId/runs'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ProjectsProjectIdSetupSettingsRouteImport } from './routes/projects/$projectId/setup/settings'
 import { Route as ProjectsProjectIdSetupSecretsRouteImport } from './routes/projects/$projectId/setup/secrets'
 import { Route as ProjectsProjectIdSetupProvidersRouteImport } from './routes/projects/$projectId/setup/providers'
+import { Route as ProjectsProjectIdSetupModelsRouteImport } from './routes/projects/$projectId/setup/models'
 import { Route as ProjectsProjectIdSetupHostsRouteImport } from './routes/projects/$projectId/setup/hosts'
 import { Route as ProjectsProjectIdSetupFleetRouteImport } from './routes/projects/$projectId/setup/fleet'
 import { Route as ProjectsProjectIdSetupDoctorRouteImport } from './routes/projects/$projectId/setup/doctor'
@@ -72,6 +74,12 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectsProjectIdSetupSettingsRoute =
+  ProjectsProjectIdSetupSettingsRouteImport.update({
+    id: '/projects/$projectId/setup/settings',
+    path: '/projects/$projectId/setup/settings',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ProjectsProjectIdSetupSecretsRoute =
   ProjectsProjectIdSetupSecretsRouteImport.update({
     id: '/projects/$projectId/setup/secrets',
@@ -82,6 +90,12 @@ const ProjectsProjectIdSetupProvidersRoute =
   ProjectsProjectIdSetupProvidersRouteImport.update({
     id: '/projects/$projectId/setup/providers',
     path: '/projects/$projectId/setup/providers',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ProjectsProjectIdSetupModelsRoute =
+  ProjectsProjectIdSetupModelsRouteImport.update({
+    id: '/projects/$projectId/setup/models',
+    path: '/projects/$projectId/setup/models',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ProjectsProjectIdSetupHostsRoute =
@@ -178,8 +192,10 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/setup/doctor': typeof ProjectsProjectIdSetupDoctorRoute
   '/projects/$projectId/setup/fleet': typeof ProjectsProjectIdSetupFleetRoute
   '/projects/$projectId/setup/hosts': typeof ProjectsProjectIdSetupHostsRoute
+  '/projects/$projectId/setup/models': typeof ProjectsProjectIdSetupModelsRoute
   '/projects/$projectId/setup/providers': typeof ProjectsProjectIdSetupProvidersRoute
   '/projects/$projectId/setup/secrets': typeof ProjectsProjectIdSetupSecretsRoute
+  '/projects/$projectId/setup/settings': typeof ProjectsProjectIdSetupSettingsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -202,8 +218,10 @@ export interface FileRoutesByTo {
   '/projects/$projectId/setup/doctor': typeof ProjectsProjectIdSetupDoctorRoute
   '/projects/$projectId/setup/fleet': typeof ProjectsProjectIdSetupFleetRoute
   '/projects/$projectId/setup/hosts': typeof ProjectsProjectIdSetupHostsRoute
+  '/projects/$projectId/setup/models': typeof ProjectsProjectIdSetupModelsRoute
   '/projects/$projectId/setup/providers': typeof ProjectsProjectIdSetupProvidersRoute
   '/projects/$projectId/setup/secrets': typeof ProjectsProjectIdSetupSecretsRoute
+  '/projects/$projectId/setup/settings': typeof ProjectsProjectIdSetupSettingsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -227,8 +245,10 @@ export interface FileRoutesById {
   '/projects/$projectId/setup/doctor': typeof ProjectsProjectIdSetupDoctorRoute
   '/projects/$projectId/setup/fleet': typeof ProjectsProjectIdSetupFleetRoute
   '/projects/$projectId/setup/hosts': typeof ProjectsProjectIdSetupHostsRoute
+  '/projects/$projectId/setup/models': typeof ProjectsProjectIdSetupModelsRoute
   '/projects/$projectId/setup/providers': typeof ProjectsProjectIdSetupProvidersRoute
   '/projects/$projectId/setup/secrets': typeof ProjectsProjectIdSetupSecretsRoute
+  '/projects/$projectId/setup/settings': typeof ProjectsProjectIdSetupSettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -253,8 +273,10 @@ export interface FileRouteTypes {
     | '/projects/$projectId/setup/doctor'
     | '/projects/$projectId/setup/fleet'
     | '/projects/$projectId/setup/hosts'
+    | '/projects/$projectId/setup/models'
     | '/projects/$projectId/setup/providers'
     | '/projects/$projectId/setup/secrets'
+    | '/projects/$projectId/setup/settings'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -277,8 +299,10 @@ export interface FileRouteTypes {
     | '/projects/$projectId/setup/doctor'
     | '/projects/$projectId/setup/fleet'
     | '/projects/$projectId/setup/hosts'
+    | '/projects/$projectId/setup/models'
     | '/projects/$projectId/setup/providers'
     | '/projects/$projectId/setup/secrets'
+    | '/projects/$projectId/setup/settings'
   id:
     | '__root__'
     | '/'
@@ -301,8 +325,10 @@ export interface FileRouteTypes {
     | '/projects/$projectId/setup/doctor'
     | '/projects/$projectId/setup/fleet'
     | '/projects/$projectId/setup/hosts'
+    | '/projects/$projectId/setup/models'
     | '/projects/$projectId/setup/providers'
     | '/projects/$projectId/setup/secrets'
+    | '/projects/$projectId/setup/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -325,8 +351,10 @@ export interface RootRouteChildren {
   ProjectsProjectIdSetupDoctorRoute: typeof ProjectsProjectIdSetupDoctorRoute
   ProjectsProjectIdSetupFleetRoute: typeof ProjectsProjectIdSetupFleetRoute
   ProjectsProjectIdSetupHostsRoute: typeof ProjectsProjectIdSetupHostsRoute
+  ProjectsProjectIdSetupModelsRoute: typeof ProjectsProjectIdSetupModelsRoute
   ProjectsProjectIdSetupProvidersRoute: typeof ProjectsProjectIdSetupProvidersRoute
   ProjectsProjectIdSetupSecretsRoute: typeof ProjectsProjectIdSetupSecretsRoute
+  ProjectsProjectIdSetupSettingsRoute: typeof ProjectsProjectIdSetupSettingsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -387,6 +415,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/projects/$projectId/setup/settings': {
+      id: '/projects/$projectId/setup/settings'
+      path: '/projects/$projectId/setup/settings'
+      fullPath: '/projects/$projectId/setup/settings'
+      preLoaderRoute: typeof ProjectsProjectIdSetupSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects/$projectId/setup/secrets': {
       id: '/projects/$projectId/setup/secrets'
       path: '/projects/$projectId/setup/secrets'
@@ -399,6 +434,13 @@ declare module '@tanstack/react-router' {
       path: '/projects/$projectId/setup/providers'
       fullPath: '/projects/$projectId/setup/providers'
       preLoaderRoute: typeof ProjectsProjectIdSetupProvidersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects/$projectId/setup/models': {
+      id: '/projects/$projectId/setup/models'
+      path: '/projects/$projectId/setup/models'
+      fullPath: '/projects/$projectId/setup/models'
+      preLoaderRoute: typeof ProjectsProjectIdSetupModelsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectId/setup/hosts': {
@@ -522,8 +564,10 @@ const rootRouteChildren: RootRouteChildren = {
   ProjectsProjectIdSetupDoctorRoute: ProjectsProjectIdSetupDoctorRoute,
   ProjectsProjectIdSetupFleetRoute: ProjectsProjectIdSetupFleetRoute,
   ProjectsProjectIdSetupHostsRoute: ProjectsProjectIdSetupHostsRoute,
+  ProjectsProjectIdSetupModelsRoute: ProjectsProjectIdSetupModelsRoute,
   ProjectsProjectIdSetupProvidersRoute: ProjectsProjectIdSetupProvidersRoute,
   ProjectsProjectIdSetupSecretsRoute: ProjectsProjectIdSetupSecretsRoute,
+  ProjectsProjectIdSetupSettingsRoute: ProjectsProjectIdSetupSettingsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

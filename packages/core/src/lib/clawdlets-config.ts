@@ -236,7 +236,7 @@ const HostSchema = z.object({
       signatureUrl: z.string().trim().default(""),
     })
     .default(() => ({ enable: false, manifestUrl: "", interval: "30min", publicKey: "", signatureUrl: "" })),
-  agentModelPrimary: z.string().trim().default("zai/glm-4.7"),
+  agentModelPrimary: z.string().trim().default("anthropic/claude-opus-4-5"),
 });
 
 const CattleSchema = z
@@ -354,9 +354,7 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
     defaultHost: host,
     baseFlake: "",
     fleet: {
-      modelSecrets: {
-        zai: "z_ai_api_key",
-      },
+      modelSecrets: {},
       guildId: "",
       botOrder: bots,
       bots: botsRecord,
@@ -398,7 +396,7 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
         },
         operator: { deploy: { enable: false } },
         selfUpdate: { enable: false, manifestUrl: "", interval: "30min", publicKey: "", signatureUrl: "" },
-        agentModelPrimary: "zai/glm-4.7",
+        agentModelPrimary: "anthropic/claude-opus-4-5",
       },
     },
   });

@@ -391,7 +391,7 @@ function HostsSetup() {
                     <LabelWithHelp htmlFor="model" help={setupFieldHelp.hosts.agentModelPrimary}>
                       Agent model (primary)
                     </LabelWithHelp>
-                    <Input id="model" value={agentModelPrimary} onChange={(e) => setAgentModelPrimary(e.target.value)} placeholder="zai/glm-4.7" />
+                    <Input id="model" value={agentModelPrimary} onChange={(e) => setAgentModelPrimary(e.target.value)} placeholder="provider/model" />
                   </div>
                 </div>
 

@@ -1,8 +1,11 @@
 import path from "node:path"
+import fs from "node:fs"
 
 import { createServerFn } from "@tanstack/react-start"
-import { loadDeployCreds, DEPLOY_CREDS_KEYS } from "@clawdlets/core/lib/deploy-creds"
+import { loadDeployCreds, DEPLOY_CREDS_KEYS, renderDeployCredsEnvFile, type DeployCredsEnvFileKeys } from "@clawdlets/core/lib/deploy-creds"
 import { getRepoLayout } from "@clawdlets/core/repo-layout"
+import { writeFileAtomic } from "@clawdlets/core/lib/fs-safe"
+import { parseDotenv } from "@clawdlets/core/lib/dotenv-file"
 
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
@@ -83,4 +86,71 @@ export const getDeployCredsStatus = createServerFn({ method: "POST" })
       keys,
       template: renderTemplate(layout.envFilePath),
     } satisfies DeployCredsStatus
+  })
+
+export const updateDeployCreds = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    if (!data || typeof data !== "object") throw new Error("invalid input")
+    const d = data as Record<string, unknown>
+    const updatesRaw = d["updates"]
+    const updates = (!updatesRaw || typeof updatesRaw !== "object" || Array.isArray(updatesRaw))
+      ? {}
+      : (updatesRaw as Record<string, unknown>)
+
+    const out: Partial<DeployCredsEnvFileKeys> = {}
+    for (const k of DEPLOY_CREDS_KEYS) {
+      if (!(k in updates)) continue
+      const v = updates[k]
+      if (typeof v !== "string") throw new Error(`invalid updates.${k}`)
+      out[k] = v
+    }
+
+    return { projectId: d["projectId"] as Id<"projects">, updates: out }
+  })
+  .handler(async ({ data }) => {
+    const client = createConvexClient()
+    const repoRoot = await getRepoRoot(client, data.projectId)
+    const layout = getRepoLayout(repoRoot)
+    const envPath = layout.envFilePath
+
+    try {
+      fs.mkdirSync(layout.runtimeDir, { recursive: true })
+      fs.chmodSync(layout.runtimeDir, 0o700)
+    } catch {
+      // best-effort on platforms without POSIX perms
+    }
+
+    let existing: Record<string, string> = {}
+    if (fs.existsSync(envPath)) {
+      const st = fs.lstatSync(envPath)
+      if (st.isSymbolicLink()) throw new Error(`refusing to read env file symlink: ${envPath}`)
+      if (!st.isFile()) throw new Error(`refusing to read non-file env path: ${envPath}`)
+      existing = parseDotenv(fs.readFileSync(envPath, "utf8"))
+    }
+
+    const next: DeployCredsEnvFileKeys = {
+      HCLOUD_TOKEN: String(existing.HCLOUD_TOKEN || "").trim(),
+      GITHUB_TOKEN: String(existing.GITHUB_TOKEN || "").trim(),
+      NIX_BIN: String(existing.NIX_BIN || "nix").trim() || "nix",
+      SOPS_AGE_KEY_FILE: String(existing.SOPS_AGE_KEY_FILE || "").trim(),
+      ...data.updates,
+    }
+    next.HCLOUD_TOKEN = String(next.HCLOUD_TOKEN || "").trim()
+    next.GITHUB_TOKEN = String(next.GITHUB_TOKEN || "").trim()
+    next.NIX_BIN = String(next.NIX_BIN || "").trim() || "nix"
+    next.SOPS_AGE_KEY_FILE = String(next.SOPS_AGE_KEY_FILE || "").trim()
+
+    await writeFileAtomic(envPath, renderDeployCredsEnvFile(next), { mode: 0o600 })
+
+    await client.mutation(api.auditLogs.append, {
+      projectId: data.projectId,
+      action: "deployCreds.update",
+      target: { envPath },
+      data: {
+        updatedKeys: Object.keys(data.updates),
+        runtimeDir: layout.runtimeDir,
+      },
+    })
+
+    return { ok: true as const }
   })
