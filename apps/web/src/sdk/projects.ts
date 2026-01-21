@@ -7,13 +7,8 @@ import { createConvexClient } from "~/server/convex";
 import { resolveUserPath } from "~/server/paths";
 import { readClawdletsEnvTokens } from "~/server/redaction";
 import { runWithEvents } from "~/server/run-manager";
+import { resolveTemplateSpec } from "~/server/template-spec";
 import fs from "node:fs";
-
-function getTemplateSpec(input?: unknown): string {
-  const fromEnv = String(process.env["CLAWDLETS_TEMPLATE_SPEC"] || "").trim();
-  const raw = typeof input === "string" ? input.trim() : "";
-  return raw || fromEnv || "regenrek/clawdlets-template";
-}
 
 function getHost(input?: unknown): string {
   const raw = typeof input === "string" ? input.trim() : "";
@@ -27,7 +22,7 @@ export const projectInitPlan = createServerFn({ method: "POST" })
     return {
       localPath: String(d["localPath"] || ""),
       host: getHost(d["host"]),
-      templateSpec: getTemplateSpec(d["templateSpec"]),
+      templateSpec: resolveTemplateSpec(d["templateSpec"]),
     };
   })
   .handler(async ({ data }) => {
@@ -47,7 +42,7 @@ export const projectCreateStart = createServerFn({ method: "POST" })
       name: String(d["name"] || ""),
       localPath: String(d["localPath"] || ""),
       host: getHost(d["host"]),
-      templateSpec: getTemplateSpec(d["templateSpec"]),
+      templateSpec: resolveTemplateSpec(d["templateSpec"]),
       gitInit: d["gitInit"] === undefined ? true : Boolean(d["gitInit"]),
     };
   })
@@ -87,7 +82,7 @@ export const projectCreateExecute = createServerFn({ method: "POST" })
       projectId: d["projectId"] as Id<"projects">,
       runId: d["runId"] as Id<"runs">,
       host: getHost(d["host"]),
-      templateSpec: getTemplateSpec(d["templateSpec"]),
+      templateSpec: resolveTemplateSpec(d["templateSpec"]),
       gitInit: d["gitInit"] === undefined ? true : Boolean(d["gitInit"]),
     };
   })

@@ -32,6 +32,10 @@ cd apps/web
 pnpm dev
 ```
 
+### Template source
+
+Project scaffolding defaults to `config/template-source.json` (pinned commit). Override with `CLAWDLETS_TEMPLATE_SPEC`.
+
 ### Dev mode (no auth)
 
 Set `VITE_CLAWDLETS_AUTH_DISABLED=true` and `CLAWDLETS_AUTH_DISABLED=true` in `apps/web/.env.local`, and also set the Convex env var:

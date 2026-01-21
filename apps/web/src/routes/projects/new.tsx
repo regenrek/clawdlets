@@ -86,10 +86,14 @@ function NewProject() {
             <Label htmlFor="template">Template (advanced)</Label>
             <Input
               id="template"
-              placeholder="regenrek/clawdlets-template"
+              placeholder="github:owner/repo/templates/default#<40-hex-sha>"
               value={templateSpec}
               onChange={(e) => setTemplateSpec(e.target.value)}
             />
+            <div className="text-muted-foreground text-xs">
+              Defaults to <code>config/template-source.json</code>. Supports <code>github:</code>, <code>gh:</code>, or{" "}
+              <code>file:</code> specs.
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
