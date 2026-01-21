@@ -109,7 +109,11 @@ in
     users.groups = builtins.listToAttrs (map runtime.mkBotGroup cfg.bots);
 
     systemd.tmpfiles.rules =
-      (lib.concatLists (map runtime.mkStateDir cfg.bots))
+      [
+        # Ensure parent exists for nested per-bot state dirs (service sandboxes rely on this).
+        "d ${cfg.stateDirBase} 0755 root root - -"
+      ]
+      ++ (lib.concatLists (map runtime.mkStateDir cfg.bots))
       ++ lib.optionals cfg.opsSnapshot.enable [
         "d ${cfg.opsSnapshot.outDir} 0750 root root - -"
       ];
