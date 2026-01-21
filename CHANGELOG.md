@@ -4,6 +4,13 @@ All notable changes to this repository will be documented in this file.
 The format is based on Keep a Changelog and this project follows SemVer for npm releases.
 
 ## Unreleased
+### Breaking
+- Config schema bumped to v9: replace `guildId` / `discordTokenSecret` / `modelSecrets` with `secretEnv` + `secretFiles` (generic secret wiring).
+
+### Changed
+- Web setup: remove Providers/Models pages; configure channels via bot config + integrations UI.
+- Nix runtime: inject secrets via per-bot env files + secret files (sops-nix templates/secrets); stop injecting secret values into clawdbot config.
+- CLI: `server channels {status|capabilities|login|logout}` for stateful channel auth (e.g. WhatsApp).
 
 ## [0.3.4] - 2026-01-21
 ### Fixed

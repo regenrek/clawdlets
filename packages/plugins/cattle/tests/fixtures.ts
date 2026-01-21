@@ -34,13 +34,14 @@ export function makeConfig(params?: {
   const hostName = params?.hostName ?? "alpha";
   const host = { ...baseHost, ...(params?.hostOverrides ?? {}) };
   const fleet = {
+    secretEnv: {},
+    secretFiles: {},
     botOrder: [] as string[],
     bots: {} as Record<string, unknown>,
-    modelSecrets: {},
     ...(params?.fleetOverrides ?? {}),
   };
   return {
-    schemaVersion: 8,
+    schemaVersion: 9,
     defaultHost: hostName,
     fleet,
     hosts: { [hostName]: host } as Record<string, typeof host>,

@@ -21,7 +21,7 @@ vi.mock("@clawdlets/core/lib/deploy-creds", () => ({
   loadDeployCreds: loadDeployCredsMock,
 }));
 
-vi.mock("@clawdlets/core/lib/fleet-secrets", () => ({
+vi.mock("@clawdlets/core/lib/fleet-secrets-plan", () => ({
   buildFleetSecretsPlan: buildFleetSecretsPlanMock,
 }));
 
@@ -60,6 +60,7 @@ describe("secrets verify", () => {
     const ageKeyPath = path.join(repoRoot, "keys", "op.agekey");
     loadDeployCredsMock.mockReturnValue({ values: { NIX_BIN: "nix", SOPS_AGE_KEY_FILE: ageKeyPath } });
     buildFleetSecretsPlanMock.mockReturnValue({
+      hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
     });
@@ -95,6 +96,7 @@ describe("secrets verify", () => {
     const ageKeyPath = path.join(repoRoot, "keys", "op.agekey");
     loadDeployCredsMock.mockReturnValue({ values: { NIX_BIN: "nix", SOPS_AGE_KEY_FILE: ageKeyPath } });
     buildFleetSecretsPlanMock.mockReturnValue({
+      hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
     });

@@ -19,10 +19,10 @@ Never commit plaintext tokens into config.
 Files under `documentsDir` are copied into the Nix store during deploy. Treat them as public:
 do **not** place secrets in `fleet/workspaces/**`.
 
-Use explicit secret names in `fleet/clawdlets.json` and let Nix inject them:
+Use env var references in clawdbot config and wire them to sops secret names in `fleet/clawdlets.json`:
 
-- Discord: `fleet.bots.<bot>.profile.discordTokenSecret = "<secretName>"`
-- Model providers: `fleet.modelSecrets.<provider> = "<secretName>"`
+- Discord: set `channels.discord.token="${DISCORD_BOT_TOKEN}"` and wire `fleet.bots.<bot>.profile.secretEnv.DISCORD_BOT_TOKEN = "<secretName>"`
+- Model providers: wire `fleet.secretEnv.<ENV_VAR> = "<secretName>"` (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `ZAI_API_KEY`)
 
 Example (Discord token):
 
@@ -31,9 +31,9 @@ Example (Discord token):
   "fleet": {
     "bots": {
       "maren": {
-        "profile": { "discordTokenSecret": "discord_token_maren" },
+        "profile": { "secretEnv": { "DISCORD_BOT_TOKEN": "discord_token_maren" } },
         "clawdbot": {
-          "channels": { "discord": { "enabled": true } }
+          "channels": { "discord": { "enabled": true, "token": "${DISCORD_BOT_TOKEN}" } }
         }
       }
     }

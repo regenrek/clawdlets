@@ -20,30 +20,16 @@ export const setupFieldHelp = {
     knownHostsFile: "Optionally import entries from your local `known_hosts` for safer SSH pinning.",
   },
   fleet: {
-    guildId: "Discord guild/server ID used by fleet integrations.",
     codexEnable: "Enables Codex integration in the fleet config.",
     resticEnable: "Enables restic backups configuration in the fleet config.",
     resticRepo: "Restic repository URL/path used for backups (only when restic is enabled).",
     jsonEditor: "Edit the full `fleet/clawdlets.json` as JSON (validated + atomic write).",
-    dotPath: "Dot-path into config (e.g. `fleet.guildId`, `hosts.my-host.targetHost`).",
+    dotPath: "Dot-path into config (e.g. `fleet.codex.enable`, `hosts.my-host.targetHost`).",
     dotValue: "Value to set as a string (use JSON value if you need objects/arrays/bools/numbers).",
     dotValueJson: "Value to set as JSON (e.g. `true`, `123`, `{...}`, `[...]`).",
   },
   bots: {
     botId: "Stable bot identifier (used in ports/services and config keys). Must match existing fleet conventions.",
-  },
-  providers: {
-    guildId: "Discord guild/server ID used by the Discord provider.",
-    discordTokenSecret: "Secret name for this bot’s Discord token (stored on disk; never in Convex). Default: `discord_token_<bot>`.",
-  },
-  models: {
-    providerKey: "Model provider key prefix used in model ids (e.g. `openai`, `anthropic`, `minimax`).",
-    secretName: "Secret name that stores the API key/token for this provider (values live in sops-encrypted host secrets).",
-    apiKey: "API key/token value to write into host secrets (never stored in Convex). Leave blank to keep existing.",
-    writeApiKeysHost: "Host whose encrypted secrets will receive the model provider API keys you enter here.",
-    primaryModel: "Primary model id for this bot (format: `provider/model`). Overrides host default model.",
-    botSelect: "Select which bot you’re editing advanced model provider config for.",
-    modelsJson5: "Raw JSON5 for `clawdbot.models` (providers, routing, costs, etc). Do not embed secrets; use env via modelSecrets.",
   },
   secrets: {
     host: "Host whose encrypted secrets you’re initializing/verifying/syncing.",
@@ -51,7 +37,6 @@ export const setupFieldHelp = {
     adminPassword: "Optional admin password used to generate a yescrypt hash via Nix.",
     adminPasswordHash: "Precomputed yescrypt hash (`$y$…`). Stored as `admin_password_hash` secret.",
     tailscaleAuthKey: "Tailscale auth key for joining the tailnet (only required for Tailscale-based access).",
-    discordToken: "Discord bot token value (written to encrypted secrets on disk).",
     extraSecret: "Additional secret value written to encrypted YAML under `secrets/hosts/<host>`.",
   },
   doctor: {

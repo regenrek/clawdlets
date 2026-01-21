@@ -3,13 +3,14 @@ import fsSync from "node:fs"
 import path from "node:path"
 
 import { createServerFn } from "@tanstack/react-start"
-import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets"
+import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets-plan"
 import {
   buildSecretsInitTemplate,
   isPlaceholderSecretValue,
   type SecretsInitJson,
 } from "@clawdlets/core/lib/secrets-init"
 import { loadClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config"
+import { SecretNameSchema } from "@clawdlets/core/lib/identifiers"
 import {
   getRepoLayout,
   getHostRemoteSecretsDir,
@@ -22,6 +23,7 @@ import {
 import { writeFileAtomic } from "@clawdlets/core/lib/fs-safe"
 import { mkpasswdYescryptHash } from "@clawdlets/core/lib/mkpasswd"
 import { createSecretsTar } from "@clawdlets/core/lib/secrets-tar"
+import { assertSafeRecordKey, createNullProtoRecord } from "@clawdlets/core/lib/safe-record"
 import { sopsDecryptYamlFile, sopsEncryptYamlToFile } from "@clawdlets/core/lib/sops"
 import { readYamlScalarFromMapping, upsertYamlScalarLine } from "@clawdlets/core/lib/yaml-scalar"
 import { loadDeployCreds } from "@clawdlets/core/lib/deploy-creds"
@@ -32,6 +34,9 @@ import { createConvexClient, type ConvexClient } from "~/server/convex"
 import { resolveClawdletsCliEntry } from "~/server/clawdlets-cli"
 import { readClawdletsEnvTokens } from "~/server/redaction"
 import { runWithEvents, spawnCommand, spawnCommandCapture } from "~/server/run-manager"
+import { assertRunBoundToProject } from "~/sdk/run-binding"
+import { parseProjectHostInput, parseProjectRunHostInput } from "~/sdk/serverfn-validators"
+import { assertSecretsAreManaged, buildManagedHostSecretNameAllowlist } from "~/sdk/secrets-allowlist"
 
 async function getRepoRoot(
   client: ConvexClient,
@@ -41,27 +46,36 @@ async function getRepoRoot(
   return project.localPath
 }
 
+function parseSecretValuesRecord(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return createNullProtoRecord<string>()
+  const out = createNullProtoRecord<string>()
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v !== "string") continue
+    const key = String(k || "").trim()
+    const value = v.trim()
+    if (!key || !value) continue
+    assertSafeRecordKey({ key, context: "web secrets values" })
+    void SecretNameSchema.parse(key)
+    out[key] = value
+  }
+  return out
+}
+
 export const getSecretsTemplate = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
-    const d = data as Record<string, unknown>
-    return { projectId: d["projectId"] as Id<"projects">, host: String(d["host"] || "") }
-  })
+  .inputValidator(parseProjectHostInput)
   .handler(async ({ data }) => {
     const client = createConvexClient()
     const repoRoot = await getRepoRoot(client, data.projectId)
     const { config } = loadClawdletsConfig({ repoRoot })
-    const host = data.host.trim() || config.defaultHost || ""
+    const host = data.host || config.defaultHost || ""
     if (!host) throw new Error("missing host")
 
     const hostCfg = config.hosts[host]
     if (!hostCfg) throw new Error(`unknown host: ${host}`)
 
     const secretsPlan = buildFleetSecretsPlan({ config, hostName: host })
-    const requiredSecretNames = new Set<string>(secretsPlan.secretNamesRequired)
-
-    const tailnetMode = String(hostCfg.tailnet?.mode || "none")
-    const requiresTailscaleAuthKey = tailnetMode === "tailscale"
+    const hostRequiredSecretNames = new Set<string>(secretsPlan.hostSecretNamesRequired)
+    const requiresTailscaleAuthKey = hostRequiredSecretNames.has("tailscale_auth_key")
 
     const garnixPrivate = hostCfg.cache?.garnix?.private
     const garnixPrivateEnabled = Boolean(garnixPrivate?.enable)
@@ -72,63 +86,58 @@ export const getSecretsTemplate = createServerFn({ method: "POST" })
       throw new Error("cache.garnix.private.netrcSecret must be set when private cache is enabled")
     }
 
-    const discordBotsRequired = secretsPlan.bots.filter((b) => {
-      const secretName = secretsPlan.discordSecretsByBot[b] || ""
-      return secretName && requiredSecretNames.has(secretName)
-    })
+    const requiredSecrets = new Set<string>([
+      ...secretsPlan.secretNamesRequired,
+      ...Array.from(hostRequiredSecretNames).filter((s) => s !== "admin_password_hash" && s !== "tailscale_auth_key"),
+    ])
 
-    const discordSecretNames = new Set<string>(Object.values(secretsPlan.discordSecretsByBot).filter(Boolean))
-    const fleetModelSecretNames = new Set<string>(
-      Object.values((config.fleet.modelSecrets || {}) as Record<string, string>)
-        .map((s) => String(s || "").trim())
-        .filter(Boolean),
-    )
+    const templateSecretNames = Array.from(new Set<string>([
+      ...secretsPlan.secretNamesAll,
+      ...Array.from(hostRequiredSecretNames).filter((s) => s !== "admin_password_hash" && s !== "tailscale_auth_key"),
+    ])).sort()
 
-    const templateExtraSecrets: Record<string, string> = {}
-    for (const secretName of secretsPlan.secretNamesAll) {
-      if (discordSecretNames.has(secretName)) continue
-      if (fleetModelSecretNames.has(secretName)) continue
-      templateExtraSecrets[secretName] = requiredSecretNames.has(secretName)
-        ? "<REPLACE_WITH_SECRET>"
-        : "<OPTIONAL>"
-    }
-    if (garnixPrivateEnabled) {
-      templateExtraSecrets[garnixNetrcSecretName] = "<REPLACE_WITH_NETRC>"
+    const templateSecrets: Record<string, string> = {}
+    for (const secretName of templateSecretNames) {
+      if (garnixPrivateEnabled && secretName === garnixNetrcSecretName) templateSecrets[secretName] = "<REPLACE_WITH_NETRC>"
+      else templateSecrets[secretName] = requiredSecrets.has(secretName) ? "<REPLACE_WITH_SECRET>" : "<OPTIONAL>"
     }
 
     const template = buildSecretsInitTemplate({
-      bots: secretsPlan.bots,
-      discordBots: discordBotsRequired,
       requiresTailscaleAuthKey,
-      secrets: templateExtraSecrets,
+      secrets: templateSecrets,
     })
 
     return {
       host,
       bots: secretsPlan.bots,
       missingSecretConfig: secretsPlan.missingSecretConfig,
-      requiredSecretNames: secretsPlan.secretNamesRequired,
+      requiredSecretNames: Array.from(new Set<string>([
+        ...secretsPlan.hostSecretNamesRequired,
+        ...secretsPlan.secretNamesRequired,
+      ])).sort(),
       templateJson: `${JSON.stringify(template, null, 2)}\n`,
     }
   })
 
 export const secretsInitStart = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
-    const d = data as Record<string, unknown>
-    return { projectId: d["projectId"] as Id<"projects">, host: String(d["host"] || "") }
-  })
+  .inputValidator(parseProjectHostInput)
   .handler(async ({ data }) => {
     const client = createConvexClient()
+    const repoRoot = await getRepoRoot(client, data.projectId)
+    const { config } = loadClawdletsConfig({ repoRoot })
+    const host = data.host || config.defaultHost || ""
+    if (!host) throw new Error("missing host")
+    if (!config.hosts[host]) throw new Error(`unknown host: ${host}`)
+
     const { runId } = await client.mutation(api.runs.create, {
       projectId: data.projectId,
       kind: "secrets_init",
-      title: `Secrets init (${data.host})`,
+      title: `Secrets init (${host})`,
     })
     await client.mutation(api.auditLogs.append, {
       projectId: data.projectId,
       action: "secrets.init",
-      target: { host: data.host },
+      target: { host },
       data: { runId },
     })
     await client.mutation(api.runEvents.appendBatch, {
@@ -140,23 +149,32 @@ export const secretsInitStart = createServerFn({ method: "POST" })
 
 export const secretsInitExecute = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
+    const base = parseProjectRunHostInput(data)
     const d = data as Record<string, unknown>
     return {
-      projectId: d["projectId"] as Id<"projects">,
-      runId: d["runId"] as Id<"runs">,
-      host: String(d["host"] || ""),
+      ...base,
       allowPlaceholders: Boolean(d["allowPlaceholders"]),
       adminPassword: typeof d["adminPassword"] === "string" ? d["adminPassword"] : "",
       adminPasswordHash: typeof d["adminPasswordHash"] === "string" ? d["adminPasswordHash"] : "",
       tailscaleAuthKey: typeof d["tailscaleAuthKey"] === "string" ? d["tailscaleAuthKey"] : "",
-      discordTokens: (d["discordTokens"] || {}) as Record<string, string>,
-      secrets: (d["secrets"] || {}) as Record<string, string>,
+      secrets: parseSecretValuesRecord(d["secrets"]),
     }
   })
   .handler(async ({ data }) => {
     const client = createConvexClient()
+
+    const runGet = await client.query(api.runs.get, { runId: data.runId })
+    assertRunBoundToProject({
+      runId: data.runId,
+      runProjectId: runGet.run.projectId as Id<"projects">,
+      expectedProjectId: data.projectId,
+      runKind: runGet.run.kind,
+      expectedKind: "secrets_init",
+    })
+
     const repoRoot = await getRepoRoot(client, data.projectId)
+    const { config } = loadClawdletsConfig({ repoRoot })
+    if (!config.hosts[data.host]) throw new Error(`unknown host: ${data.host}`)
     const layout = getRepoLayout(repoRoot)
 
     const baseRedactions = await readClawdletsEnvTokens(repoRoot)
@@ -164,7 +182,6 @@ export const secretsInitExecute = createServerFn({ method: "POST" })
       data.adminPassword,
       data.adminPasswordHash,
       data.tailscaleAuthKey,
-      ...Object.values(data.discordTokens || {}),
       ...Object.values(data.secrets || {}),
     ]
       .map((s) => String(s || "").trim())
@@ -223,13 +240,8 @@ export const secretsInitExecute = createServerFn({ method: "POST" })
 
     const payload: SecretsInitJson = {
       adminPasswordHash,
-      discordTokens: Object.fromEntries(
-        Object.entries(data.discordTokens || {})
-          .map(([k, v]) => [String(k).trim(), String(v).trim()] as const)
-          .filter(([, v]) => v),
-      ),
       ...(data.tailscaleAuthKey.trim() ? { tailscaleAuthKey: data.tailscaleAuthKey.trim() } : {}),
-      ...(data.secrets && Object.keys(data.secrets).length > 0 ? { secrets: data.secrets } : {}),
+      secrets: data.secrets,
     }
 
     await writeFileAtomic(tmpJsonPath, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 })
@@ -273,40 +285,46 @@ export const secretsInitExecute = createServerFn({ method: "POST" })
   })
 
 export const secretsVerifyStart = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
-    const d = data as Record<string, unknown>
-    return { projectId: d["projectId"] as Id<"projects">, host: String(d["host"] || "") }
-  })
+  .inputValidator(parseProjectHostInput)
   .handler(async ({ data }) => {
     const client = createConvexClient()
+    const repoRoot = await getRepoRoot(client, data.projectId)
+    const { config } = loadClawdletsConfig({ repoRoot })
+    const host = data.host || config.defaultHost || ""
+    if (!host) throw new Error("missing host")
+    if (!config.hosts[host]) throw new Error(`unknown host: ${host}`)
+
     const { runId } = await client.mutation(api.runs.create, {
       projectId: data.projectId,
       kind: "secrets_verify",
-      title: `Secrets verify (${data.host})`,
+      title: `Secrets verify (${host})`,
     })
     await client.mutation(api.auditLogs.append, {
       projectId: data.projectId,
       action: "secrets.verify",
-      target: { host: data.host },
+      target: { host },
       data: { runId },
     })
     return { runId }
   })
 
 export const secretsVerifyExecute = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
-    const d = data as Record<string, unknown>
-    return {
-      projectId: d["projectId"] as Id<"projects">,
-      runId: d["runId"] as Id<"runs">,
-      host: String(d["host"] || ""),
-    }
-  })
+  .inputValidator(parseProjectRunHostInput)
   .handler(async ({ data }) => {
     const client = createConvexClient()
+
+    const runGet = await client.query(api.runs.get, { runId: data.runId })
+    assertRunBoundToProject({
+      runId: data.runId,
+      runProjectId: runGet.run.projectId as Id<"projects">,
+      expectedProjectId: data.projectId,
+      runKind: runGet.run.kind,
+      expectedKind: "secrets_verify",
+    })
+
     const repoRoot = await getRepoRoot(client, data.projectId)
+    const { config } = loadClawdletsConfig({ repoRoot })
+    if (!config.hosts[data.host]) throw new Error(`unknown host: ${data.host}`)
     const redactTokens = await readClawdletsEnvTokens(repoRoot)
     const cliEntry = resolveClawdletsCliEntry()
 
@@ -370,38 +388,36 @@ export const secretsVerifyExecute = createServerFn({ method: "POST" })
   })
 
 export const secretsSyncStart = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
-    const d = data as Record<string, unknown>
-    return { projectId: d["projectId"] as Id<"projects">, host: String(d["host"] || "") }
-  })
+  .inputValidator(parseProjectHostInput)
   .handler(async ({ data }) => {
     const client = createConvexClient()
+    const repoRoot = await getRepoRoot(client, data.projectId)
+    const { config } = loadClawdletsConfig({ repoRoot })
+    const host = data.host || config.defaultHost || ""
+    if (!host) throw new Error("missing host")
+    if (!config.hosts[host]) throw new Error(`unknown host: ${host}`)
+
     const { runId } = await client.mutation(api.runs.create, {
       projectId: data.projectId,
       kind: "secrets_sync",
-      title: `Secrets sync (${data.host})`,
+      title: `Secrets sync (${host})`,
     })
     await client.mutation(api.auditLogs.append, {
       projectId: data.projectId,
       action: "secrets.sync",
-      target: { host: data.host },
+      target: { host },
       data: { runId },
     })
     return { runId }
   })
 
 export const secretsSyncPreview = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
-    const d = data as Record<string, unknown>
-    return { projectId: d["projectId"] as Id<"projects">, host: String(d["host"] || "") }
-  })
+  .inputValidator(parseProjectHostInput)
   .handler(async ({ data }) => {
     const client = createConvexClient()
     const repoRoot = await getRepoRoot(client, data.projectId)
     const { config } = loadClawdletsConfig({ repoRoot })
-    const host = data.host.trim() || config.defaultHost || ""
+    const host = data.host || config.defaultHost || ""
     if (!host) throw new Error("missing host")
 
     const layout = getRepoLayout(repoRoot)
@@ -434,18 +450,22 @@ export const secretsSyncPreview = createServerFn({ method: "POST" })
   })
 
 export const secretsSyncExecute = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
-    const d = data as Record<string, unknown>
-    return {
-      projectId: d["projectId"] as Id<"projects">,
-      runId: d["runId"] as Id<"runs">,
-      host: String(d["host"] || ""),
-    }
-  })
+  .inputValidator(parseProjectRunHostInput)
   .handler(async ({ data }) => {
     const client = createConvexClient()
+
+    const runGet = await client.query(api.runs.get, { runId: data.runId })
+    assertRunBoundToProject({
+      runId: data.runId,
+      runProjectId: runGet.run.projectId as Id<"projects">,
+      expectedProjectId: data.projectId,
+      runKind: runGet.run.kind,
+      expectedKind: "secrets_sync",
+    })
+
     const repoRoot = await getRepoRoot(client, data.projectId)
+    const { config } = loadClawdletsConfig({ repoRoot })
+    if (!config.hosts[data.host]) throw new Error(`unknown host: ${data.host}`)
     const redactTokens = await readClawdletsEnvTokens(repoRoot)
     const cliEntry = resolveClawdletsCliEntry()
 
@@ -481,12 +501,14 @@ export const writeHostSecrets = createServerFn({ method: "POST" })
     if (!d["secrets"] || typeof d["secrets"] !== "object" || Array.isArray(d["secrets"])) {
       throw new Error("invalid secrets")
     }
-    const secrets: Record<string, string> = {}
+    const secrets = createNullProtoRecord<string>()
     for (const [k, v] of Object.entries(d["secrets"] as Record<string, unknown>)) {
       if (typeof v !== "string") continue
       const key = String(k || "").trim()
       const value = v.trim()
       if (!key || !value) continue
+      assertSafeRecordKey({ key, context: "web writeHostSecrets" })
+      void SecretNameSchema.parse(key)
       secrets[key] = value
     }
     return {
@@ -503,6 +525,9 @@ export const writeHostSecrets = createServerFn({ method: "POST" })
     const repoRoot = await getRepoRoot(client, data.projectId)
     const { config } = loadClawdletsConfig({ repoRoot })
     if (!config.hosts[host]) throw new Error(`unknown host: ${host}`)
+
+    const allowlist = buildManagedHostSecretNameAllowlist({ config, host })
+    assertSecretsAreManaged({ allowlist, secrets: data.secrets })
 
     const layout = getRepoLayout(repoRoot)
     if (!fsSync.existsSync(layout.sopsConfigPath)) {

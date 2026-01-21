@@ -54,26 +54,22 @@ function SecretsSetup() {
   const [allowPlaceholders, setAllowPlaceholders] = useState(false)
   const [adminPassword, setAdminPassword] = useState("")
   const [tailscaleAuthKey, setTailscaleAuthKey] = useState("")
-  const [discordTokens, setDiscordTokens] = useState<Record<string, string>>({})
-  const [extraSecrets, setExtraSecrets] = useState<Record<string, string>>({})
-  const [extraSecretTemplate, setExtraSecretTemplate] = useState<Record<string, string>>({})
+  const [needsTailscaleAuthKey, setNeedsTailscaleAuthKey] = useState(false)
+  const [secrets, setSecrets] = useState<Record<string, string>>({})
+  const [secretsTemplate, setSecretsTemplate] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (!template.data) return
     try {
       const parsed = JSON.parse(template.data.templateJson) as any
-      const parsedDiscordTokens = (parsed.discordTokens || {}) as Record<string, string>
       const parsedSecrets = (parsed.secrets || {}) as Record<string, string>
 
-      setExtraSecretTemplate(parsedSecrets)
+      setNeedsTailscaleAuthKey(Boolean(parsed.tailscaleAuthKey))
+      if (!parsed.tailscaleAuthKey) setTailscaleAuthKey("")
 
-      setDiscordTokens((prev) => {
-        const out: Record<string, string> = {}
-        for (const botId of Object.keys(parsedDiscordTokens)) out[botId] = prev[botId] || ""
-        return out
-      })
+      setSecretsTemplate(parsedSecrets)
 
-      setExtraSecrets((prev) => {
+      setSecrets((prev) => {
         const out: Record<string, string> = {}
         for (const name of Object.keys(parsedSecrets)) out[name] = prev[name] || ""
         return out
@@ -96,9 +92,8 @@ function SecretsSetup() {
           allowPlaceholders,
           adminPassword,
           tailscaleAuthKey,
-          discordTokens,
           secrets: Object.fromEntries(
-            Object.entries(extraSecrets).map(([k, v]) => [k, String(v || "")]).filter(([, v]) => v.trim()),
+            Object.entries(secrets).map(([k, v]) => [k, String(v || "")]).filter(([, v]) => v.trim()),
           ),
         },
       })
@@ -157,7 +152,7 @@ function SecretsSetup() {
           <div className="rounded-lg border bg-card p-6 space-y-3">
             <div className="font-medium">Related setup</div>
             <div className="text-xs text-muted-foreground">
-              Deploy creds live in Project Settings. Model provider API keys are set on Models.
+              Deploy creds live in Project Settings. Most secrets are configured via bot clawdbot config + secret wiring.
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -172,9 +167,9 @@ function SecretsSetup() {
                 type="button"
                 variant="outline"
                 nativeButton={false}
-                render={<Link to="/projects/$projectId/setup/models" params={{ projectId }} />}
+                render={<Link to="/projects/$projectId/setup/bots" params={{ projectId }} />}
               >
-                Models
+                Bots
               </Button>
             </div>
           </div>
@@ -254,54 +249,30 @@ function SecretsSetup() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <LabelWithHelp htmlFor="tskey" help={setupFieldHelp.secrets.tailscaleAuthKey}>
-                        Tailscale auth key (if needed)
-                      </LabelWithHelp>
-                      <Input id="tskey" value={tailscaleAuthKey} onChange={(e) => setTailscaleAuthKey(e.target.value)} placeholder="tskey-auth-…" />
-                    </div>
-
-                    <div className="space-y-2">
-                      <LabelWithHelp help={setupFieldHelp.secrets.discordToken}>
-                        Discord tokens
-                      </LabelWithHelp>
-                      <div className="grid gap-3">
-                        {Object.keys(discordTokens).length === 0 ? (
-                          <div className="text-muted-foreground text-sm">No discord tokens required.</div>
-                        ) : (
-                          Object.keys(discordTokens).map((botId) => (
-                            <div key={botId} className="grid gap-2 md:grid-cols-[180px_1fr] items-center">
-                              <div className="flex items-center gap-1 text-sm font-medium">
-                                <span>{botId}</span>
-                                <HelpTooltip title={`${botId} discord token`} side="top">
-                                  {setupFieldHelp.secrets.discordToken}
-                                </HelpTooltip>
-                              </div>
-                              <Input
-                                type="password"
-                                value={discordTokens[botId] || ""}
-                                onChange={(e) => setDiscordTokens((prev) => ({ ...prev, [botId]: e.target.value }))}
-                                aria-label={`${botId} discord token`}
-                                placeholder="discord token"
-                              />
-                            </div>
-                          ))
-                        )}
+                    {needsTailscaleAuthKey ? (
+                      <div className="space-y-2">
+                        <LabelWithHelp htmlFor="tskey" help={setupFieldHelp.secrets.tailscaleAuthKey}>
+                          Tailscale auth key
+                        </LabelWithHelp>
+                        <Input id="tskey" value={tailscaleAuthKey} onChange={(e) => setTailscaleAuthKey(e.target.value)} placeholder="tskey-auth-…" />
                       </div>
-                    </div>
+                    ) : null}
 
                     <div className="space-y-2">
                       <LabelWithHelp help={setupFieldHelp.secrets.extraSecret}>
-                        Extra secrets
+                        Secrets
                       </LabelWithHelp>
                       <div className="text-xs text-muted-foreground">
                         Values are written to encrypted YAML in <code>secrets/hosts/{host}</code>.
                       </div>
                       <div className="grid gap-3">
-                        {Object.keys(extraSecrets).length === 0 ? (
-                          <div className="text-muted-foreground text-sm">No extra secrets.</div>
+                        {Object.keys(secrets).length === 0 ? (
+                          <div className="text-muted-foreground text-sm">No secrets.</div>
                         ) : (
-                          Object.keys(extraSecrets).sort().map((name) => (
+                          Object.keys(secrets).sort().map((name) => {
+                            const placeholder = secretsTemplate[name] || "<REPLACE_WITH_SECRET>"
+                            const isMultiline = placeholder === "<REPLACE_WITH_NETRC>" || name.includes("netrc")
+                            return (
                             <div key={name} className="grid gap-2 md:grid-cols-[220px_1fr] items-center">
                               <div className="flex items-center gap-1 text-sm font-medium truncate">
                                 <span className="truncate">{name}</span>
@@ -309,17 +280,27 @@ function SecretsSetup() {
                                   {setupFieldHelp.secrets.extraSecret}
                                 </HelpTooltip>
                               </div>
-                              <Input
-                                type="password"
-                                value={extraSecrets[name] || ""}
-                                onChange={(e) =>
-                                  setExtraSecrets((prev) => ({ ...prev, [name]: e.target.value }))
-                                }
-                                aria-label={`extra secret ${name}`}
-                                placeholder={extraSecretTemplate[name] || "<REPLACE_WITH_SECRET>"}
-                              />
+                              {isMultiline ? (
+                                <Textarea
+                                  value={secrets[name] || ""}
+                                  onChange={(e) => setSecrets((prev) => ({ ...prev, [name]: e.target.value }))}
+                                  aria-label={`secret ${name}`}
+                                  placeholder={placeholder}
+                                  rows={3}
+                                  className="font-mono text-xs"
+                                />
+                              ) : (
+                                <Input
+                                  type="password"
+                                  value={secrets[name] || ""}
+                                  onChange={(e) => setSecrets((prev) => ({ ...prev, [name]: e.target.value }))}
+                                  aria-label={`secret ${name}`}
+                                  placeholder={placeholder}
+                                />
+                              )}
                             </div>
-                          ))
+                            )
+                          })
                         )}
                       </div>
                     </div>

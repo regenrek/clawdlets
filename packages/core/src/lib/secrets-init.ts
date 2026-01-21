@@ -1,8 +1,10 @@
+import { SecretNameSchema } from "./identifiers.js";
+import { assertSafeRecordKey, createNullProtoRecord } from "./safe-record.js";
+
 export type SecretsInitJson = {
   adminPasswordHash: string;
   tailscaleAuthKey?: string;
-  secrets?: Record<string, string>;
-  discordTokens: Record<string, string>;
+  secrets: Record<string, string>;
 };
 
 function getCliFlagValue(argv: string[], flagNames: string[]): string | undefined {
@@ -73,8 +75,6 @@ export function isPlaceholderSecretValue(value: string): boolean {
 
 export function listSecretsInitPlaceholders(params: {
   input: SecretsInitJson;
-  bots: string[];
-  discordBots?: string[];
   requiresTailscaleAuthKey: boolean;
 }): string[] {
   const out = new Set<string>();
@@ -85,38 +85,23 @@ export function listSecretsInitPlaceholders(params: {
     out.add("tailscaleAuthKey");
   }
 
-  if (params.input.secrets && typeof params.input.secrets === "object") {
-    for (const [k, v] of Object.entries(params.input.secrets)) {
-      if (typeof v !== "string") continue;
-      if (v && isPlaceholderSecretValue(v)) out.add(`secrets.${k}`);
-    }
-  }
-
-  const bots = Array.from(new Set(params.bots.map((b) => String(b).trim()).filter(Boolean)));
-  const discordBots = Array.from(new Set((params.discordBots ?? bots).map((b) => String(b).trim()).filter(Boolean)));
-  for (const b of discordBots) {
-    const v = params.input.discordTokens?.[b];
-    if (v && isPlaceholderSecretValue(v)) out.add(`discordTokens.${b}`);
+  for (const [k, v] of Object.entries(params.input.secrets || {})) {
+    if (typeof v !== "string") continue;
+    if (v && isPlaceholderSecretValue(v)) out.add(`secrets.${k}`);
   }
 
   return Array.from(out).sort();
 }
 
 export function buildSecretsInitTemplate(params: {
-  bots: string[];
-  discordBots?: string[];
   requiresTailscaleAuthKey: boolean;
   secrets?: Record<string, string>;
 }): SecretsInitJson {
-  const bots = Array.from(new Set(params.bots.map((b) => String(b).trim()).filter(Boolean)));
-  const discordBots = Array.from(new Set((params.discordBots ?? bots).map((b) => String(b).trim()).filter(Boolean)));
-  const secrets = params.secrets && typeof params.secrets === "object" ? params.secrets : undefined;
-  const hasSecrets = secrets && Object.keys(secrets).length > 0;
+  const secrets = params.secrets && typeof params.secrets === "object" ? params.secrets : {};
   return {
     adminPasswordHash: "<REPLACE_WITH_YESCRYPT_HASH>",
     ...(params.requiresTailscaleAuthKey ? { tailscaleAuthKey: "<REPLACE_WITH_TSKEY_AUTH>" } : {}),
-    discordTokens: Object.fromEntries(discordBots.map((b) => [b, "<REPLACE_WITH_DISCORD_TOKEN>"])),
-    ...(hasSecrets ? { secrets } : {}),
+    secrets,
   };
 }
 
@@ -135,28 +120,24 @@ export function parseSecretsInitJson(raw: string): SecretsInitJson {
   const adminPasswordHash = typeof obj.adminPasswordHash === "string" ? obj.adminPasswordHash.trim() : "";
   if (!adminPasswordHash) throw new Error("invalid --from-json (missing adminPasswordHash)");
 
-  if (!obj.discordTokens || typeof obj.discordTokens !== "object") throw new Error("invalid --from-json (missing discordTokens object)");
-  const discordTokens: Record<string, string> = {};
-  for (const [k, v] of Object.entries(obj.discordTokens)) {
+  const tailscaleAuthKey = typeof obj.tailscaleAuthKey === "string" ? obj.tailscaleAuthKey.trim() : undefined;
+
+  if (!obj.secrets || typeof obj.secrets !== "object" || Array.isArray(obj.secrets)) {
+    throw new Error("invalid --from-json (missing secrets object)");
+  }
+  const secrets = createNullProtoRecord<string>();
+  for (const [k, v] of Object.entries(obj.secrets)) {
     if (typeof v !== "string") continue;
     const token = v.trim();
     if (!token) continue;
-    discordTokens[String(k)] = token;
+    const key = String(k || "").trim();
+    if (!key) continue;
+    assertSafeRecordKey({ key, context: "secrets init json secrets" });
+    void SecretNameSchema.parse(key);
+    secrets[key] = token;
   }
 
-  const tailscaleAuthKey = typeof obj.tailscaleAuthKey === "string" ? obj.tailscaleAuthKey.trim() : undefined;
-
-  const secrets: Record<string, string> = {};
-  if (obj.secrets && typeof obj.secrets === "object" && !Array.isArray(obj.secrets)) {
-    for (const [k, v] of Object.entries(obj.secrets)) {
-      if (typeof v !== "string") continue;
-      const token = v.trim();
-      if (!token) continue;
-      secrets[String(k)] = token;
-    }
-  }
-
-  return { adminPasswordHash, tailscaleAuthKey, discordTokens, ...(Object.keys(secrets).length > 0 ? { secrets } : {}) };
+  return { adminPasswordHash, tailscaleAuthKey, secrets };
 }
 
 export function validateSecretsInitNonInteractive(params: {

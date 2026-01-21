@@ -161,13 +161,16 @@ in {
       /run/current-system/sw/bin/journalctl -u clawdbot-* -n * --since * -f --no-pager
     Cmnd_Alias CLAWDBOT_SS = /run/current-system/sw/bin/ss -ltnp
     Cmnd_Alias CLAWDBOT_GH_SYNC_READ = /etc/clawdlets/bin/gh-sync-read *
+    Cmnd_Alias CLAWDBOT_CHANNELS = /etc/clawdlets/bin/clawdbot-channels *
     ${deploySudo}
-    admin ALL=(root) NOPASSWD: CLAWDBOT_SYSTEMCTL, CLAWDBOT_JOURNAL, CLAWDBOT_SS, CLAWDBOT_GH_SYNC_READ${deployAlias}
+    admin ALL=(root) NOPASSWD: CLAWDBOT_SYSTEMCTL, CLAWDBOT_JOURNAL, CLAWDBOT_SS, CLAWDBOT_GH_SYNC_READ, CLAWDBOT_CHANNELS${deployAlias}
   '';
 
   services.clawdbotFleet = {
     enable = hostCfg.enable or false;
     bots = fleet.bots;
+    secretEnv = fleet.secretEnv;
+    secretFiles = fleet.secretFiles;
     botProfiles = fleet.botProfiles;
     backups = fleet.backups;
     documentsDir = fleet.documentsDir;

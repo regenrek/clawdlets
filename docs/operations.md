@@ -36,8 +36,8 @@ clawdlets bot add --bot <id>
 ```
 
 2) Add secret + config:
-   - `fleet.bots.<id>.profile.discordTokenSecret = "discord_token_<id>"`
-   - clawdbot config: `fleet.bots.<id>.clawdbot.channels.discord.enabled = true`
+   - `fleet.bots.<id>.profile.secretEnv.DISCORD_BOT_TOKEN = "discord_token_<id>"`
+   - clawdbot config: `fleet.bots.<id>.clawdbot.channels.discord = { enabled: true, token: "${DISCORD_BOT_TOKEN}" }`
 
 Then:
 ```bash

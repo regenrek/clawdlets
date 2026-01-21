@@ -95,6 +95,7 @@ in
 
     sops.secrets = lib.mkMerge [
       runtime.perBotSkillSecrets
+      runtime.secretFileSecrets
       (lib.optionalAttrs (cfg.backups.restic.enable && cfg.backups.restic.passwordSecret != "") {
         "${cfg.backups.restic.passwordSecret}" = defs.mkSopsSecretFor cfg.backups.restic.passwordSecret;
       })
@@ -114,6 +115,7 @@ in
         "d ${cfg.stateDirBase} 0755 root root - -"
       ]
       ++ (lib.concatLists (map runtime.mkStateDir cfg.bots))
+      ++ runtime.secretFileTmpfilesRules
       ++ lib.optionals cfg.opsSnapshot.enable [
         "d ${cfg.opsSnapshot.outDir} 0750 root root - -"
       ];
@@ -156,6 +158,11 @@ in
 
         "clawdlets/bin/ensure-gateway-token" = {
           source = ../../scripts/ensure-gateway-token.sh;
+          mode = "0755";
+        };
+
+        "clawdlets/bin/clawdbot-channels" = {
+          source = ../../scripts/clawdbot-channels.sh;
           mode = "0755";
         };
 

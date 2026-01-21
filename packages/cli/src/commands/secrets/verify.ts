@@ -6,13 +6,14 @@ import YAML from "yaml";
 import { agePublicKeyFromIdentityFile } from "@clawdlets/core/lib/age-keygen";
 import { sopsDecryptYamlFile } from "@clawdlets/core/lib/sops";
 import { sanitizeOperatorId } from "@clawdlets/core/lib/identifiers";
-import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets";
+import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets-plan";
 import { isPlaceholderSecretValue } from "@clawdlets/core/lib/secrets-init";
 import { loadDeployCreds } from "@clawdlets/core/lib/deploy-creds";
 import { getHostSecretsDir, getLocalOperatorAgeKeyPath } from "@clawdlets/core/repo-layout";
 import { loadHostContextOrExit } from "@clawdlets/core/lib/context";
 import { getHostAgeKeySopsCreationRulePathRegex, getHostSecretsSopsCreationRulePathRegex } from "@clawdlets/core/lib/sops-rules";
 import { getSopsCreationRuleAgeRecipients } from "@clawdlets/core/lib/sops-config";
+import { mapWithConcurrency } from "@clawdlets/core/lib/concurrency";
 
 export const secretsVerify = defineCommand({
   meta: {
@@ -34,7 +35,7 @@ export const secretsVerify = defineCommand({
     const cwd = process.cwd();
     const ctx = loadHostContextOrExit({ cwd, runtimeDir: (args as any).runtimeDir, hostArg: args.host });
     if (!ctx) return;
-    const { layout, config, hostName, hostCfg } = ctx;
+    const { layout, config, hostName } = ctx;
 
     const deployCreds = loadDeployCreds({ cwd, runtimeDir: (args as any).runtimeDir, envFile: (args as any).envFile });
     if (deployCreds.envFile?.origin === "explicit" && deployCreds.envFile.status !== "ok") {
@@ -52,13 +53,11 @@ export const secretsVerify = defineCommand({
 
     const localDir = getHostSecretsDir(layout, hostName);
     const secretsPlan = buildFleetSecretsPlan({ config, hostName });
-    const requiredSecretNames = new Set<string>(secretsPlan.secretNamesRequired);
-
-    const tailnetMode = String(hostCfg.tailnet?.mode || "none");
-    const requiredSecrets = Array.from(new Set([
-      ...(tailnetMode === "tailscale" ? ["tailscale_auth_key"] : []),
-      "admin_password_hash",
-    ]));
+    const requiredSecretNames = new Set<string>([
+      ...secretsPlan.hostSecretNamesRequired,
+      ...secretsPlan.secretNamesRequired,
+    ]);
+    const requiredSecrets = secretsPlan.hostSecretNamesRequired;
     const secretNames = secretsPlan.secretNamesAll;
     const optionalSecrets = ["root_password_hash"];
 
@@ -118,50 +117,54 @@ export const secretsVerify = defineCommand({
 
     const results: Result[] = [];
 
-    const verifyOne = async (secretName: string, optional: boolean, allowOptionalMarker: boolean) => {
+    const verifyOne = async (secretName: string, optional: boolean, allowOptionalMarker: boolean): Promise<Result> => {
       const filePath = path.join(localDir, `${secretName}.yaml`);
       if (!fs.existsSync(filePath)) {
-        results.push({ secret: secretName, status: optional ? "warn" : "missing", detail: `(missing: ${filePath})` });
-        return;
+        return { secret: secretName, status: optional ? "warn" : "missing", detail: `(missing: ${filePath})` };
       }
       try {
         const decrypted = await sopsDecryptYamlFile({ filePath, ageKeyFile: operatorKeyPath, nix });
         const parsed = (YAML.parse(decrypted) as Record<string, unknown>) || {};
         const keys = Object.keys(parsed).filter((k) => k !== "sops");
         if (keys.length !== 1 || keys[0] !== secretName) {
-          results.push({ secret: secretName, status: "missing", detail: "(invalid: expected exactly 1 key matching filename)" });
-          return;
+          return { secret: secretName, status: "missing", detail: "(invalid: expected exactly 1 key matching filename)" };
         }
         const v = parsed[secretName];
         const value = typeof v === "string" ? v : v == null ? "" : String(v);
         if (!allowOptionalMarker && value.trim() === "<OPTIONAL>") {
-          results.push({ secret: secretName, status: "missing", detail: "(placeholder: <OPTIONAL>)" });
-          return;
+          return { secret: secretName, status: "missing", detail: "(placeholder: <OPTIONAL>)" };
         }
         if (!optional && isPlaceholderSecretValue(value)) {
-          results.push({ secret: secretName, status: "missing", detail: `(placeholder: ${value.trim()})` });
-          return;
+          return { secret: secretName, status: "missing", detail: `(placeholder: ${value.trim()})` };
         }
         if (optional && isPlaceholderSecretValue(value)) {
-          results.push({ secret: secretName, status: "missing", detail: `(placeholder: ${value.trim()})` });
-          return;
+          return { secret: secretName, status: "missing", detail: `(placeholder: ${value.trim()})` };
         }
         if (!optional && !value.trim()) {
-          results.push({ secret: secretName, status: "missing", detail: "(empty)" });
-          return;
+          return { secret: secretName, status: "missing", detail: "(empty)" };
         }
-        results.push({ secret: secretName, status: "ok" });
+        return { secret: secretName, status: "ok" };
       } catch (e) {
-        results.push({ secret: secretName, status: "missing", detail: String((e as Error)?.message || e) });
+        return { secret: secretName, status: "missing", detail: String((e as Error)?.message || e) };
       }
     };
 
     if (!fs.existsSync(localDir)) {
       results.push({ secret: "secrets.localDir", status: "missing", detail: localDir });
     } else {
-      for (const s of requiredSecrets) await verifyOne(s, false, false);
-      for (const s of secretNames) await verifyOne(s, false, !requiredSecretNames.has(s));
-      for (const s of optionalSecrets) await verifyOne(s, true, true);
+      const checks = [
+        ...requiredSecrets.map((s) => ({ secretName: s, optional: false, allowOptionalMarker: false })),
+        ...secretNames.map((s) => ({ secretName: s, optional: false, allowOptionalMarker: !requiredSecretNames.has(s) })),
+        ...optionalSecrets.map((s) => ({ secretName: s, optional: true, allowOptionalMarker: true })),
+      ];
+
+      const checked = await mapWithConcurrency({
+        items: checks,
+        concurrency: 4,
+        fn: async (c) => await verifyOne(c.secretName, c.optional, c.allowOptionalMarker),
+      });
+
+      results.push(...checked);
     }
 
     if (args.json) {

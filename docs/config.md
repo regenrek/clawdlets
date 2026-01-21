@@ -18,7 +18,7 @@ This file is **committed to git**. Secrets are not stored here (see `docs/secret
 
 Top-level:
 
-- `schemaVersion`: currently `8`
+- `schemaVersion`: currently `9`
 - `defaultHost` (optional): used when `--host` is omitted
 - `baseFlake` (optional): flake URI for remote builds (e.g. `github:<owner>/<repo>`)
   - if empty, CLI falls back to `git remote origin` (recommended)
@@ -28,12 +28,13 @@ Top-level:
 
 Fleet (`fleet.*`):
 
-- `fleet.modelSecrets`: model provider -> sops secret name (e.g. `zai`, `openai`, `anthropic`)
+- `fleet.secretEnv`: env var name -> sops secret name (global defaults)
+- `fleet.secretFiles`: host-scoped secret files (id -> `{ secretName, targetPath, ... }`)
 - `fleet.botOrder`: ordered bot ids (deterministic ports/services)
 - `fleet.bots.<bot>`: per-bot config object
   - `profile`: clawdlets/template infra knobs (systemd/env/secrets/limits)
-    - `profile.discordTokenSecret`: sops secret name for the bot’s Discord token
-    - `profile.modelSecrets`: per-bot provider -> secret overrides (optional)
+    - `profile.secretEnv`: per-bot env var -> sops secret name overrides (merged onto `fleet.secretEnv`)
+    - `profile.secretFiles`: bot-scoped secret files (id -> `{ secretName, targetPath, ... }`)
     - other keys are forwarded into Nix `services.clawdbotFleet.botProfiles.<bot>` (forward compatible)
   - `clawdbot`: raw clawdbot config (canonical; channels/routing/agents/tools/etc)
   - `clf`: clawdlets/clf policy (bot access to orchestrator/queue)
@@ -81,19 +82,21 @@ Cattle (`cattle.*`):
 
 ```json
 {
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "defaultHost": "clawdbot-fleet-host",
   "baseFlake": "",
   "fleet": {
-    "modelSecrets": { "zai": "z_ai_api_key" },
+    "secretEnv": { "ZAI_API_KEY": "z_ai_api_key" },
+    "secretFiles": {},
     "botOrder": ["maren"],
     "bots": {
       "maren": {
-        "profile": { "discordTokenSecret": "discord_token_maren" },
+        "profile": { "secretEnv": { "DISCORD_BOT_TOKEN": "discord_token_maren" }, "secretFiles": {} },
         "clawdbot": {
           "channels": {
             "discord": {
               "enabled": true,
+              "token": "${DISCORD_BOT_TOKEN}",
               "dm": { "enabled": true, "policy": "pairing" }
             }
           }

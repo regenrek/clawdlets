@@ -58,8 +58,9 @@ describe("cattle command", () => {
   } as any;
 
   const config = {
-    schemaVersion: 8,
-    fleet: { modelSecrets: { zai: "z_ai_api_key" }, botOrder: [], bots: {} },
+    schemaVersion: 9,
+    defaultHost: hostName,
+    fleet: { secretEnv: { ZAI_API_KEY: "z_ai_api_key" }, secretFiles: {}, botOrder: [], bots: {} },
     cattle: {
       enabled: true,
       hetzner: { image: "img-1", serverType: "cx22", location: "nbg1", maxInstances: 10, defaultTtl: "2h", labels: { "managed-by": "clawdlets" } },

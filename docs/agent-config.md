@@ -26,12 +26,15 @@ Clawdlets invariants override (gateway bind/port/auth; workspace path).
     "bots": {
       "maren": {
         "profile": {
-          "discordTokenSecret": "discord_token_maren"
+          "secretEnv": {
+            "DISCORD_BOT_TOKEN": "discord_token_maren"
+          }
         },
         "clawdbot": {
           "channels": {
             "discord": {
-              "enabled": true
+              "enabled": true,
+              "token": "${DISCORD_BOT_TOKEN}"
             }
           }
         }
@@ -60,14 +63,17 @@ Ports:
 
 ## Secrets
 
-Model provider secrets:
+Secret env wiring (provider-agnostic):
 
-- global defaults: `fleet.modelSecrets.<provider> = "<secretName>"`
-- optional per-bot overrides: `fleet.bots.<bot>.profile.modelSecrets.<provider> = "<secretName>"`
+- global defaults: `fleet.secretEnv.<ENV_VAR> = "<secretName>"`
+- optional per-bot overrides: `fleet.bots.<bot>.profile.secretEnv.<ENV_VAR> = "<secretName>"`
 
-Discord token secrets:
+Examples:
 
-- per bot: `fleet.bots.<bot>.profile.discordTokenSecret = "<secretName>"`
+- Discord: `DISCORD_BOT_TOKEN -> discord_token_<bot>`
+- Telegram: `TELEGRAM_BOT_TOKEN -> telegram_bot_token_<bot>`
+- Slack: `SLACK_BOT_TOKEN -> slack_bot_token_<bot>`, `SLACK_APP_TOKEN -> slack_app_token_<bot>`
+- Models: `OPENAI_API_KEY -> openai_api_key`, `ANTHROPIC_API_KEY -> anthropic_api_key`, `ZAI_API_KEY -> z_ai_api_key`
 
 ## Documents (AGENTS / SOUL / TOOLS / IDENTITY)
 
@@ -133,12 +139,12 @@ clawdlets config set --path fleet.bots.melinda.clawdbot.agents.defaults.model.pr
 Provider API keys (provider -> sops secret name):
 
 ```bash
-clawdlets config set --path fleet.modelSecrets.zai --value z_ai_api_key
-clawdlets config set --path fleet.modelSecrets.anthropic --value anthropic_api_key
-clawdlets config set --path fleet.modelSecrets.openai --value openai_api_key
+clawdlets config set --path fleet.secretEnv.ZAI_API_KEY --value z_ai_api_key
+clawdlets config set --path fleet.secretEnv.ANTHROPIC_API_KEY --value anthropic_api_key
+clawdlets config set --path fleet.secretEnv.OPENAI_API_KEY --value openai_api_key
 ```
 
-These are injected into the systemd environment.
+These are injected into per-bot `EnvironmentFile=` entries via sops-nix templates.
 
 ## Codex CLI (server)
 
@@ -218,11 +224,11 @@ Per-skill secrets (recommended):
 
 - `fleet.bots.<bot>.profile.skills.entries."<skill>".apiKeySecret = "<sops_secret_name>"`
 
-### Per-bot model secret overrides
+### Per-bot secret env overrides
 
 Use this to override provider keys per bot (rare).
 
-- `fleet.bots.<bot>.profile.modelSecrets.<provider> = "<sops_secret_name>"`
+- `fleet.bots.<bot>.profile.secretEnv.<ENV_VAR> = "<sops_secret_name>"`
 
 Note: enabling `"coding-agent"` pulls large packages (Codex CLI + deps) into the NixOS closure and can
 OOM small remote build machines during bootstrap. Prefer enabling it only after the host is up (swap

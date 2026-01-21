@@ -34,7 +34,6 @@ function FleetSetup() {
   const config = cfg.data?.config
   const repoRoot = cfg.data?.repoRoot
 
-  const [guildId, setGuildId] = useState("")
   const [codexEnable, setCodexEnable] = useState(false)
   const [resticEnable, setResticEnable] = useState(false)
   const [resticRepo, setResticRepo] = useState("")
@@ -43,7 +42,6 @@ function FleetSetup() {
 
   useEffect(() => {
     if (!config) return
-    setGuildId(config.fleet.guildId || "")
     setCodexEnable(Boolean(config.fleet.codex?.enable))
     setResticEnable(Boolean(config.fleet.backups?.restic?.enable))
     setResticRepo(config.fleet.backups?.restic?.repository || "")
@@ -57,7 +55,6 @@ function FleetSetup() {
         ...config,
         fleet: {
           ...config.fleet,
-          guildId: guildId.trim(),
           codex: { ...config.fleet.codex, enable: codexEnable },
           backups: {
             ...config.fleet.backups,
@@ -109,7 +106,7 @@ function FleetSetup() {
     },
   })
 
-  const [dotPath, setDotPath] = useState("fleet.guildId")
+  const [dotPath, setDotPath] = useState("fleet.codex.enable")
   const [dotValueJson, setDotValueJson] = useState("")
   const [dotValue, setDotValue] = useState("")
   const [dotResult, setDotResult] = useState<null | { path: string; value: unknown }>(null)
@@ -176,16 +173,6 @@ function FleetSetup() {
               </div>
 
               <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
-                  <LabelWithHelp htmlFor="guild" help={setupFieldHelp.fleet.guildId}>
-                    Discord guild ID
-                  </LabelWithHelp>
-                  <Input id="guild" value={guildId} onChange={(e) => setGuildId(e.target.value)} />
-                  <div className="text-xs text-muted-foreground">
-                    Stored as <code>fleet.guildId</code>.
-                  </div>
-                </div>
-
                 <div className="space-y-2">
                   <LabelWithHelp>Codex</LabelWithHelp>
                   <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">

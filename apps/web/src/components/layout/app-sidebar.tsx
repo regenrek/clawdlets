@@ -12,10 +12,8 @@ import {
   DocumentTextIcon,
   FolderIcon,
   KeyIcon,
-  PuzzlePieceIcon,
   RocketLaunchIcon,
   ServerStackIcon,
-  SparklesIcon,
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline"
 import {
@@ -112,7 +110,7 @@ function AppSidebarContent() {
           to: `${projectBase}/setup/fleet`,
           label: "Fleet",
           icon: Cog6ToothIcon,
-          tooltip: "Edit fleet config (bots, providers, skills, workspaces).",
+          tooltip: "Edit fleet config (bots, skills, workspaces).",
         },
         {
           to: `${projectBase}/setup/settings`,
@@ -124,25 +122,13 @@ function AppSidebarContent() {
           to: `${projectBase}/setup/hosts`,
           label: "Hosts",
           icon: ServerStackIcon,
-          tooltip: "Host settings: SSH target, admin CIDR, Hetzner params, tailnet, models.",
+          tooltip: "Host settings: SSH target, admin CIDR, Hetzner params, tailnet.",
         },
         {
           to: `${projectBase}/setup/bots`,
           label: "Bots",
           icon: CpuChipIcon,
           tooltip: "Bot roster: add/remove bots and configure routing.",
-        },
-        {
-          to: `${projectBase}/setup/providers`,
-          label: "Providers",
-          icon: PuzzlePieceIcon,
-          tooltip: "Configure external providers (e.g. Discord) used by the fleet.",
-        },
-        {
-          to: `${projectBase}/setup/models`,
-          label: "Models",
-          icon: SparklesIcon,
-          tooltip: "Model providers, API key mapping, and per-bot defaults.",
         },
         {
           to: `${projectBase}/setup/secrets`,

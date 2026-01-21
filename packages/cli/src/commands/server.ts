@@ -1,8 +1,10 @@
 import process from "node:process";
 import { defineCommand } from "citty";
 import { shellQuote, sshCapture, sshRun } from "@clawdlets/core/lib/ssh-remote";
+import { mapWithConcurrency } from "@clawdlets/core/lib/concurrency";
 import { requireTargetHost, needsSudo } from "./server/common.js";
 import { serverGithubSync } from "./server/github-sync.js";
+import { serverChannels } from "./server/channels.js";
 import { serverDeploy } from "./server/deploy.js";
 import { serverManifest } from "./server/manifest.js";
 import { loadHostContextOrExit } from "@clawdlets/core/lib/context";
@@ -120,22 +122,62 @@ const serverAudit = defineCommand({
       add({ status: "warn", label: "fleet bots list", detail: "(empty)" });
     }
 
-    for (const bot of bots) {
-      const unit = normalizeClawdbotUnit(`clawdbot-${String(bot).trim()}`);
-      const show = await must(`systemctl show ${unit}`, [ ...(sudo ? ["sudo"] : []), "systemctl", "show", shellQuote(unit) ].join(" "));
-      if (!show) continue;
-      const parsed = parseSystemctlShow(show);
-      const loadState = parsed.LoadState || "";
-      const activeState = parsed.ActiveState || "";
-      const subState = parsed.SubState || "";
+    const botChecks = await mapWithConcurrency({
+      items: bots,
+      concurrency: 4,
+      fn: async (bot) => {
+        const out: AuditCheck[] = [];
 
-      if (loadState && loadState !== "loaded") {
-        add({ status: "missing", label: `${unit} load state`, detail: `LoadState=${loadState}` });
-      } else if (activeState === "active" && subState === "running") {
-        add({ status: "ok", label: `${unit} state`, detail: `${activeState}/${subState}` });
-      } else {
-        add({ status: "missing", label: `${unit} state`, detail: `${activeState || "?"}/${subState || "?"}` });
-      }
+        const mustBot = async (label: string, cmd: string): Promise<string | null> => {
+          const captured = await trySshCapture(targetHost, cmd, { tty: sudo && args.sshTty });
+          if (!captured.ok) {
+            out.push({ status: "missing", label, detail: captured.out });
+            return null;
+          }
+          return captured.out;
+        };
+
+        const botId = String(bot).trim();
+        const unit = normalizeClawdbotUnit(`clawdbot-${botId}`);
+
+        const show = await mustBot(
+          `systemctl show ${unit}`,
+          [ ...(sudo ? ["sudo"] : []), "systemctl", "show", shellQuote(unit) ].join(" "),
+        );
+        if (show) {
+          const parsed = parseSystemctlShow(show);
+          const loadState = parsed.LoadState || "";
+          const activeState = parsed.ActiveState || "";
+          const subState = parsed.SubState || "";
+
+          if (loadState && loadState !== "loaded") {
+            out.push({ status: "missing", label: `${unit} load state`, detail: `LoadState=${loadState}` });
+          } else if (activeState === "active" && subState === "running") {
+            out.push({ status: "ok", label: `${unit} state`, detail: `${activeState}/${subState}` });
+          } else {
+            out.push({ status: "missing", label: `${unit} state`, detail: `${activeState || "?"}/${subState || "?"}` });
+          }
+        }
+
+        const channelsStatus = await mustBot(
+          `channels status (${botId})`,
+          [
+            ...(sudo ? ["sudo"] : []),
+            "/etc/clawdlets/bin/clawdbot-channels",
+            "--bot",
+            shellQuote(botId),
+            "status",
+            "--json",
+          ].join(" "),
+        );
+        if (channelsStatus) out.push({ status: "ok", label: `channels status (${botId})` });
+
+        return out;
+      },
+    });
+
+    for (const list of botChecks) {
+      for (const c of list) add(c);
     }
 
     if (args.json) console.log(JSON.stringify({ host: hostName, targetHost, checks }, null, 2));
@@ -262,6 +304,7 @@ export const server = defineCommand({
   },
   subCommands: {
     audit: serverAudit,
+    channels: serverChannels,
     deploy: serverDeploy,
     manifest: serverManifest,
     status: serverStatus,

@@ -80,13 +80,15 @@ The two public keys must match. If they don’t, `clawdlets secrets init` rewrit
 
 - `tailscale_auth_key` (required when using Tailscale auto-join)
 - `garnix_netrc` (netrc for private Garnix cache access; installed at `/etc/nix/netrc` when enabled)
-- `discord_token_<bot>` (template default via `fleet.bots.<bot>.profile.discordTokenSecret`)
-- LLM API keys (configured via `fleet.modelSecrets` and optional per-bot overrides in `fleet.bots.<bot>.profile.modelSecrets`):
-  - `z_ai_api_key` (Z.AI; env: `ZAI_API_KEY` + `Z_AI_API_KEY`)
+- `discord_token_<bot>` (default mapping via `fleet.bots.<bot>.profile.secretEnv.DISCORD_BOT_TOKEN`)
+- LLM API keys (wired via env vars referenced in clawdbot config, then mapped in `fleet.secretEnv` and/or per-bot overrides in `fleet.bots.<bot>.profile.secretEnv`):
+  - `z_ai_api_key` (Z.AI; env: `ZAI_API_KEY`)
   - `anthropic_api_key` (Anthropic; env: `ANTHROPIC_API_KEY`)
-  - `openai_api_key` (OpenAI; env: `OPENAI_API_KEY` + `OPEN_AI_APIKEY`)
+  - `openai_api_key` (OpenAI; env: `OPENAI_API_KEY`)
 
-Secret values are injected directly into the systemd environment (no env file on disk).
+Secrets are injected by sops-nix at activation time:
+- per-bot env vars via `sops.templates` → `EnvironmentFile=...`
+- optional secret files via `sops.secrets` with explicit `path=...`
 
 Optional:
 

@@ -49,6 +49,49 @@ in {
       description = "Bot instance names (also used for system users).";
     };
 
+    secretEnv = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = {};
+      description = "Global secret env mapping (ENV_VAR -> sops secret name). Merged into each bot's env file; per-bot overrides via botProfiles.<bot>.secretEnv.";
+    };
+
+    secretFiles = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.submodule ({ ... }: {
+        options = {
+          secretName = lib.mkOption {
+            type = lib.types.str;
+            description = "Sops secret name for this file.";
+          };
+          targetPath = lib.mkOption {
+            type = lib.types.strMatching "^/var/lib/clawdlets/.*";
+            description = "Absolute target path for the rendered secret file (host-scoped; must be under /var/lib/clawdlets/).";
+          };
+          mode = lib.mkOption {
+            type = lib.types.str;
+            default = "0400";
+            description = "File mode (octal string).";
+          };
+          owner = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = "Optional file owner (default: root).";
+          };
+          group = lib.mkOption {
+            type = lib.types.nullOr lib.types.str;
+            default = null;
+            description = "Optional file group (default: root).";
+          };
+          format = lib.mkOption {
+            type = lib.types.nullOr (lib.types.enum [ "raw" "dotenv" "json" "yaml" ]);
+            default = null;
+            description = "Optional format hint (currently raw-only; future expansion).";
+          };
+        };
+      }));
+      default = {};
+      description = "Host-scoped secret files (id -> spec).";
+    };
+
     gatewayPortBase = lib.mkOption {
       type = lib.types.int;
       default = 18789;
@@ -197,16 +240,47 @@ in {
             description = "Per-bot service env vars (non-secret).";
           };
 
-          discordTokenSecret = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = null;
-            description = "Sops secret name containing the Discord bot token.";
-          };
-
-          modelSecrets = lib.mkOption {
+          secretEnv = lib.mkOption {
             type = lib.types.attrsOf lib.types.str;
             default = {};
-            description = "Map of model provider -> sops secret name (e.g. zai/openai/anthropic).";
+            description = "Per-bot secret env mapping (ENV_VAR -> sops secret name) merged into the bot env file.";
+          };
+
+          secretFiles = lib.mkOption {
+            type = lib.types.attrsOf (lib.types.submodule ({ ... }: {
+              options = {
+                secretName = lib.mkOption {
+                  type = lib.types.str;
+                  description = "Sops secret name for this file.";
+                };
+                targetPath = lib.mkOption {
+                  type = lib.types.str;
+                  description = "Absolute target path for the rendered secret file (bot-scoped; must be under the bot state dir).";
+                };
+                mode = lib.mkOption {
+                  type = lib.types.str;
+                  default = "0400";
+                  description = "File mode (octal string).";
+                };
+                owner = lib.mkOption {
+                  type = lib.types.nullOr lib.types.str;
+                  default = null;
+                  description = "Optional file owner (default: bot user).";
+                };
+                group = lib.mkOption {
+                  type = lib.types.nullOr lib.types.str;
+                  default = null;
+                  description = "Optional file group (default: bot group).";
+                };
+                format = lib.mkOption {
+                  type = lib.types.nullOr (lib.types.enum [ "raw" "dotenv" "json" "yaml" ]);
+                  default = null;
+                  description = "Optional format hint (currently raw-only; future expansion).";
+                };
+              };
+            }));
+            default = {};
+            description = "Per-bot secret files (id -> spec).";
           };
 
           workspace = {

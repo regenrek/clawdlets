@@ -14,6 +14,7 @@ import {
   loadClawdletsConfigRaw,
   writeClawdletsConfig,
 } from "@clawdlets/core/lib/clawdlets-config";
+import { migrateClawdletsConfigToV9 } from "@clawdlets/core/lib/clawdlets-config-migrate";
 
 const init = defineCommand({
   meta: { name: "init", description: "Initialize fleet/clawdlets.json (canonical config)." },
@@ -135,7 +136,50 @@ const set = defineCommand({
   },
 });
 
+const migrate = defineCommand({
+  meta: { name: "migrate", description: "Migrate fleet/clawdlets.json to a new schema version." },
+  args: {
+    to: { type: "string", description: "Target schema version (only v9 supported).", default: "v9" },
+    "dry-run": { type: "boolean", description: "Print planned write without writing.", default: false },
+  },
+  async run({ args }) {
+    const repoRoot = findRepoRoot(process.cwd());
+    const configPath = getRepoLayout(repoRoot).clawdletsConfigPath;
+    if (!fs.existsSync(configPath)) throw new Error(`missing config: ${configPath}`);
+
+    const rawText = fs.readFileSync(configPath, "utf8");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      throw new Error(`invalid JSON: ${configPath}`);
+    }
+
+    const to = String((args as any).to || "v9").trim().toLowerCase();
+    if (to !== "v9" && to !== "9") throw new Error(`unsupported --to: ${to} (expected v9)`);
+
+    const res = migrateClawdletsConfigToV9(parsed);
+    if (!res.changed) {
+      console.log("ok: already schemaVersion 9");
+      return;
+    }
+
+    const validated = ClawdletsConfigSchema.parse(res.migrated);
+
+    if ((args as any)["dry-run"]) {
+      console.log(`planned: write ${path.relative(repoRoot, configPath)}`);
+      for (const w of res.warnings) console.log(`warn: ${w}`);
+      return;
+    }
+
+    await ensureDir(path.dirname(configPath));
+    await writeClawdletsConfig({ configPath, config: validated });
+    console.log(`ok: migrated to schemaVersion 9: ${path.relative(repoRoot, configPath)}`);
+    for (const w of res.warnings) console.log(`warn: ${w}`);
+  },
+});
+
 export const config = defineCommand({
   meta: { name: "config", description: "Canonical config (fleet/clawdlets.json)." },
-  subCommands: { init, show, validate, get, set },
+  subCommands: { init, show, validate, get, set, migrate },
 });

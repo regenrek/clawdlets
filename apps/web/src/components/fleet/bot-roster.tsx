@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button"
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "~/components/ui/item"
 import { removeBot } from "~/sdk/config"
 import { BotClawdbotEditor } from "./bot-clawdbot-editor"
+import { BotIntegrations } from "./bot-integrations"
 import { BotWorkspaceDocs } from "./bot-workspace-docs"
 
 export function BotRoster(props: {
@@ -19,6 +20,12 @@ export function BotRoster(props: {
   canEdit: boolean
 }) {
   const queryClient = useQueryClient()
+  const hosts =
+    props.config?.hosts && typeof props.config.hosts === "object" && !Array.isArray(props.config.hosts)
+      ? Object.keys(props.config.hosts).sort()
+      : []
+  const defaultHost = String(props.config?.defaultHost || "").trim()
+  const host = defaultHost || hosts[0] || ""
 
   const rmBotMutation = useMutation({
     mutationFn: async (bot: string) =>
@@ -38,8 +45,18 @@ export function BotRoster(props: {
       <ItemGroup className="gap-0">
         {props.bots.map((botId) => {
           const botCfg = (props.config?.fleet?.bots as any)?.[botId] || {}
-          const discordSecret = botCfg?.profile?.discordTokenSecret || ""
+          const profile = botCfg?.profile || {}
           const clawdbotCfg = botCfg?.clawdbot || {}
+          const channels =
+            clawdbotCfg?.channels && typeof clawdbotCfg.channels === "object" && !Array.isArray(clawdbotCfg.channels)
+              ? Object.keys(clawdbotCfg.channels).sort()
+              : []
+          const channelsLabel =
+            channels.length === 0
+              ? "(none)"
+              : channels.length <= 4
+                ? channels.join(", ")
+                : `${channels.slice(0, 4).join(", ")} (+${channels.length - 4})`
 
           return (
             <AccordionItem
@@ -59,7 +76,7 @@ export function BotRoster(props: {
                   <ItemContent className="gap-0">
 	                    <ItemTitle className="text-base">{botId}</ItemTitle>
 	                    <ItemDescription className="text-xs">
-	                      discordTokenSecret: <code>{discordSecret || "(unset)"}</code>
+	                      channels: <code>{channelsLabel}</code>
 	                    </ItemDescription>
                   </ItemContent>
                 </Item>
@@ -71,6 +88,15 @@ export function BotRoster(props: {
                     projectId={props.projectId}
                     botId={botId}
                     initial={clawdbotCfg}
+                    canEdit={props.canEdit}
+                  />
+                  <BotIntegrations
+                    projectId={props.projectId}
+                    botId={botId}
+                    host={host}
+                    clawdbot={clawdbotCfg}
+                    profile={profile}
+                    fleetSecretEnv={(props.config?.fleet as any)?.secretEnv}
                     canEdit={props.canEdit}
                   />
 	                  <BotWorkspaceDocs

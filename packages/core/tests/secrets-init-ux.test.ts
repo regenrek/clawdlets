@@ -1,24 +1,23 @@
 import { describe, it, expect } from "vitest";
 
 describe("secrets-init UX helpers", () => {
-  it("buildSecretsInitTemplate includes bot ids and optional tailscale key", async () => {
+  it("buildSecretsInitTemplate includes secrets and optional tailscale key", async () => {
     const { buildSecretsInitTemplate } = await import("../src/lib/secrets-init");
-    const out = buildSecretsInitTemplate({ bots: ["maren", "sonja"], requiresTailscaleAuthKey: true });
+    const out = buildSecretsInitTemplate({ requiresTailscaleAuthKey: true, secrets: { discord_token_maren: "<REPLACE>" } });
     expect(out.adminPasswordHash).toMatch(/REPLACE_WITH_YESCRYPT_HASH/);
     expect(out.tailscaleAuthKey).toMatch(/REPLACE_WITH_TSKEY_AUTH/);
-    expect("secrets" in out).toBe(false);
-    expect(Object.keys(out.discordTokens)).toEqual(["maren", "sonja"]);
+    expect(Object.keys(out.secrets)).toEqual(["discord_token_maren"]);
   });
 
   it("buildSecretsInitTemplate omits tailscale key when not required", async () => {
     const { buildSecretsInitTemplate } = await import("../src/lib/secrets-init");
-    const out = buildSecretsInitTemplate({ bots: ["maren"], requiresTailscaleAuthKey: false });
+    const out = buildSecretsInitTemplate({ requiresTailscaleAuthKey: false, secrets: {} });
     expect("tailscaleAuthKey" in out).toBe(false);
   });
 
-  it("buildSecretsInitTemplate trims and dedupes bots", async () => {
+  it("buildSecretsInitTemplate defaults secrets to {}", async () => {
     const { buildSecretsInitTemplate } = await import("../src/lib/secrets-init");
-    const out = buildSecretsInitTemplate({ bots: [" maren ", "maren", "", "sonja"], requiresTailscaleAuthKey: false });
-    expect(Object.keys(out.discordTokens)).toEqual(["maren", "sonja"]);
+    const out = buildSecretsInitTemplate({ requiresTailscaleAuthKey: false });
+    expect(out.secrets).toEqual({});
   });
 });

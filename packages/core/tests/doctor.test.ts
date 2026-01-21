@@ -108,13 +108,22 @@ describe("doctor", () => {
     await writeFile(operatorKey, "AGE-SECRET-KEY-TEST\n", "utf8");
 
     const clawdletsConfig = {
-      schemaVersion: 8,
+      schemaVersion: 9,
       defaultHost: "clawdbot-fleet-host",
       baseFlake: "",
       fleet: {
-        modelSecrets: { zai: "z_ai_api_key" },
+        secretEnv: { ZAI_API_KEY: "z_ai_api_key" },
         botOrder: ["alpha", "beta"],
-        bots: { alpha: {}, beta: {} },
+        bots: {
+          alpha: {
+            profile: { secretEnv: { DISCORD_BOT_TOKEN: "discord_token_alpha" } },
+            clawdbot: { channels: { discord: { enabled: true, token: "${DISCORD_BOT_TOKEN}" } } },
+          },
+          beta: {
+            profile: { secretEnv: { DISCORD_BOT_TOKEN: "discord_token_beta" } },
+            clawdbot: { channels: { discord: { enabled: true, token: "${DISCORD_BOT_TOKEN}" } } },
+          },
+        },
         codex: { enable: false, bots: [] },
         backups: { restic: { enable: false, repository: "" } },
       },

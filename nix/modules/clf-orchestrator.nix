@@ -11,23 +11,9 @@ let
   cattleHetzner = cattleCfg.hetzner or { };
   cattleDefaults = cattleCfg.defaults or { };
 
-  modelSecrets = fleetCfg.fleet.modelSecrets or { };
-  modelSecretNames =
-    builtins.filter (s: s != null && s != "") (builtins.attrValues modelSecrets);
-  modelEnv =
-    let
-      llmProviderInfo = builtins.fromJSON (builtins.readFile (project.root + "/packages/core/src/assets/llm-providers.json"));
-      pairs = lib.concatLists (lib.mapAttrsToList (provider: secretName:
-        let
-          s = toString secretName;
-          keys = ((llmProviderInfo.${lib.toLower provider} or { }).secretEnvVars or []);
-        in
-          if s == "" || keys == []
-          then [ ]
-          else map (k: { name = k; value = config.sops.placeholder.${s}; }) keys
-      ) modelSecrets);
-    in
-      builtins.listToAttrs pairs;
+  secretEnv = fleetCfg.fleet.secretEnv or { };
+  secretEnvSecretNames =
+    lib.unique (builtins.filter (s: s != null && s != "") (builtins.attrValues secretEnv));
 
   tailscaleSecret = config.clawdlets.tailnet.tailscale.authKeySecret or null;
 
@@ -221,7 +207,7 @@ in
           mode = "0400";
           sopsFile = "${config.clawdlets.secrets.hostDir}/${secretName}.yaml";
         };
-      }) modelSecretNames))
+      }) secretEnvSecretNames))
     ];
 
     sops.templates."clf-orchestrator.env" = {
@@ -234,7 +220,7 @@ in
             "HCLOUD_TOKEN=${config.sops.placeholder.${cfg.hcloudTokenSecret}}"
             "TAILSCALE_AUTH_KEY=${config.sops.placeholder.${tailscaleSecret}}"
           ]
-          ++ (lib.mapAttrsToList mkEnvLine modelEnv)
+          ++ (lib.mapAttrsToList (envVar: secretName: mkEnvLine envVar config.sops.placeholder.${toString secretName}) secretEnv)
           ++ [ "" ]
         );
     };

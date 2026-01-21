@@ -102,9 +102,9 @@ function BotsSetup() {
                 size="sm"
                 variant="outline"
                 nativeButton={false}
-                render={<Link to="/projects/$projectId/setup/providers" params={{ projectId }} />}
+                render={<Link to="/projects/$projectId/setup/secrets" params={{ projectId }} />}
               >
-                Providers
+                Secrets
               </Button>
             </div>
 

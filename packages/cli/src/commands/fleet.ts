@@ -17,7 +17,6 @@ const set = defineCommand({
   meta: { name: "set", description: "Set fleet config fields (in fleet/clawdlets.json)." },
   args: {
     "codex-enable": { type: "string", description: "Enable codex (true/false)." },
-    "guild-id": { type: "string", description: "Discord guild ID." },
     "restic-enable": { type: "string", description: "Enable restic backups (true/false)." },
     "restic-repository": { type: "string", description: "Restic repository URL/path." },
   },
@@ -44,8 +43,6 @@ const set = defineCommand({
       const v = parseBool((args as any)["restic-enable"]);
       if (v !== undefined) next.fleet.backups.restic.enable = v;
     }
-
-    if ((args as any)["guild-id"] !== undefined) next.fleet.guildId = String((args as any)["guild-id"]).trim();
 
     if ((args as any)["restic-repository"] !== undefined) next.fleet.backups.restic.repository = String((args as any)["restic-repository"]).trim();
 

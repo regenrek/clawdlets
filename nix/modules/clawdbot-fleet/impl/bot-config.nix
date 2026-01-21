@@ -54,25 +54,11 @@ let
         lib.optionalAttrs (hooksEnabled != null) { enabled = hooksEnabled; }
         // lib.optionalAttrs (hooksTokenSecret != null) { token = config.sops.placeholder.${hooksTokenSecret}; }
         // lib.optionalAttrs (hooksGmailPushTokenSecret != null) { gmail.pushToken = config.sops.placeholder.${hooksGmailPushTokenSecret}; };
-      discordTokenSecret = profile.discordTokenSecret or null;
       gatewayPort =
         if (profile.gatewayPort or null) != null
         then profile.gatewayPort
         else botGatewayPort b;
       userCfg = profile.passthrough or { };
-      userDiscordToken =
-        let
-          channels = (userCfg.channels or {});
-          discord = (channels.discord or {});
-        in discord.token or null;
-      secretCfg =
-        if discordTokenSecret != null && discordTokenSecret != ""
-        then (
-          if userDiscordToken != null && userDiscordToken != ""
-          then throw "clawdbot config sets channels.discord.token while profile.discordTokenSecret is set; remove the inline token"
-          else { channels = { discord = { token = "\${DISCORD_BOT_TOKEN}"; }; }; }
-        )
-        else { };
       baseCfg = (
         {
           agents = {
@@ -103,7 +89,7 @@ let
       };
     in
       lib.recursiveUpdate
-        (lib.recursiveUpdate (lib.recursiveUpdate baseCfg userCfg) secretCfg)
+        (lib.recursiveUpdate baseCfg userCfg)
         invariants;
 in
 {

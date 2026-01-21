@@ -11,11 +11,12 @@ import { upsertSopsCreationRule } from "@clawdlets/core/lib/sops-config";
 import { sopsDecryptYamlFile, sopsEncryptYamlToFile } from "@clawdlets/core/lib/sops";
 import { getHostAgeKeySopsCreationRulePathRegex, getHostSecretsSopsCreationRulePathRegex } from "@clawdlets/core/lib/sops-rules";
 import { sanitizeOperatorId } from "@clawdlets/core/lib/identifiers";
-import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets";
+import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets-plan";
 import { buildSecretsInitTemplate, isPlaceholderSecretValue, listSecretsInitPlaceholders, parseSecretsInitJson, resolveSecretsInitFromJsonArg, validateSecretsInitNonInteractive, type SecretsInitJson } from "@clawdlets/core/lib/secrets-init";
 import { readYamlScalarFromMapping } from "@clawdlets/core/lib/yaml-scalar";
 import { getHostEncryptedAgeKeyFile, getHostExtraFilesKeyPath, getHostExtraFilesSecretsDir, getHostSecretsDir, getLocalOperatorAgeKeyPath } from "@clawdlets/core/repo-layout";
 import { expandPath } from "@clawdlets/core/lib/path-expand";
+import { mapWithConcurrency } from "@clawdlets/core/lib/concurrency";
 import { cancelFlow, navOnCancel, NAV_EXIT } from "../../lib/wizard.js";
 import { loadHostContextOrExit } from "@clawdlets/core/lib/context";
 import { upsertYamlScalarLine } from "./common.js";
@@ -97,9 +98,6 @@ export const secretsInit = defineCommand({
     const bots = clawdletsConfig.fleet.botOrder;
     if (bots.length === 0) throw new Error("fleet.botOrder is empty (set bots in fleet/clawdlets.json)");
 
-    const tailnetMode = String(hostCfg.tailnet?.mode || "none");
-    const requiresTailscaleAuthKey = tailnetMode === "tailscale";
-
     const garnixPrivate = hostCfg.cache?.garnix?.private;
     const garnixPrivateEnabled = Boolean(garnixPrivate?.enable);
     const garnixNetrcSecretName = garnixPrivateEnabled ? String(garnixPrivate?.netrcSecret || "garnix_netrc").trim() : "";
@@ -109,35 +107,34 @@ export const secretsInit = defineCommand({
     const secretsPlan = buildFleetSecretsPlan({ config: clawdletsConfig, hostName });
     if (secretsPlan.missingSecretConfig.length > 0) {
       const first = secretsPlan.missingSecretConfig[0]!;
-      if (first.kind === "discord") {
-        throw new Error(`missing discordTokenSecret for bot=${first.bot} (set fleet.bots.${first.bot}.profile.discordTokenSecret)`);
+      if (first.kind === "envVar") {
+        throw new Error(
+          `missing secretEnv mapping for envVar=${first.envVar} (bot=${first.bot}); set fleet.secretEnv.${first.envVar} or fleet.bots.${first.bot}.profile.secretEnv.${first.envVar}`,
+        );
       }
-      throw new Error(`missing modelSecrets entry for provider=${first.provider} (bot=${first.bot}, model=${first.model}); set fleet.modelSecrets.${first.provider}`);
+      throw new Error(`invalid secret file config: scope=${first.scope} id=${first.fileId} targetPath=${first.targetPath} (${first.message})`);
     }
 
-    const requiredSecretNames = new Set<string>(secretsPlan.secretNamesRequired);
-    const discordSecretByName = new Map<string, string>();
-    for (const [bot, secretName] of Object.entries(secretsPlan.discordSecretsByBot)) {
-      if (secretName) discordSecretByName.set(secretName, bot);
-    }
-    const discordBotsRequired = bots.filter((b) => {
-      const secretName = secretsPlan.discordSecretsByBot[b] || "";
-      return secretName && requiredSecretNames.has(secretName);
-    });
-    const requiredExtraSecretNames = new Set<string>([
-      ...requiredSecretNames,
-      ...(garnixPrivateEnabled ? [garnixNetrcSecretName] : []),
+    const hostRequiredSecretNames = new Set<string>(secretsPlan.hostSecretNamesRequired);
+    const requiresTailscaleAuthKey = hostRequiredSecretNames.has("tailscale_auth_key");
+
+    const requiredSecrets = new Set<string>([
+      ...secretsPlan.secretNamesRequired,
+      ...Array.from(hostRequiredSecretNames).filter((s) => s !== "admin_password_hash" && s !== "tailscale_auth_key"),
     ]);
 
-    const discordSecretNames = new Set<string>(Array.from(discordSecretByName.keys()));
+    const templateSecretNames = Array.from(new Set<string>([
+      ...secretsPlan.secretNamesAll,
+      ...Array.from(hostRequiredSecretNames).filter((s) => s !== "admin_password_hash" && s !== "tailscale_auth_key"),
+    ])).sort();
 
-    const templateExtraSecrets: Record<string, string> = {};
-    for (const secretName of secretsPlan.secretNamesAll) {
-      if (discordSecretNames.has(secretName)) continue;
-      templateExtraSecrets[secretName] = requiredSecretNames.has(secretName) ? "<REPLACE_WITH_SECRET>" : "<OPTIONAL>";
-    }
-    if (garnixPrivateEnabled) {
-      templateExtraSecrets[garnixNetrcSecretName] = "<REPLACE_WITH_NETRC>";
+    const templateSecrets: Record<string, string> = {};
+    for (const secretName of templateSecretNames) {
+      if (garnixPrivateEnabled && secretName === garnixNetrcSecretName) {
+        templateSecrets[secretName] = "<REPLACE_WITH_NETRC>";
+      } else {
+        templateSecrets[secretName] = requiredSecrets.has(secretName) ? "<REPLACE_WITH_SECRET>" : "<OPTIONAL>";
+      }
     }
 
     const defaultSecretsJsonPath = path.join(layout.runtimeDir, "secrets.json");
@@ -154,7 +151,7 @@ export const secretsInit = defineCommand({
         if (!a.allowPlaceholders) {
           const raw = fs.readFileSync(defaultSecretsJsonPath, "utf8");
           const parsed = parseSecretsInitJson(raw);
-          const placeholders = listSecretsInitPlaceholders({ input: parsed, bots, discordBots: discordBotsRequired, requiresTailscaleAuthKey });
+          const placeholders = listSecretsInitPlaceholders({ input: parsed, requiresTailscaleAuthKey });
           if (placeholders.length > 0) {
             console.error(`error: placeholders found in ${defaultSecretsJsonDisplay} (fill it or pass --allow-placeholders)`);
             for (const p0 of placeholders) console.error(`- ${p0}`);
@@ -163,7 +160,7 @@ export const secretsInit = defineCommand({
           }
         }
       } else {
-        const template = buildSecretsInitTemplate({ bots, discordBots: discordBotsRequired, requiresTailscaleAuthKey, secrets: templateExtraSecrets });
+        const template = buildSecretsInitTemplate({ requiresTailscaleAuthKey, secrets: templateSecrets });
 
         if (!a.dryRun) {
           await ensureDir(path.dirname(defaultSecretsJsonPath));
@@ -335,39 +332,25 @@ export const secretsInit = defineCommand({
       adminPasswordHash: string;
       tailscaleAuthKey: string;
       secrets: Record<string, string>;
-      discordTokens: Record<string, string>;
-    } = { adminPassword: "", adminPasswordHash: "", tailscaleAuthKey: "", secrets: {}, discordTokens: {} };
+    } = { adminPassword: "", adminPasswordHash: "", tailscaleAuthKey: "", secrets: {} };
 
     if (interactive) {
       type Step =
         | { kind: "adminPassword" }
         | { kind: "tailscaleAuthKey" }
         | { kind: "garnixNetrcFile"; secretName: string; netrcPath: string }
-        | { kind: "secret"; secretName: string }
-        | { kind: "discordToken"; bot: string; secretName: string };
+        | { kind: "secret"; secretName: string };
 
-      const discordSecretNames = new Set<string>(Object.values(secretsPlan.discordSecretsByBot).filter(Boolean));
-      const requiredExtraSecrets = Array.from(requiredExtraSecretNames).filter((s) => !discordSecretNames.has(s)).sort();
-      const discordTokenBots: Array<{ bot: string; secretName: string }> = [];
-      const seenDiscordSecrets = new Set<string>();
-      for (const bot of bots) {
-        const secretName = secretsPlan.discordSecretsByBot[bot] || "";
-        if (!secretName) continue;
-        if (!requiredSecretNames.has(secretName)) continue;
-        if (seenDiscordSecrets.has(secretName)) continue;
-        seenDiscordSecrets.add(secretName);
-        discordTokenBots.push({ bot, secretName });
-      }
+      const requiredSecretsToPrompt = Array.from(requiredSecrets).sort();
 
       const allSteps: Step[] = [
         { kind: "adminPassword" },
         ...(requiresTailscaleAuthKey ? ([{ kind: "tailscaleAuthKey" }] as const) : []),
-        ...requiredExtraSecrets.map((secretName) =>
+        ...requiredSecretsToPrompt.map((secretName) =>
           garnixPrivateEnabled && secretName === garnixNetrcSecretName
             ? ({ kind: "garnixNetrcFile", secretName, netrcPath: garnixNetrcPath || "/etc/nix/netrc" } as const)
             : ({ kind: "secret", secretName } as const),
         ),
-        ...discordTokenBots.map((b) => ({ kind: "discordToken", bot: b.bot, secretName: b.secretName }) as const),
       ];
 
       for (let i = 0; i < allSteps.length;) {
@@ -386,8 +369,6 @@ export const secretsInit = defineCommand({
           });
         } else if (step.kind === "secret") {
           v = await p.password({ message: `Secret value (${step.secretName}) (required)` });
-        } else {
-          v = await p.password({ message: `Discord token for ${step.bot} (${step.secretName}) (required)` });
         }
 
         if (p.isCancel(v)) {
@@ -418,9 +399,6 @@ export const secretsInit = defineCommand({
           }
         }
         else if (step.kind === "secret") values.secrets[step.secretName] = s;
-        else {
-          values.discordTokens[step.bot] = s;
-        }
         i += 1;
       }
     } else {
@@ -428,30 +406,42 @@ export const secretsInit = defineCommand({
       values.adminPasswordHash = input.adminPasswordHash;
       values.tailscaleAuthKey = input.tailscaleAuthKey || "";
       values.secrets = input.secrets || {};
-      values.discordTokens = input.discordTokens || {};
     }
 
-    for (const secretName of Object.keys(values.secrets || {})) {
-      const bot = discordSecretByName.get(secretName) || "";
-      if (!bot) continue;
-      throw new Error(
-        `discord token secrets must be set via discordTokens.${bot} (remove secrets.${secretName})`,
-      );
-    }
-
-    const secretsToWrite = secretsPlan.secretNamesAll;
-    const requiredSecrets = Array.from(new Set([
-      ...(requiresTailscaleAuthKey ? ["tailscale_auth_key"] : []),
-      "admin_password_hash",
-      ...(garnixPrivateEnabled ? [garnixNetrcSecretName] : []),
-      ...secretsToWrite,
-    ]));
+    const secretsToWrite = Array.from(new Set([
+      ...secretsPlan.hostSecretNamesRequired,
+      ...secretsPlan.secretNamesAll,
+    ])).sort();
 
     const isOptionalMarker = (v: string): boolean => String(v || "").trim() === "<OPTIONAL>";
+    const requiredSecretNamesForValue = new Set<string>([
+      ...secretsPlan.hostSecretNamesRequired,
+      ...secretsPlan.secretNamesRequired,
+    ]);
+
+    const needsExistingValue = (secretName: string): boolean => {
+      if (secretName === "tailscale_auth_key") return !values.tailscaleAuthKey.trim();
+      if (secretName === "admin_password_hash") return !values.adminPasswordHash.trim() && !values.adminPassword.trim();
+      const vv = values.secrets?.[secretName]?.trim() || "";
+      const required = requiredSecretNamesForValue.has(secretName);
+      if (vv && !(required && (isOptionalMarker(vv) || isPlaceholderSecretValue(vv)))) return false;
+      return true;
+    };
+
+    const secretsNeedingExisting = secretsToWrite.filter(needsExistingValue);
+    const existingPairs =
+      secretsNeedingExisting.length > 0
+        ? await mapWithConcurrency({
+            items: secretsNeedingExisting,
+            concurrency: 4,
+            fn: async (secretName) => [secretName, await readExistingScalar(secretName)] as const,
+          })
+        : [];
+    const existingBySecret = new Map(existingPairs);
 
     const resolvedValues: Record<string, string> = {};
-    for (const secretName of requiredSecrets) {
-      const existing = await readExistingScalar(secretName);
+    for (const secretName of secretsToWrite) {
+      const existing = existingBySecret.get(secretName) ?? null;
       if (secretName === "tailscale_auth_key") {
         if (values.tailscaleAuthKey.trim()) resolvedValues[secretName] = values.tailscaleAuthKey.trim();
         else if (existing && !isPlaceholderSecretValue(existing)) resolvedValues[secretName] = existing;
@@ -471,21 +461,9 @@ export const secretsInit = defineCommand({
         continue;
       }
 
-      if (discordSecretByName.has(secretName)) {
-        const bot = discordSecretByName.get(secretName) || "";
-        const required = requiredSecretNames.has(secretName);
-        const vv = (bot ? values.discordTokens[bot]?.trim() : "") || "";
-        if (vv) resolvedValues[secretName] = vv;
-        else if (existing) resolvedValues[secretName] = existing;
-        else if (!required) resolvedValues[secretName] = "<OPTIONAL>";
-        else if (a.allowPlaceholders) resolvedValues[secretName] = "<FILL_ME>";
-        else throw new Error(`missing discord token for ${bot || secretName} (provide it in --from-json.discordTokens or pass --allow-placeholders)`);
-        continue;
-      }
-
       const vv = values.secrets?.[secretName]?.trim() || "";
-      const required = requiredExtraSecretNames.has(secretName);
-      if (vv && !(required && isOptionalMarker(vv))) {
+      const required = requiredSecretNamesForValue.has(secretName);
+      if (vv && !(required && (isOptionalMarker(vv) || isPlaceholderSecretValue(vv)))) {
         resolvedValues[secretName] = vv;
         continue;
       }
@@ -505,7 +483,7 @@ export const secretsInit = defineCommand({
       await ensureDir(localSecretsDir);
       await ensureDir(extraFilesSecretsDir);
 
-      for (const secretName of requiredSecrets) {
+      for (const secretName of secretsToWrite) {
         const outPath = path.join(localSecretsDir, `${secretName}.yaml`);
         const plaintextYaml = upsertYamlScalarLine({ text: "\n", key: secretName, value: resolvedValues[secretName] ?? "" });
         await sopsEncryptYamlToFile({ plaintextYaml, outPath, configPath: sopsConfigPath, nix });
