@@ -14,7 +14,7 @@ import { Textarea } from "~/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip"
 import { singleHostCidrFromIp } from "~/lib/ip-utils"
 import { setupFieldHelp } from "~/lib/setup-field-help"
-import { addHost, addHostSshKeys, getClawdletsConfig, writeClawdletsConfigFile } from "~/sdk/config"
+import { addHost, addHostSshKeys, getClawdletsConfig, removeHostSshAuthorizedKey, removeHostSshKnownHost, writeClawdletsConfigFile } from "~/sdk/config"
 
 export const Route = createFileRoute("/projects/$projectId/setup/hosts")({
   component: HostsSetup,
@@ -181,6 +181,28 @@ function HostsSetup() {
         setKeyText("")
         setKeyFilePath("")
         setKnownHostsFilePath("")
+        void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", projectId] })
+      } else toast.error("Failed")
+    },
+  })
+
+  const removeAuthorizedKey = useMutation({
+    mutationFn: async (key: string) =>
+      await removeHostSshAuthorizedKey({ data: { projectId: projectId as Id<"projects">, host: selectedHost, key } }),
+    onSuccess: (res) => {
+      if (res.ok) {
+        toast.success("Removed SSH key")
+        void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", projectId] })
+      } else toast.error("Failed")
+    },
+  })
+
+  const removeKnownHost = useMutation({
+    mutationFn: async (entry: string) =>
+      await removeHostSshKnownHost({ data: { projectId: projectId as Id<"projects">, host: selectedHost, entry } }),
+    onSuccess: (res) => {
+      if (res.ok) {
+        toast.success("Removed known_hosts entry")
         void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", projectId] })
       } else toast.error("Failed")
     },
@@ -407,6 +429,40 @@ function HostsSetup() {
                   <Button type="button" disabled={addSsh.isPending} onClick={() => addSsh.mutate()}>
                     Add SSH settings
                   </Button>
+
+                  <div className="border-t pt-4 grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium">Authorized keys</div>
+                      {hostCfg.sshAuthorizedKeys?.length ? (
+                        <div className="max-h-44 overflow-auto pr-1 space-y-2">
+                          {hostCfg.sshAuthorizedKeys.map((key: string) => (
+                            <div key={key} className="flex items-start gap-2 rounded-md border bg-background/30 p-2">
+                              <code className="flex-1 text-xs font-mono break-all">{key}</code>
+                              <Button type="button" size="xs" variant="destructive" disabled={removeAuthorizedKey.isPending} onClick={() => removeAuthorizedKey.mutate(key)}>Remove</Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">None.</div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium">Known hosts</div>
+                      {hostCfg.sshKnownHosts?.length ? (
+                        <div className="max-h-44 overflow-auto pr-1 space-y-2">
+                          {hostCfg.sshKnownHosts.map((entry: string) => (
+                            <div key={entry} className="flex items-start gap-2 rounded-md border bg-background/30 p-2">
+                              <code className="flex-1 text-xs font-mono break-all">{entry}</code>
+                              <Button type="button" size="xs" variant="destructive" disabled={removeKnownHost.isPending} onClick={() => removeKnownHost.mutate(entry)}>Remove</Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">None.</div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
