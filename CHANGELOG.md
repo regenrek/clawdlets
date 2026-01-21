@@ -5,6 +5,16 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 
 ## Unreleased
 
+## [0.3.3] - 2026-01-21
+### Fixed
+- Ensure `/srv/clawdbot` (stateDirBase) is created via tmpfiles so gateway-token services can write credentials on fresh hosts under `ProtectSystem=strict`.
+
+### Tests
+- Add nix-eval regression test asserting tmpfiles create `stateDirBase` + per-bot state dirs (and that bot homes are isolated).
+
+### CI
+- Enable auto-merge for scheduled “bump” PRs.
+
 ## [0.3.2] - 2026-01-20
 ### Fixed
 - Add repository metadata to the cattle plugin so npm OIDC provenance publish succeeds.
