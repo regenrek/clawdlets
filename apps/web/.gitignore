@@ -13,7 +13,6 @@ yarn.lock
 /public/build
 
 # Convex (generated + local state)
-convex/_generated/
 .convex/
 .env.*.local
 

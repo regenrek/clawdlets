@@ -129,8 +129,11 @@ export const secretsInit = defineCommand({
       ...(garnixPrivateEnabled ? [garnixNetrcSecretName] : []),
     ]);
 
+    const discordSecretNames = new Set<string>(Array.from(discordSecretByName.keys()));
+
     const templateExtraSecrets: Record<string, string> = {};
     for (const secretName of secretsPlan.secretNamesAll) {
+      if (discordSecretNames.has(secretName)) continue;
       templateExtraSecrets[secretName] = requiredSecretNames.has(secretName) ? "<REPLACE_WITH_SECRET>" : "<OPTIONAL>";
     }
     if (garnixPrivateEnabled) {
@@ -417,7 +420,6 @@ export const secretsInit = defineCommand({
         else if (step.kind === "secret") values.secrets[step.secretName] = s;
         else {
           values.discordTokens[step.bot] = s;
-          values.secrets[step.secretName] = s;
         }
         i += 1;
       }
@@ -427,6 +429,14 @@ export const secretsInit = defineCommand({
       values.tailscaleAuthKey = input.tailscaleAuthKey || "";
       values.secrets = input.secrets || {};
       values.discordTokens = input.discordTokens || {};
+    }
+
+    for (const secretName of Object.keys(values.secrets || {})) {
+      const bot = discordSecretByName.get(secretName) || "";
+      if (!bot) continue;
+      throw new Error(
+        `discord token secrets must be set via discordTokens.${bot} (remove secrets.${secretName})`,
+      );
     }
 
     const secretsToWrite = secretsPlan.secretNamesAll;
@@ -464,7 +474,7 @@ export const secretsInit = defineCommand({
       if (discordSecretByName.has(secretName)) {
         const bot = discordSecretByName.get(secretName) || "";
         const required = requiredSecretNames.has(secretName);
-        const vv = (bot ? values.discordTokens[bot]?.trim() : "") || values.secrets?.[secretName]?.trim() || "";
+        const vv = (bot ? values.discordTokens[bot]?.trim() : "") || "";
         if (vv) resolvedValues[secretName] = vv;
         else if (existing) resolvedValues[secretName] = existing;
         else if (!required) resolvedValues[secretName] = "<OPTIONAL>";

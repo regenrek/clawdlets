@@ -109,7 +109,6 @@ describe("secrets init", () => {
 
     const secretsJson = {
       adminPasswordHash: "hash",
-      secrets: { discord_token_maren: "token" },
       discordTokens: { maren: "token" },
     };
     const jsonPath = path.join(repoRoot, ".clawdlets", "secrets.json");
@@ -305,6 +304,45 @@ describe("secrets init", () => {
     ).rejects.toThrow(/missing discord token/i);
   });
 
+  it("rejects when discord token is provided via secrets map (double-entry)", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(tmpdir(), "clawdlets-secrets-"));
+    const layout = getRepoLayout(repoRoot);
+    const config = makeConfig({
+      hostName: "alpha",
+      hostOverrides: { ...baseHost, tailnet: { mode: "none" } },
+      fleetOverrides: { botOrder: ["maren"], bots: { maren: {} } },
+    });
+    const hostCfg = config.hosts.alpha;
+    loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
+    buildFleetSecretsPlanMock.mockReturnValue({
+      secretNamesAll: ["discord_token_maren"],
+      secretNamesRequired: ["discord_token_maren"],
+      discordSecretsByBot: { maren: "discord_token_maren" },
+      missingSecretConfig: [],
+    });
+    ageKeygenMock.mockResolvedValue({
+      secretKey: "AGE-SECRET-KEY-1",
+      publicKey: "age1publickey",
+      fileText: "AGE-SECRET-KEY-1",
+    });
+    upsertSopsCreationRuleMock.mockReturnValue("sops");
+    const jsonPath = path.join(repoRoot, ".clawdlets", "secrets.json");
+    fs.mkdirSync(path.dirname(jsonPath), { recursive: true });
+    fs.writeFileSync(
+      jsonPath,
+      JSON.stringify({
+        adminPasswordHash: "hash",
+        discordTokens: { maren: "token" },
+        secrets: { discord_token_maren: "token" },
+      }),
+      "utf8",
+    );
+    const { secretsInit } = await import("../src/commands/secrets/init.js");
+    await expect(
+      secretsInit.run({ args: { host: "alpha", fromJson: jsonPath, yes: true, dryRun: true } } as any),
+    ).rejects.toThrow(/remove secrets\.discord_token_maren/i);
+  });
+
   it("collects interactive secrets including netrc and discord token", async () => {
     const repoRoot = fs.mkdtempSync(path.join(tmpdir(), "clawdlets-secrets-"));
     const layout = getRepoLayout(repoRoot);
@@ -404,7 +442,6 @@ describe("secrets init", () => {
 
     const secretsJson = {
       adminPasswordHash: "hash",
-      secrets: { discord_token_maren: "token" },
       discordTokens: { maren: "token" },
     };
     const jsonPath = path.join(repoRoot, ".clawdlets", "secrets.json");
@@ -471,7 +508,6 @@ describe("secrets init", () => {
 
     const secretsJson = {
       adminPasswordHash: "hash",
-      secrets: { discord_token_maren: "token" },
       discordTokens: { maren: "token" },
     };
     const jsonPath = path.join(repoRoot, ".clawdlets", "secrets.json");

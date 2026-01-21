@@ -70,7 +70,7 @@ let
         then (
           if userDiscordToken != null && userDiscordToken != ""
           then throw "clawdbot config sets channels.discord.token while profile.discordTokenSecret is set; remove the inline token"
-          else { channels = { discord = { token = config.sops.placeholder.${discordTokenSecret}; }; }; }
+          else { channels = { discord = { token = "\${DISCORD_BOT_TOKEN}"; }; }; }
         )
         else { };
       baseCfg = (
