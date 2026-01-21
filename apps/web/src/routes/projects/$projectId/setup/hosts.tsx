@@ -3,12 +3,16 @@ import { createFileRoute } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import type { Id } from "../../../../../convex/_generated/dataModel"
+import { ArrowPathIcon } from "@heroicons/react/24/outline"
 import { Button } from "~/components/ui/button"
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "~/components/ui/input-group"
 import { Input } from "~/components/ui/input"
 import { HelpTooltip, LabelWithHelp } from "~/components/ui/label-help"
 import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select"
 import { Switch } from "~/components/ui/switch"
 import { Textarea } from "~/components/ui/textarea"
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip"
+import { singleHostCidrFromIp } from "~/lib/ip-utils"
 import { setupFieldHelp } from "~/lib/setup-field-help"
 import { addHost, addHostSshKeys, getClawdletsConfig, writeClawdletsConfigFile } from "~/sdk/config"
 
@@ -61,6 +65,34 @@ function HostsSetup() {
   const [hetznerLocation, setHetznerLocation] = useState("nbg1")
   const [flakeHost, setFlakeHost] = useState("")
   const [agentModelPrimary, setAgentModelPrimary] = useState("")
+
+  const [detectingAdminCidr, setDetectingAdminCidr] = useState(false)
+
+  async function detectAdminCidr() {
+    setDetectingAdminCidr(true)
+    const ctrl = new AbortController()
+    const timeout = setTimeout(() => ctrl.abort(), 6000)
+    try {
+      const res = await fetch("https://api.ipify.org?format=json", { signal: ctrl.signal })
+      if (!res.ok) throw new Error(`ip lookup failed (${res.status})`)
+      const json = (await res.json()) as { ip?: unknown }
+      const ip = typeof json.ip === "string" ? json.ip : ""
+      const cidr = singleHostCidrFromIp(ip)
+      setAdminCidr(cidr)
+      toast.success(`Admin CIDR set to ${cidr}`)
+    } catch (err) {
+      const msg =
+        err instanceof DOMException && err.name === "AbortError"
+          ? "timed out"
+          : err instanceof Error
+            ? err.message
+            : String(err)
+      toast.error(`Admin CIDR detect failed: ${msg}`)
+    } finally {
+      clearTimeout(timeout)
+      setDetectingAdminCidr(false)
+    }
+  }
 
   useEffect(() => {
     if (!config) return
@@ -251,7 +283,34 @@ function HostsSetup() {
                     <LabelWithHelp htmlFor="adminCidr" help={setupFieldHelp.hosts.adminCidr}>
                       Admin CIDR
                     </LabelWithHelp>
-                    <Input id="adminCidr" value={adminCidr} onChange={(e) => setAdminCidr(e.target.value)} placeholder="203.0.113.10/32" />
+                    <InputGroup>
+                      <InputGroupInput
+                        id="adminCidr"
+                        value={adminCidr}
+                        onChange={(e) => setAdminCidr(e.target.value)}
+                        placeholder="203.0.113.10/32"
+                      />
+                      <InputGroupAddon align="inline-end">
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <InputGroupButton
+                                type="button"
+                                variant="secondary"
+                                disabled={detectingAdminCidr}
+                                onClick={() => void detectAdminCidr()}
+                              >
+                                <ArrowPathIcon className={detectingAdminCidr ? "animate-spin" : ""} />
+                                Detect
+                              </InputGroupButton>
+                            }
+                          />
+                          <TooltipContent side="top" align="end">
+                            Detect from your current public IP (via ipify).
+                          </TooltipContent>
+                        </Tooltip>
+                      </InputGroupAddon>
+                    </InputGroup>
                   </div>
                   <div className="space-y-2">
                     <LabelWithHelp htmlFor="pubkeyFile" help={setupFieldHelp.hosts.sshPubkeyFile}>

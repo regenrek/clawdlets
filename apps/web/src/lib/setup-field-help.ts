@@ -6,7 +6,7 @@ export const setupFieldHelp = {
     enabled: "Toggles whether this host is managed/deployed by clawdlets.",
     diskDevice: "Block device to install NixOS onto (usually `/dev/sda` on Hetzner). Must start with `/dev/`.",
     targetHost: "SSH destination used for deploy/ops after bootstrap (ssh alias or `user@host`).",
-    adminCidr: "CIDR allowed to reach admin SSH during bootstrap (recommend your current IP `/32`).",
+    adminCidr: "CIDR allowed to reach admin SSH during bootstrap (recommend your current IP `/32`). Use Detect to autofill from your public IP.",
     sshPubkeyFile: "Local `.pub` file to authorize on the host during provisioning.",
     sshExposure: "How SSH is exposed: `bootstrap` (temporary), `tailnet` (recommended), or `public` (risky).",
     tailnet: "Tailnet integration mode. `tailscale` enables Tailscale-based access; `none` disables it.",
@@ -58,4 +58,3 @@ export const setupFieldHelp = {
     dryRun: "Show commands without executing (safe preview).",
   },
 } as const
-
