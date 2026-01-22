@@ -19,6 +19,7 @@ yarn.lock
 # TanStack Start / Vite
 dist/
 .vinxi/
+coverage/
 
 # Sentry Config File
 .env.sentry-build-plugin
