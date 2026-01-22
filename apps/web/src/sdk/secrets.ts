@@ -86,14 +86,20 @@ export const getSecretsTemplate = createServerFn({ method: "POST" })
       throw new Error("cache.garnix.private.netrcSecret must be set when private cache is enabled")
     }
 
-    const requiredSecrets = new Set<string>([
-      ...secretsPlan.secretNamesRequired,
-      ...Array.from(hostRequiredSecretNames).filter((s) => s !== "admin_password_hash" && s !== "tailscale_auth_key"),
-    ])
-
+    const skipHostNames = new Set(["admin_password_hash", "tailscale_auth_key"])
+    const requiredSecrets = new Set<string>(
+      (secretsPlan.required || [])
+        .map((spec) => spec.name)
+        .filter((name) => !skipHostNames.has(name)),
+    )
+    const optionalSecrets = new Set<string>(
+      (secretsPlan.optional || [])
+        .map((spec) => spec.name)
+        .filter((name) => !skipHostNames.has(name)),
+    )
     const templateSecretNames = Array.from(new Set<string>([
-      ...secretsPlan.secretNamesAll,
-      ...Array.from(hostRequiredSecretNames).filter((s) => s !== "admin_password_hash" && s !== "tailscale_auth_key"),
+      ...Array.from(requiredSecrets),
+      ...Array.from(optionalSecrets),
     ])).sort()
 
     const templateSecrets: Record<string, string> = {}
@@ -110,10 +116,11 @@ export const getSecretsTemplate = createServerFn({ method: "POST" })
     return {
       host,
       bots: secretsPlan.bots,
-      missingSecretConfig: secretsPlan.missingSecretConfig,
+      secretsPlan,
+      missingSecretConfig: secretsPlan.missing,
       requiredSecretNames: Array.from(new Set<string>([
         ...secretsPlan.hostSecretNamesRequired,
-        ...secretsPlan.secretNamesRequired,
+        ...(secretsPlan.required || []).map((spec) => spec.name),
       ])).sort(),
       templateJson: `${JSON.stringify(template, null, 2)}\n`,
     }
@@ -154,6 +161,7 @@ export const secretsInitExecute = createServerFn({ method: "POST" })
     return {
       ...base,
       allowPlaceholders: Boolean(d["allowPlaceholders"]),
+      allowUnmanaged: Boolean(d["allowUnmanaged"]),
       adminPassword: typeof d["adminPassword"] === "string" ? d["adminPassword"] : "",
       adminPasswordHash: typeof d["adminPasswordHash"] === "string" ? d["adminPasswordHash"] : "",
       tailscaleAuthKey: typeof d["tailscaleAuthKey"] === "string" ? d["tailscaleAuthKey"] : "",
@@ -176,6 +184,9 @@ export const secretsInitExecute = createServerFn({ method: "POST" })
     const { config } = loadClawdletsConfig({ repoRoot })
     if (!config.hosts[data.host]) throw new Error(`unknown host: ${data.host}`)
     const layout = getRepoLayout(repoRoot)
+
+    const allowlist = buildManagedHostSecretNameAllowlist({ config, host: data.host })
+    assertSecretsAreManaged({ allowlist, secrets: data.secrets, allowUnmanaged: data.allowUnmanaged })
 
     const baseRedactions = await readClawdletsEnvTokens(repoRoot)
     const extraRedactions = [
@@ -514,6 +525,7 @@ export const writeHostSecrets = createServerFn({ method: "POST" })
     return {
       projectId: d["projectId"] as Id<"projects">,
       host: String(d["host"] || ""),
+      allowUnmanaged: Boolean(d["allowUnmanaged"]),
       secrets,
     }
   })
@@ -527,7 +539,7 @@ export const writeHostSecrets = createServerFn({ method: "POST" })
     if (!config.hosts[host]) throw new Error(`unknown host: ${host}`)
 
     const allowlist = buildManagedHostSecretNameAllowlist({ config, host })
-    assertSecretsAreManaged({ allowlist, secrets: data.secrets })
+    assertSecretsAreManaged({ allowlist, secrets: data.secrets, allowUnmanaged: data.allowUnmanaged })
 
     const layout = getRepoLayout(repoRoot)
     if (!fsSync.existsSync(layout.sopsConfigPath)) {

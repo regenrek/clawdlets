@@ -12,11 +12,11 @@ import { setupFieldHelp } from "~/lib/setup-field-help"
 import { BotRoster } from "~/components/fleet/bot-roster"
 import { getClawdletsConfig, addBot } from "~/sdk/config"
 
-export const Route = createFileRoute("/projects/$projectId/setup/bots")({
-  component: BotsSetup,
+export const Route = createFileRoute("/projects/$projectId/hosts/agents")({
+  component: AgentsSetup,
 })
 
-function BotsSetup() {
+function AgentsSetup() {
   const { projectId } = Route.useParams()
   const queryClient = useQueryClient()
 
@@ -38,7 +38,7 @@ function BotsSetup() {
   const addBotMutation = useMutation({
     mutationFn: async () => await addBot({ data: { projectId: projectId as Id<"projects">, bot: newBot } }),
     onSuccess: () => {
-      toast.success("Bot added")
+      toast.success("Agent added")
       setNewBot("")
       void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", projectId] })
     },
@@ -46,9 +46,9 @@ function BotsSetup() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-black tracking-tight">Bots</h1>
+      <h1 className="text-2xl font-black tracking-tight">Agents</h1>
       <p className="text-muted-foreground">
-        Add/remove bots and configure per-bot settings.
+        Add/remove agents and configure per-agent settings.
       </p>
 
       {cfg.isPending ? (
@@ -60,11 +60,11 @@ function BotsSetup() {
       ) : (
         <div className="space-y-6">
           <div className="rounded-lg border bg-card p-6 space-y-3">
-            <div className="font-medium">Add bot</div>
+            <div className="font-medium">Add agent</div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1 space-y-2">
                 <LabelWithHelp htmlFor="newBot" help={setupFieldHelp.bots.botId}>
-                  Bot id
+                  Agent id
                 </LabelWithHelp>
                 <Input
                   id="newBot"
@@ -82,9 +82,9 @@ function BotsSetup() {
                 Add
               </Button>
             </div>
-            <div className="text-xs text-muted-foreground">
-              Stored in <code>fleet.botOrder</code> and <code>fleet.bots</code>.
-            </div>
+              <div className="text-xs text-muted-foreground">
+                Stored in <code>fleet.botOrder</code> and <code>fleet.bots</code>.
+              </div>
             {!canEdit ? (
               <div className="text-xs text-muted-foreground">
                 Read-only: project role <code>{project.data?.role || "…"}</code>.
@@ -95,14 +95,14 @@ function BotsSetup() {
           <div className="rounded-lg border bg-card p-6 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="font-medium">Bot roster</div>
-                <div className="text-xs text-muted-foreground">{bots.length} bots</div>
+                <div className="font-medium">Agent roster</div>
+                <div className="text-xs text-muted-foreground">{bots.length} agents</div>
               </div>
               <Button
                 size="sm"
                 variant="outline"
                 nativeButton={false}
-                render={<Link to="/projects/$projectId/setup/secrets" params={{ projectId }} />}
+                render={<Link to="/projects/$projectId/hosts/secrets" params={{ projectId }} />}
               >
                 Secrets
               </Button>

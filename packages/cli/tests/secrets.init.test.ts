@@ -68,6 +68,33 @@ vi.mock("@clawdlets/core/lib/context", () => ({
   loadHostContextOrExit: loadHostContextMock,
 }));
 
+const buildPlan = (overrides: Record<string, unknown>) => {
+  const hostSecretNamesRequired = (overrides["hostSecretNamesRequired"] as string[] | undefined) || ["admin_password_hash"];
+  const secretNamesRequired = (overrides["secretNamesRequired"] as string[] | undefined) || [];
+  const required =
+    (overrides["required"] as Array<Record<string, unknown>> | undefined) ||
+    [
+      ...hostSecretNamesRequired.map((name) => ({ name, kind: "extra", scope: "host", source: "custom" })),
+      ...secretNamesRequired
+        .filter((name) => !hostSecretNamesRequired.includes(name))
+        .map((name) => ({ name, kind: "env", scope: "bot", source: "custom" })),
+    ];
+  return {
+    bots: [],
+    hostSecretNamesRequired,
+    secretNamesAll: [],
+    secretNamesRequired,
+    required,
+    optional: [],
+    missing: (overrides["missingSecretConfig"] as unknown[]) || [],
+    warnings: [],
+    missingSecretConfig: [],
+    byBot: {},
+    hostSecretFiles: {},
+    ...overrides,
+  };
+};
+
 describe("secrets init", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -86,12 +113,12 @@ describe("secrets init", () => {
 
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
 
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
       hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
       missingSecretConfig: [],
-    });
+    }));
 
     ageKeygenMock.mockResolvedValue({
       secretKey: "AGE-SECRET-KEY-1",
@@ -175,12 +202,12 @@ describe("secrets init", () => {
     });
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
       hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: [],
       secretNamesRequired: [],
-      missingSecretConfig: [{ kind: "envVar", bot: "maren", envVar: "DISCORD_BOT_TOKEN", sources: ["config"], paths: [] }],
-    });
+      missingSecretConfig: [{ kind: "envVar", bot: "maren", envVar: "DISCORD_BOT_TOKEN", sources: ["custom"], paths: [] }],
+    }));
     const { secretsInit } = await import("../src/commands/secrets/init.js");
     await expect(secretsInit.run({ args: { host: "alpha" } } as any)).rejects.toThrow(/missing secretEnv mapping/i);
   });
@@ -195,12 +222,12 @@ describe("secrets init", () => {
     });
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
       hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
       missingSecretConfig: [],
-    });
+    }));
 
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { secretsInit } = await import("../src/commands/secrets/init.js");
@@ -220,12 +247,12 @@ describe("secrets init", () => {
     });
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
       hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: [],
       secretNamesRequired: [],
       missingSecretConfig: [],
-    });
+    }));
     const { secretsInit } = await import("../src/commands/secrets/init.js");
     await expect(secretsInit.run({ args: { host: "alpha", fromJson: path.join(repoRoot, "missing.json") } } as any)).rejects.toThrow(
       /missing --from-json file/i,
@@ -242,12 +269,12 @@ describe("secrets init", () => {
     });
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
       hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
       missingSecretConfig: [],
-    });
+    }));
     fs.mkdirSync(layout.runtimeDir, { recursive: true });
     fs.writeFileSync(
       path.join(layout.runtimeDir, "secrets.json"),
@@ -275,12 +302,12 @@ describe("secrets init", () => {
     });
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
       hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
       missingSecretConfig: [],
-    });
+    }));
     ageKeygenMock.mockResolvedValue({
       secretKey: "AGE-SECRET-KEY-1",
       publicKey: "age1publickey",
@@ -319,12 +346,12 @@ describe("secrets init", () => {
     });
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
       hostSecretNamesRequired: ["admin_password_hash", "tailscale_auth_key", "garnix_netrc"],
       secretNamesAll: ["discord_token_maren", "api_key"],
       secretNamesRequired: ["discord_token_maren", "api_key"],
       missingSecretConfig: [],
-    });
+    }));
     ageKeygenMock.mockResolvedValue({
       secretKey: "AGE-SECRET-KEY-1",
       publicKey: "age1publickey",
@@ -371,12 +398,12 @@ describe("secrets init", () => {
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
 
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
       hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
       missingSecretConfig: [],
-    });
+    }));
 
     agePublicKeyFromIdentityFileMock.mockResolvedValue("age1correct");
     ageKeygenMock.mockResolvedValue({
@@ -428,12 +455,12 @@ describe("secrets init", () => {
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
 
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
       hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
       missingSecretConfig: [],
-    });
+    }));
 
     agePublicKeyFromIdentityFileMock.mockImplementation(async (p: string) => (p.includes("extra-files") ? "age1host" : "age1operator"));
     ageKeygenMock.mockResolvedValue({

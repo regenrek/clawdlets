@@ -3,7 +3,7 @@ import { z } from "zod";
 const SAFE_HOSTNAME_RE = /^[a-z][a-z0-9-]*$/;
 const SAFE_BOT_ID_RE = /^[a-z][a-z0-9_-]*$/;
 const SAFE_PERSONA_NAME_RE = /^[a-z][a-z0-9_-]*$/;
-const SAFE_SECRET_NAME_RE = /^[a-z][a-z0-9_-]*$/;
+const SAFE_SECRET_NAME_RE = /^[A-Za-z][A-Za-z0-9_-]*$/;
 const SAFE_OPERATOR_ID_RE = /^[a-zA-Z0-9._-]+$/;
 const SAFE_ENV_VAR_NAME_RE = /^[A-Z_][A-Z0-9_]*$/;
 
@@ -29,7 +29,7 @@ export const SecretNameSchema = z
   .string()
   .trim()
   .min(1)
-  .refine((v) => SAFE_SECRET_NAME_RE.test(v), { message: "invalid secret name (use [a-z][a-z0-9_-]*)" });
+  .refine((v) => SAFE_SECRET_NAME_RE.test(v), { message: "invalid secret name (use [A-Za-z][A-Za-z0-9_-]*)" });
 
 export const EnvVarNameSchema = z
   .string()

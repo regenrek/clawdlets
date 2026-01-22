@@ -49,13 +49,29 @@ export const getClawdletsConfig = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const client = createConvexClient()
     const repoRoot = await getProjectRepoRoot(client, data.projectId)
-    const { configPath, config } = loadClawdletsConfig({ repoRoot })
-    const json = JSON.stringify(config, null, 2)
-    return {
-      repoRoot,
-      configPath,
-      config: JSON.parse(json) as any,
-      json,
+    try {
+      const { configPath, config } = loadClawdletsConfig({ repoRoot })
+      const json = JSON.stringify(config, null, 2)
+      return {
+        repoRoot,
+        configPath,
+        config: JSON.parse(json) as any,
+        json,
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.toLowerCase().includes("missing clawdlets config")) {
+        const match = message.match(/missing clawdlets config:\s*(.+)$/i)
+        const configPath = match?.[1]?.trim() || ""
+        return {
+          repoRoot,
+          configPath,
+          config: null,
+          json: "",
+          missing: true,
+        }
+      }
+      throw err
     }
   })
 

@@ -8,13 +8,13 @@ import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
-import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select"
 import { Textarea } from "~/components/ui/textarea"
+import { useHostSelection } from "~/lib/host-selection"
 import { getClawdletsConfig } from "~/sdk/config"
 import { runDoctor } from "~/sdk/operations"
 import { serverDeployExecute, serverDeployStart } from "~/sdk/server-ops"
 
-export const Route = createFileRoute("/projects/$projectId/operate/deploy")({
+export const Route = createFileRoute("/projects/$projectId/hosts/deploy")({
   component: DeployOperate,
 })
 
@@ -29,12 +29,10 @@ function DeployOperate() {
   const config = cfg.data?.config as any
   const hosts = useMemo(() => Object.keys(config?.hosts || {}).sort(), [config])
 
-  const [host, setHost] = useState("")
-  useEffect(() => {
-    if (!config) return
-    if (host) return
-    setHost(config.defaultHost || hosts[0] || "")
-  }, [config, host, hosts])
+  const { host } = useHostSelection({
+    hosts,
+    defaultHost: config?.defaultHost || null,
+  })
 
   const [manifestPath, setManifestPath] = useState("")
   useEffect(() => {
@@ -46,7 +44,7 @@ function DeployOperate() {
   const [rev, setRev] = useState("HEAD")
   const [targetHost, setTargetHost] = useState("")
 
-  const expectedConfirm = `deploy ${host}`.trim()
+  const expectedConfirm = host ? `deploy ${host}` : "deploy <host>"
   const [confirm, setConfirm] = useState("")
 
   const [doctor, setDoctor] = useState<null | { ok: boolean; checks: any[]; runId: Id<"runs"> }>(null)
@@ -113,13 +111,12 @@ function DeployOperate() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Host</Label>
-                <NativeSelect value={host} onChange={(e) => setHost(e.target.value)}>
-                  {hosts.map((h) => (
-                    <NativeSelectOption key={h} value={h}>
-                      {h}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                  {host || "No hosts configured"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Change the active host in the header.
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Manifest path</Label>

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { createFileRoute } from "@tanstack/react-router"
+import { Link, createFileRoute } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import type { Id } from "../../../../../convex/_generated/dataModel"
@@ -13,10 +13,11 @@ import { Switch } from "~/components/ui/switch"
 import { Textarea } from "~/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip"
 import { singleHostCidrFromIp } from "~/lib/ip-utils"
+import { useHostSelection } from "~/lib/host-selection"
 import { setupFieldHelp } from "~/lib/setup-field-help"
-import { addHost, addHostSshKeys, getClawdletsConfig, removeHostSshAuthorizedKey, removeHostSshKnownHost, writeClawdletsConfigFile } from "~/sdk/config"
+import { addHostSshKeys, getClawdletsConfig, removeHostSshAuthorizedKey, removeHostSshKnownHost, writeClawdletsConfigFile } from "~/sdk/config"
 
-export const Route = createFileRoute("/projects/$projectId/setup/hosts")({
+export const Route = createFileRoute("/projects/$projectId/hosts/settings")({
   component: HostsSetup,
 })
 
@@ -33,26 +34,13 @@ function HostsSetup() {
   const config = cfg.data?.config
   const hosts = useMemo(() => Object.keys(config?.hosts || {}).sort(), [config])
 
-  const [newHost, setNewHost] = useState("")
-  const addHostMutation = useMutation({
-    mutationFn: async () =>
-      await addHost({ data: { projectId: projectId as Id<"projects">, host: newHost } }),
-    onSuccess: () => {
-      toast.success("Host added")
-      void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", projectId] })
-    },
+  const { host: selectedHost } = useHostSelection({
+    hosts,
+    defaultHost: config?.defaultHost || null,
   })
-
-  const [selectedHost, setSelectedHost] = useState("")
-  useEffect(() => {
-    if (!config) return
-    if (selectedHost) return
-    setSelectedHost(config.defaultHost || hosts[0] || "")
-  }, [config, hosts, selectedHost])
 
   const hostCfg = selectedHost && config ? config.hosts[selectedHost] : null
 
-  const [defaultHost, setDefaultHost] = useState("")
   const [enable, setEnable] = useState(false)
   const [diskDevice, setDiskDevice] = useState("/dev/sda")
   const [targetHost, setTargetHost] = useState("")
@@ -95,11 +83,6 @@ function HostsSetup() {
   }
 
   useEffect(() => {
-    if (!config) return
-    setDefaultHost(config.defaultHost || "")
-  }, [config])
-
-  useEffect(() => {
     if (!hostCfg) return
     setEnable(Boolean(hostCfg.enable))
     setDiskDevice(hostCfg.diskDevice || "/dev/sda")
@@ -120,7 +103,6 @@ function HostsSetup() {
       if (!config || !hostCfg) throw new Error("missing host")
       const next = {
         ...config,
-        defaultHost: defaultHost || config.defaultHost,
         hosts: {
           ...config.hosts,
           [selectedHost]: {
@@ -210,7 +192,7 @@ function HostsSetup() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-black tracking-tight">Hosts</h1>
+      <h1 className="text-2xl font-black tracking-tight">Host Settings</h1>
       <p className="text-muted-foreground">
         Manage hosts, SSH targets, and access settings.
       </p>
@@ -222,60 +204,15 @@ function HostsSetup() {
       ) : !config ? (
         <div className="text-muted-foreground">Missing config.</div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-          <div className="rounded-lg border bg-card p-5 space-y-4">
-            <div className="font-medium">Hosts</div>
-            <div className="space-y-2">
-              <LabelWithHelp htmlFor="defaultHost" help={setupFieldHelp.hosts.defaultHost}>
-                Default host
-              </LabelWithHelp>
-              <NativeSelect
-                id="defaultHost"
-                value={defaultHost}
-                onChange={(e) => setDefaultHost(e.target.value)}
-              >
-                <NativeSelectOption value="">(unset)</NativeSelectOption>
-                {hosts.map((h) => (
-                  <NativeSelectOption key={h} value={h}>
-                    {h}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </div>
-            <div className="space-y-2">
-              <LabelWithHelp htmlFor="hostSelect" help={setupFieldHelp.hosts.editHost}>
-                Edit host
-              </LabelWithHelp>
-              <NativeSelect id="hostSelect" value={selectedHost} onChange={(e) => setSelectedHost(e.target.value)}>
-                <NativeSelectOption value="">(select)</NativeSelectOption>
-                {hosts.map((h) => (
-                  <NativeSelectOption key={h} value={h}>
-                    {h}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
-            </div>
-
-            <div className="border-t pt-4 space-y-2">
-              <LabelWithHelp htmlFor="newHost" help={setupFieldHelp.hosts.addHost}>
-                Add host
-              </LabelWithHelp>
-              <Input id="newHost" placeholder="my-host" value={newHost} onChange={(e) => setNewHost(e.target.value)} />
-              <Button type="button" disabled={addHostMutation.isPending || !newHost.trim()} onClick={() => addHostMutation.mutate()}>
-                Add
-              </Button>
-            </div>
-          </div>
-
-          <div className="rounded-lg border bg-card p-6 space-y-6">
-            {hostCfg ? (
-              <>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-lg font-semibold truncate">{selectedHost}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Stored in <code>hosts.{selectedHost}</code>.
-                    </div>
+        <div className="rounded-lg border bg-card p-6 space-y-6">
+          {hostCfg ? (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-lg font-semibold truncate">{selectedHost}</div>
+                  <div className="text-xs text-muted-foreground">
+                    Stored in <code>hosts.{selectedHost}</code>.
+                  </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1 text-sm text-muted-foreground">
@@ -477,11 +414,21 @@ function HostsSetup() {
                     Reload
                   </Button>
                 </div>
-              </>
-            ) : (
-              <div className="text-muted-foreground">Select a host.</div>
-            )}
-          </div>
+            </>
+          ) : (
+            <div className="flex flex-col gap-3 text-muted-foreground">
+              <div>Select a host from Hosts overview.</div>
+              <Button
+                size="sm"
+                variant="outline"
+                nativeButton={false}
+                render={<Link to="/projects/$projectId/hosts/overview" params={{ projectId }} search={{}} />}
+                className="w-fit"
+              >
+                View hosts
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1,21 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router"
 import * as React from "react"
-import {
-  ArrowPathIcon,
-  ClockIcon,
-  CloudArrowUpIcon,
-  CodeBracketSquareIcon,
-  Cog6ToothIcon,
-  CommandLineIcon,
-  CpuChipIcon,
-  ClipboardDocumentCheckIcon,
-  DocumentTextIcon,
-  FolderIcon,
-  KeyIcon,
-  RocketLaunchIcon,
-  ServerStackIcon,
-  WrenchScrewdriverIcon,
-} from "@heroicons/react/24/outline"
+import { Cog6ToothIcon, ServerStackIcon } from "@heroicons/react/24/outline"
 import {
   Sidebar,
   SidebarContent,
@@ -36,6 +21,7 @@ type NavItem = {
   label: string
   icon?: React.ComponentType<React.ComponentProps<"svg">>
   tooltip?: string
+  search?: Record<string, unknown>
 }
 
 function useActiveProjectId(): string | null {
@@ -75,7 +61,7 @@ function NavLink({
             variant="ghost"
             size="sm"
             nativeButton={false}
-            render={<Link to={item.to} />}
+            render={<Link to={item.to} search={item.search} />}
             className={cn(
               "w-full justify-start gap-2 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
               isActive && "bg-sidebar-accent text-sidebar-accent-foreground"
@@ -94,111 +80,21 @@ function AppSidebarContent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const projectId = useActiveProjectId()
 
-  const base: NavItem[] = [
-    {
-      to: "/projects",
-      label: "Projects",
-      icon: FolderIcon,
-      tooltip: "Browse projects on this machine. Create new or import existing repos.",
-    },
-  ]
-
   const projectBase = projectId ? `/projects/${projectId}` : null
-  const setup: NavItem[] = projectBase
+  const projectSettings: NavItem[] = projectBase
     ? [
         {
-          to: `${projectBase}/setup/fleet`,
-          label: "Fleet",
-          icon: Cog6ToothIcon,
-          tooltip: "Edit fleet config (bots, skills, workspaces).",
+          to: `${projectBase}/hosts/overview`,
+          label: "Hosts",
+          icon: ServerStackIcon,
+          tooltip: "Host-specific overview, agents, secrets, deploy, and settings.",
+          search: {},
         },
         {
           to: `${projectBase}/setup/settings`,
           label: "Project Settings",
           icon: Cog6ToothIcon,
-          tooltip: "Local operator creds: HCLOUD_TOKEN, GITHUB_TOKEN, SOPS_AGE_KEY_FILE, NIX_BIN.",
-        },
-        {
-          to: `${projectBase}/setup/hosts`,
-          label: "Hosts",
-          icon: ServerStackIcon,
-          tooltip: "Host settings: SSH target, admin CIDR, Hetzner params, tailnet.",
-        },
-        {
-          to: `${projectBase}/setup/bots`,
-          label: "Bots",
-          icon: CpuChipIcon,
-          tooltip: "Bot roster: add/remove bots and configure routing.",
-        },
-        {
-          to: `${projectBase}/setup/secrets`,
-          label: "Secrets",
-          icon: KeyIcon,
-          tooltip: "Generate + validate secrets, then sync into the project repo (no secrets stored in Convex).",
-        },
-        {
-          to: `${projectBase}/setup/doctor`,
-          label: "Doctor",
-          icon: WrenchScrewdriverIcon,
-          tooltip: "Run checks for config, repo health, and host readiness; follow fix links.",
-        },
-        {
-          to: `${projectBase}/setup/bootstrap`,
-          label: "Bootstrap",
-          icon: RocketLaunchIcon,
-          tooltip: "Provision + bootstrap a new host and deploy initial system state.",
-        },
-      ]
-    : []
-
-  const operate: NavItem[] = projectBase
-    ? [
-        {
-          to: `${projectBase}/operate/deploy`,
-          label: "Deploy",
-          icon: CloudArrowUpIcon,
-          tooltip: "Apply config changes to the host (build + switch).",
-        },
-        {
-          to: `${projectBase}/operate/logs`,
-          label: "Logs",
-          icon: DocumentTextIcon,
-          tooltip: "View recent run logs and command output for this project.",
-        },
-        {
-          to: `${projectBase}/operate/audit`,
-          label: "Audit",
-          icon: ClipboardDocumentCheckIcon,
-          tooltip: "Security/audit checks for config and infra state; review findings.",
-        },
-        {
-          to: `${projectBase}/operate/restart`,
-          label: "Restart",
-          icon: ArrowPathIcon,
-          tooltip: "Restart selected services/units with safety confirmation.",
-        },
-      ]
-    : []
-
-  const advanced: NavItem[] = projectBase
-    ? [
-        {
-          to: `${projectBase}/advanced/editor`,
-          label: "Raw Editor",
-          icon: CodeBracketSquareIcon,
-          tooltip: "Directly edit raw JSON config. Use only when you know what you’re changing.",
-        },
-        {
-          to: `${projectBase}/advanced/commands`,
-          label: "Command Runner",
-          icon: CommandLineIcon,
-          tooltip: "Run clawdlets CLI commands with structured logs captured as runs.",
-        },
-        {
-          to: `${projectBase}/runs`,
-          label: "Runs",
-          icon: ClockIcon,
-          tooltip: "Run history + event timeline. Debug failures and review actions.",
+          tooltip: "Project-level credentials and operator settings.",
         },
       ]
     : []
@@ -206,48 +102,13 @@ function AppSidebarContent() {
   return (
     <Sidebar variant="sidebar" collapsible="icon">
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Home</SidebarGroupLabel>
-          <SidebarMenu>
-            {base.map((item) => (
-              <NavLink key={item.to} item={item} isActive={pathname === item.to} />
-            ))}
-          </SidebarMenu>
-        </SidebarGroup>
-
         {projectId ? (
           <>
             <SidebarSeparator />
             <SidebarGroup>
-              <SidebarGroupLabel>Setup</SidebarGroupLabel>
+              <SidebarGroupLabel>Project</SidebarGroupLabel>
               <SidebarMenu>
-                {setup.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    item={item}
-                    isActive={pathname === item.to}
-                  />
-                ))}
-              </SidebarMenu>
-            </SidebarGroup>
-
-            <SidebarGroup>
-              <SidebarGroupLabel>Operate</SidebarGroupLabel>
-              <SidebarMenu>
-                {operate.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    item={item}
-                    isActive={pathname === item.to}
-                  />
-                ))}
-              </SidebarMenu>
-            </SidebarGroup>
-
-            <SidebarGroup>
-              <SidebarGroupLabel>Advanced</SidebarGroupLabel>
-              <SidebarMenu>
-                {advanced.map((item) => (
+                {projectSettings.map((item) => (
                   <NavLink
                     key={item.to}
                     item={item}

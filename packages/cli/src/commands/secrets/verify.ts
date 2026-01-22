@@ -53,12 +53,13 @@ export const secretsVerify = defineCommand({
 
     const localDir = getHostSecretsDir(layout, hostName);
     const secretsPlan = buildFleetSecretsPlan({ config, hostName });
-    const requiredSecretNames = new Set<string>([
-      ...secretsPlan.hostSecretNamesRequired,
-      ...secretsPlan.secretNamesRequired,
-    ]);
-    const requiredSecrets = secretsPlan.hostSecretNamesRequired;
-    const secretNames = secretsPlan.secretNamesAll;
+    const planRequiredNames = (secretsPlan.required || []).map((spec) => spec.name);
+    const planOptionalNames = (secretsPlan.optional || []).map((spec) => spec.name);
+    const requiredSecretNames = new Set<string>(planRequiredNames);
+    const secretNames = Array.from(new Set<string>([
+      ...planRequiredNames,
+      ...planOptionalNames,
+    ])).sort();
     const optionalSecrets = ["root_password_hash"];
 
     type Result = { secret: string; status: "ok" | "missing" | "warn"; detail?: string };
@@ -153,7 +154,6 @@ export const secretsVerify = defineCommand({
       results.push({ secret: "secrets.localDir", status: "missing", detail: localDir });
     } else {
       const checks = [
-        ...requiredSecrets.map((s) => ({ secretName: s, optional: false, allowOptionalMarker: false })),
         ...secretNames.map((s) => ({ secretName: s, optional: false, allowOptionalMarker: !requiredSecretNames.has(s) })),
         ...optionalSecrets.map((s) => ({ secretName: s, optional: true, allowOptionalMarker: true })),
       ];

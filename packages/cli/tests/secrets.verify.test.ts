@@ -33,6 +33,33 @@ vi.mock("@clawdlets/core/lib/sops", () => ({
   sopsDecryptYamlFile: sopsDecryptMock,
 }));
 
+const buildPlan = (overrides: Record<string, unknown>) => {
+  const hostSecretNamesRequired = (overrides["hostSecretNamesRequired"] as string[] | undefined) || ["admin_password_hash"];
+  const secretNamesRequired = (overrides["secretNamesRequired"] as string[] | undefined) || [];
+  const required =
+    (overrides["required"] as Array<Record<string, unknown>> | undefined) ||
+    [
+      ...hostSecretNamesRequired.map((name) => ({ name, kind: "extra", scope: "host", source: "custom" })),
+      ...secretNamesRequired
+        .filter((name) => !hostSecretNamesRequired.includes(name))
+        .map((name) => ({ name, kind: "env", scope: "bot", source: "custom" })),
+    ];
+  return {
+    bots: [],
+    hostSecretNamesRequired,
+    secretNamesAll: [],
+    secretNamesRequired,
+    required,
+    optional: [],
+    missing: [],
+    warnings: [],
+    missingSecretConfig: [],
+    byBot: {},
+    hostSecretFiles: {},
+    ...overrides,
+  };
+};
+
 describe("secrets verify", () => {
   let logSpy: ReturnType<typeof vi.spyOn>;
 
@@ -59,11 +86,11 @@ describe("secrets verify", () => {
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
     const ageKeyPath = path.join(repoRoot, "keys", "op.agekey");
     loadDeployCredsMock.mockReturnValue({ values: { NIX_BIN: "nix", SOPS_AGE_KEY_FILE: ageKeyPath } });
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
       hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
-    });
+    }));
 
     const secretsDir = path.join(layout.secretsHostsDir, "alpha");
     fs.mkdirSync(secretsDir, { recursive: true });
@@ -95,11 +122,11 @@ describe("secrets verify", () => {
 
     const ageKeyPath = path.join(repoRoot, "keys", "op.agekey");
     loadDeployCredsMock.mockReturnValue({ values: { NIX_BIN: "nix", SOPS_AGE_KEY_FILE: ageKeyPath } });
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
       hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
-    });
+    }));
 
     fs.mkdirSync(path.dirname(ageKeyPath), { recursive: true });
     fs.writeFileSync(ageKeyPath, "AGE-SECRET-KEY-1", "utf8");

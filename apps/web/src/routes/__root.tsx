@@ -117,9 +117,12 @@ function RootComponent() {
   const convexQueryClient = router.options.context.convexQueryClient
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const showShell = pathname !== "/sign-in"
+  const projectMatch = pathname.match(/^\/projects\/([^/]+)/)
+  const activeProjectId = projectMatch?.[1] || null
+  const showSidebar = Boolean(activeProjectId && activeProjectId !== "new" && activeProjectId !== "import")
 
   const app = showShell ? (
-    <AppShell>
+    <AppShell showSidebar={showSidebar}>
       <Outlet />
     </AppShell>
   ) : (

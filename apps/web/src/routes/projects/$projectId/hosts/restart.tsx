@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import type { Id } from "../../../../../convex/_generated/dataModel"
 import { RunLogTail } from "~/components/run-log-tail"
@@ -8,15 +8,15 @@ import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select"
-import { Switch } from "~/components/ui/switch"
+import { useHostSelection } from "~/lib/host-selection"
 import { getClawdletsConfig } from "~/sdk/config"
-import { serverLogsExecute, serverLogsStart } from "~/sdk/server-ops"
+import { serverRestartExecute, serverRestartStart } from "~/sdk/server-ops"
 
-export const Route = createFileRoute("/projects/$projectId/operate/logs")({
-  component: LogsOperate,
+export const Route = createFileRoute("/projects/$projectId/hosts/restart")({
+  component: RestartOperate,
 })
 
-function LogsOperate() {
+function RestartOperate() {
   const { projectId } = Route.useParams()
   const cfg = useQuery({
     queryKey: ["clawdletsConfig", projectId],
@@ -27,46 +27,37 @@ function LogsOperate() {
   const hosts = useMemo(() => Object.keys(config?.hosts || {}).sort(), [config])
   const bots = useMemo(() => (config?.fleet?.botOrder || []) as string[], [config])
 
-  const [host, setHost] = useState("")
-  useEffect(() => {
-    if (!config) return
-    if (host) return
-    setHost(config.defaultHost || hosts[0] || "")
-  }, [config, host, hosts])
+  const { host } = useHostSelection({
+    hosts,
+    defaultHost: config?.defaultHost || null,
+  })
 
   const [unit, setUnit] = useState("clawdbot-*.service")
-  const [lines, setLines] = useState("200")
-  const [since, setSince] = useState("")
-  const [follow, setFollow] = useState(false)
   const [targetHost, setTargetHost] = useState("")
+
+  const expectedConfirm = `restart ${unit.trim() || "clawdbot-*.service"}`.trim()
+  const [confirm, setConfirm] = useState("")
 
   const [runId, setRunId] = useState<Id<"runs"> | null>(null)
   const start = useMutation({
     mutationFn: async () =>
-      await serverLogsStart({ data: { projectId: projectId as Id<"projects">, host, unit } }),
+      await serverRestartStart({ data: { projectId: projectId as Id<"projects">, host, unit } }),
     onSuccess: (res) => {
       setRunId(res.runId)
-      void serverLogsExecute({
-        data: {
-          projectId: projectId as Id<"projects">,
-          runId: res.runId,
-          host,
-          unit,
-          lines,
-          since,
-          follow,
-          targetHost,
-        },
+      void serverRestartExecute({
+        data: { projectId: projectId as Id<"projects">, runId: res.runId, host, unit, targetHost, confirm },
       })
-      toast.info("Logs started")
+      toast.info("Restart started")
     },
   })
 
+  const canRestart = Boolean(host && confirm.trim() === expectedConfirm)
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-black tracking-tight">Logs</h1>
+      <h1 className="text-2xl font-black tracking-tight">Restart</h1>
       <p className="text-muted-foreground">
-        Browse logs per unit with filters and follow mode.
+        Restart services with typed confirmations and RBAC.
       </p>
 
       {cfg.isPending ? (
@@ -81,13 +72,12 @@ function LogsOperate() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Host</Label>
-                <NativeSelect value={host} onChange={(e) => setHost(e.target.value)}>
-                  {hosts.map((h) => (
-                    <NativeSelectOption key={h} value={h}>
-                      {h}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                  {host || "No hosts configured"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Change the active host in the header.
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Unit</Label>
@@ -102,37 +92,25 @@ function LogsOperate() {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Lines</Label>
-                <Input value={lines} onChange={(e) => setLines(e.target.value)} placeholder="200" />
-              </div>
-              <div className="space-y-2">
-                <Label>Since (optional)</Label>
-                <Input value={since} onChange={(e) => setSince(e.target.value)} placeholder="1h / 5m / 2d" />
-              </div>
-              <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium">Follow</div>
-                  <div className="text-xs text-muted-foreground">
-                    Streams logs until you cancel.
-                  </div>
-                </div>
-                <Switch checked={follow} onCheckedChange={setFollow} />
-              </div>
-            </div>
-
             <div className="space-y-2">
               <Label>Target host override (optional)</Label>
               <Input value={targetHost} onChange={(e) => setTargetHost(e.target.value)} placeholder="admin@100.64.0.1" />
             </div>
 
+            <div className="space-y-2">
+              <Label>Type to confirm</Label>
+              <Input value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder={expectedConfirm} />
+              <div className="text-xs text-muted-foreground">
+                Expected: <code>{expectedConfirm}</code>
+              </div>
+            </div>
+
             <div className="flex items-center gap-2">
-              <Button type="button" disabled={start.isPending || !host} onClick={() => start.mutate()}>
-                {follow ? "Start following" : "Fetch logs"}
+              <Button type="button" disabled={start.isPending || !canRestart} onClick={() => start.mutate()}>
+                Restart
               </Button>
               <div className="text-xs text-muted-foreground">
-                Uses <code>--ssh-tty=false</code>. Ensure passwordless sudo if required.
+                Uses <code>--ssh-tty=false</code>.
               </div>
             </div>
           </div>

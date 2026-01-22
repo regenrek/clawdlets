@@ -118,14 +118,20 @@ export const secretsInit = defineCommand({
     const hostRequiredSecretNames = new Set<string>(secretsPlan.hostSecretNamesRequired);
     const requiresTailscaleAuthKey = hostRequiredSecretNames.has("tailscale_auth_key");
 
-    const requiredSecrets = new Set<string>([
-      ...secretsPlan.secretNamesRequired,
-      ...Array.from(hostRequiredSecretNames).filter((s) => s !== "admin_password_hash" && s !== "tailscale_auth_key"),
-    ]);
-
+    const skipHostNames = new Set(["admin_password_hash", "tailscale_auth_key"]);
+    const requiredSecrets = new Set<string>(
+      (secretsPlan.required || [])
+        .map((spec) => spec.name)
+        .filter((name) => !skipHostNames.has(name)),
+    );
+    const optionalSecrets = new Set<string>(
+      (secretsPlan.optional || [])
+        .map((spec) => spec.name)
+        .filter((name) => !skipHostNames.has(name)),
+    );
     const templateSecretNames = Array.from(new Set<string>([
-      ...secretsPlan.secretNamesAll,
-      ...Array.from(hostRequiredSecretNames).filter((s) => s !== "admin_password_hash" && s !== "tailscale_auth_key"),
+      ...Array.from(requiredSecrets),
+      ...Array.from(optionalSecrets),
     ])).sort();
 
     const templateSecrets: Record<string, string> = {};

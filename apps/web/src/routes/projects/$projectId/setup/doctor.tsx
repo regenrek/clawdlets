@@ -8,6 +8,7 @@ import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { LabelWithHelp } from "~/components/ui/label-help"
 import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select"
+import { useHostSelection } from "~/lib/host-selection"
 import { setupFieldHelp } from "~/lib/setup-field-help"
 import { getClawdletsConfig } from "~/sdk/config"
 import { runDoctor } from "~/sdk/operations"
@@ -24,11 +25,11 @@ function pickFixLink(
   const scope = String(check?.scope || "")
 
   const toFleet = () => ({ to: `/projects/${projectId}/setup/fleet`, label: "Open Fleet" })
-  const toHosts = () => ({ to: `/projects/${projectId}/setup/hosts`, label: "Open Hosts" })
-  const toSettings = () => ({ to: `/projects/${projectId}/setup/settings`, label: "Open Project Settings" })
-  const toSecrets = () => ({ to: `/projects/${projectId}/setup/secrets`, label: "Open Secrets" })
-  const toDeploy = () => ({ to: `/projects/${projectId}/operate/deploy`, label: "Open Deploy" })
-  const toAudit = () => ({ to: `/projects/${projectId}/operate/audit`, label: "Open Audit" })
+  const toHosts = () => ({ to: `/projects/${projectId}/hosts/overview`, label: "Open Hosts" })
+  const toSettings = () => ({ to: `/projects/${projectId}/hosts/secrets`, label: "Open Secrets" })
+  const toSecrets = () => ({ to: `/projects/${projectId}/hosts/secrets`, label: "Open Secrets" })
+  const toDeploy = () => ({ to: `/projects/${projectId}/hosts/deploy`, label: "Open Deploy" })
+  const toAudit = () => ({ to: `/projects/${projectId}/hosts/audit`, label: "Open Audit" })
 
   if (label.includes("clawdlets config") || label.includes("fleet config")) return toFleet()
   if (label.includes("fleet policy") || label.includes("fleet bots") || label.includes("services.clawdbotfleet.enable")) return toFleet()
@@ -51,18 +52,20 @@ function DoctorSetup() {
   const config = cfg.data?.config as any
   const hosts = useMemo(() => Object.keys(config?.hosts || {}).sort(), [config])
 
-  const [host, setHost] = useState("")
+  const { host } = useHostSelection({
+    hosts,
+    defaultHost: config?.defaultHost || null,
+  })
   const [scope, setScope] = useState<"repo" | "bootstrap" | "server-deploy" | "cattle" | "all">("all")
   const [result, setResult] = useState<null | { runId: Id<"runs">; checks: any[]; ok: boolean }>(null)
 
   const run = useMutation({
     mutationFn: async () => {
-      const effectiveHost = host || config?.defaultHost || hosts[0] || ""
-      if (!effectiveHost) throw new Error("missing host")
+      if (!host) throw new Error("missing host")
       return await runDoctor({
         data: {
           projectId: projectId as Id<"projects">,
-          host: effectiveHost,
+          host,
           scope,
         },
       })
@@ -102,17 +105,15 @@ function DoctorSetup() {
           <div className="rounded-lg border bg-card p-6 space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <LabelWithHelp htmlFor="doctorHost" help={setupFieldHelp.doctor.host}>
+                <LabelWithHelp help={setupFieldHelp.doctor.host}>
                   Host
                 </LabelWithHelp>
-                <NativeSelect id="doctorHost" value={host} onChange={(e) => setHost(e.target.value)}>
-                  <NativeSelectOption value="">(default)</NativeSelectOption>
-                  {hosts.map((h) => (
-                    <NativeSelectOption key={h} value={h}>
-                      {h}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                  {host || "No hosts configured"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Change the active host in the header.
+                </div>
               </div>
               <div className="space-y-2">
                 <LabelWithHelp htmlFor="doctorScope" help={setupFieldHelp.doctor.scope}>

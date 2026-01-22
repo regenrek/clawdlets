@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { createFileRoute } from "@tanstack/react-router"
-import { useEffect, useMemo, useState } from "react"
+import { Link, createFileRoute } from "@tanstack/react-router"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import type { Id } from "../../../../../convex/_generated/dataModel"
 import { RunLogTail } from "~/components/run-log-tail"
@@ -10,12 +10,13 @@ import { HelpTooltip, LabelWithHelp } from "~/components/ui/label-help"
 import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select"
 import { Switch } from "~/components/ui/switch"
 import { canBootstrapFromDoctorGate } from "~/lib/bootstrap-gate"
+import { useHostSelection } from "~/lib/host-selection"
 import { setupFieldHelp } from "~/lib/setup-field-help"
 import { getClawdletsConfig } from "~/sdk/config"
 import { getDeployCredsStatus } from "~/sdk/deploy-creds"
 import { bootstrapExecute, bootstrapStart, runDoctor } from "~/sdk/operations"
 
-export const Route = createFileRoute("/projects/$projectId/setup/bootstrap")({
+export const Route = createFileRoute("/projects/$projectId/hosts/bootstrap")({
   component: BootstrapSetup,
 })
 
@@ -34,16 +35,13 @@ function BootstrapSetup() {
   const config = cfg.data?.config as any
   const hosts = useMemo(() => Object.keys(config?.hosts || {}).sort(), [config])
 
-  const [host, setHost] = useState("")
+  const { host } = useHostSelection({
+    hosts,
+    defaultHost: config?.defaultHost || null,
+  })
   const [mode, setMode] = useState<"nixos-anywhere" | "image">("nixos-anywhere")
   const [force, setForce] = useState(false)
   const [dryRun, setDryRun] = useState(false)
-
-  useEffect(() => {
-    if (!config) return
-    if (host) return
-    setHost(config.defaultHost || hosts[0] || "")
-  }, [config, host, hosts])
 
   const [doctor, setDoctor] = useState<null | { ok: boolean; checks: any[]; runId: Id<"runs"> }>(null)
 
@@ -82,10 +80,17 @@ function BootstrapSetup() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-black tracking-tight">Bootstrap</h1>
-      <p className="text-muted-foreground">
-        Bootstrap the host with structured progress and logs.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black tracking-tight">Bootstrap</h1>
+          <p className="text-muted-foreground">
+            Bootstrap the host with structured progress and logs.
+          </p>
+        </div>
+        <Button variant="outline" nativeButton={false} render={<Link to="/projects/$projectId/setup/doctor" params={{ projectId }} />}>
+          Open Doctor
+        </Button>
+      </div>
 
       {cfg.isPending ? (
         <div className="text-muted-foreground">Loading…</div>
@@ -98,16 +103,15 @@ function BootstrapSetup() {
           <div className="rounded-lg border bg-card p-6 space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <LabelWithHelp htmlFor="bootstrapHost" help={setupFieldHelp.bootstrap.host}>
+                <LabelWithHelp help={setupFieldHelp.bootstrap.host}>
                   Host
                 </LabelWithHelp>
-                <NativeSelect id="bootstrapHost" value={host} onChange={(e) => setHost(e.target.value)}>
-                  {hosts.map((h) => (
-                    <NativeSelectOption key={h} value={h}>
-                      {h}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                  {host || "No hosts configured"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Change the active host in the header.
+                </div>
               </div>
               <div className="space-y-2">
                 <LabelWithHelp htmlFor="bootstrapMode" help={setupFieldHelp.bootstrap.mode}>

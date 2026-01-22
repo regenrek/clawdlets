@@ -1,17 +1,23 @@
-import { convexQuery } from "@convex-dev/react-query"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Add01Icon } from "@hugeicons/core-free-icons"
 import { useQuery } from "@tanstack/react-query"
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
 import { Button } from "~/components/ui/button"
-import { api } from "../../../convex/_generated/api"
+import { ProjectsTable } from "~/components/dashboard/projects-table"
+import { getDashboardOverview } from "~/sdk/dashboard"
 
 export const Route = createFileRoute("/projects/")({
   component: ProjectsIndex,
 })
 
 function ProjectsIndex() {
-  const projects = useQuery({ ...convexQuery(api.projects.list, {}), gcTime: 5_000 })
+  const router = useRouter()
+  const overview = useQuery({
+    queryKey: ["dashboardOverview"],
+    queryFn: async () => await getDashboardOverview({ data: {} }),
+    gcTime: 5_000,
+  })
+  const projects = overview.data?.projects ?? []
 
   return (
     <div className="space-y-6">
@@ -33,31 +39,21 @@ function ProjectsIndex() {
         </div>
       </div>
 
-      {projects.isPending ? (
+      {overview.isPending ? (
         <div className="text-muted-foreground">Loading…</div>
-      ) : projects.data && projects.data.length > 0 ? (
-        <div className="grid gap-3">
-          {projects.data.map((p) => (
-            <Link
-              key={p._id}
-              to="/projects/$projectId"
-              params={{ projectId: p._id }}
-              className="block rounded-lg border bg-card p-5 hover:bg-accent/30 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{p.name}</div>
-                  <div className="text-muted-foreground text-xs mt-1 truncate">
-                    {p.localPath}
-                  </div>
-                </div>
-                <div className="text-xs text-muted-foreground shrink-0">
-                  {p.status}
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+      ) : overview.error ? (
+        <div className="text-sm text-destructive">{String(overview.error)}</div>
+      ) : projects.length > 0 ? (
+        <ProjectsTable
+          projects={projects}
+          selectedProjectId={null}
+          onSelectProjectId={(projectId) => {
+            void router.navigate({
+              to: "/projects/$projectId/dashboard",
+              params: { projectId },
+            })
+          }}
+        />
       ) : (
         <div className="border rounded-lg p-6 bg-card">
           <div className="font-medium">No projects yet</div>

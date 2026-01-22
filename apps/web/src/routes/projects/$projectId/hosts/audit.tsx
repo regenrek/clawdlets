@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query"
 import { createFileRoute, useRouter } from "@tanstack/react-router"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import type { Id } from "../../../../../convex/_generated/dataModel"
 import { api } from "../../../../../convex/_generated/api"
@@ -9,12 +9,12 @@ import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
-import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select"
 import { Textarea } from "~/components/ui/textarea"
+import { useHostSelection } from "~/lib/host-selection"
 import { getClawdletsConfig } from "~/sdk/config"
 import { serverAuditExecute, serverAuditStart, serverStatusExecute, serverStatusStart } from "~/sdk/server-ops"
 
-export const Route = createFileRoute("/projects/$projectId/operate/audit")({
+export const Route = createFileRoute("/projects/$projectId/hosts/audit")({
   component: AuditOperate,
 })
 
@@ -49,12 +49,10 @@ function AuditOperate() {
   const config = cfg.data?.config as any
   const hosts = useMemo(() => Object.keys(config?.hosts || {}).sort(), [config])
 
-  const [host, setHost] = useState("")
-  useEffect(() => {
-    if (!config) return
-    if (host) return
-    setHost(config.defaultHost || hosts[0] || "")
-  }, [config, host, hosts])
+  const { host } = useHostSelection({
+    hosts,
+    defaultHost: config?.defaultHost || null,
+  })
 
   const [targetHost, setTargetHost] = useState("")
 
@@ -113,13 +111,12 @@ function AuditOperate() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Host</Label>
-                <NativeSelect value={host} onChange={(e) => setHost(e.target.value)}>
-                  {hosts.map((h) => (
-                    <NativeSelectOption key={h} value={h}>
-                      {h}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                  {host || "No hosts configured"}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Change the active host in the header.
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Target host override (optional)</Label>

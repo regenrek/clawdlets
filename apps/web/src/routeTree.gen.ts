@@ -10,31 +10,41 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProjectsIndexRouteImport } from './routes/projects/index'
 import { Route as ProjectsNewRouteImport } from './routes/projects/new'
 import { Route as ProjectsImportRouteImport } from './routes/projects/import'
 import { Route as ProjectsProjectIdIndexRouteImport } from './routes/projects/$projectId/index'
 import { Route as ProjectsProjectIdRunsRouteImport } from './routes/projects/$projectId/runs'
+import { Route as ProjectsProjectIdHostsRouteImport } from './routes/projects/$projectId/hosts'
+import { Route as ProjectsProjectIdDashboardRouteImport } from './routes/projects/$projectId/dashboard'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ProjectsProjectIdHostsIndexRouteImport } from './routes/projects/$projectId/hosts/index'
 import { Route as ProjectsProjectIdSetupSettingsRouteImport } from './routes/projects/$projectId/setup/settings'
-import { Route as ProjectsProjectIdSetupSecretsRouteImport } from './routes/projects/$projectId/setup/secrets'
-import { Route as ProjectsProjectIdSetupHostsRouteImport } from './routes/projects/$projectId/setup/hosts'
 import { Route as ProjectsProjectIdSetupFleetRouteImport } from './routes/projects/$projectId/setup/fleet'
 import { Route as ProjectsProjectIdSetupDoctorRouteImport } from './routes/projects/$projectId/setup/doctor'
-import { Route as ProjectsProjectIdSetupBotsRouteImport } from './routes/projects/$projectId/setup/bots'
-import { Route as ProjectsProjectIdSetupBootstrapRouteImport } from './routes/projects/$projectId/setup/bootstrap'
 import { Route as ProjectsProjectIdRunsRunIdRouteImport } from './routes/projects/$projectId/runs/$runId'
-import { Route as ProjectsProjectIdOperateRestartRouteImport } from './routes/projects/$projectId/operate/restart'
-import { Route as ProjectsProjectIdOperateLogsRouteImport } from './routes/projects/$projectId/operate/logs'
-import { Route as ProjectsProjectIdOperateDeployRouteImport } from './routes/projects/$projectId/operate/deploy'
-import { Route as ProjectsProjectIdOperateAuditRouteImport } from './routes/projects/$projectId/operate/audit'
+import { Route as ProjectsProjectIdHostsSettingsRouteImport } from './routes/projects/$projectId/hosts/settings'
+import { Route as ProjectsProjectIdHostsSecretsRouteImport } from './routes/projects/$projectId/hosts/secrets'
+import { Route as ProjectsProjectIdHostsRestartRouteImport } from './routes/projects/$projectId/hosts/restart'
+import { Route as ProjectsProjectIdHostsOverviewRouteImport } from './routes/projects/$projectId/hosts/overview'
+import { Route as ProjectsProjectIdHostsLogsRouteImport } from './routes/projects/$projectId/hosts/logs'
+import { Route as ProjectsProjectIdHostsDeployRouteImport } from './routes/projects/$projectId/hosts/deploy'
+import { Route as ProjectsProjectIdHostsBootstrapRouteImport } from './routes/projects/$projectId/hosts/bootstrap'
+import { Route as ProjectsProjectIdHostsAuditRouteImport } from './routes/projects/$projectId/hosts/audit'
+import { Route as ProjectsProjectIdHostsAgentsRouteImport } from './routes/projects/$projectId/hosts/agents'
 import { Route as ProjectsProjectIdAdvancedEditorRouteImport } from './routes/projects/$projectId/advanced/editor'
 import { Route as ProjectsProjectIdAdvancedCommandsRouteImport } from './routes/projects/$projectId/advanced/commands'
 
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -67,27 +77,32 @@ const ProjectsProjectIdRunsRoute = ProjectsProjectIdRunsRouteImport.update({
   path: '/projects/$projectId/runs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectsProjectIdHostsRoute = ProjectsProjectIdHostsRouteImport.update({
+  id: '/projects/$projectId/hosts',
+  path: '/projects/$projectId/hosts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsProjectIdDashboardRoute =
+  ProjectsProjectIdDashboardRouteImport.update({
+    id: '/projects/$projectId/dashboard',
+    path: '/projects/$projectId/dashboard',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectsProjectIdHostsIndexRoute =
+  ProjectsProjectIdHostsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => ProjectsProjectIdHostsRoute,
+  } as any)
 const ProjectsProjectIdSetupSettingsRoute =
   ProjectsProjectIdSetupSettingsRouteImport.update({
     id: '/projects/$projectId/setup/settings',
     path: '/projects/$projectId/setup/settings',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ProjectsProjectIdSetupSecretsRoute =
-  ProjectsProjectIdSetupSecretsRouteImport.update({
-    id: '/projects/$projectId/setup/secrets',
-    path: '/projects/$projectId/setup/secrets',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ProjectsProjectIdSetupHostsRoute =
-  ProjectsProjectIdSetupHostsRouteImport.update({
-    id: '/projects/$projectId/setup/hosts',
-    path: '/projects/$projectId/setup/hosts',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ProjectsProjectIdSetupFleetRoute =
@@ -102,47 +117,65 @@ const ProjectsProjectIdSetupDoctorRoute =
     path: '/projects/$projectId/setup/doctor',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ProjectsProjectIdSetupBotsRoute =
-  ProjectsProjectIdSetupBotsRouteImport.update({
-    id: '/projects/$projectId/setup/bots',
-    path: '/projects/$projectId/setup/bots',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ProjectsProjectIdSetupBootstrapRoute =
-  ProjectsProjectIdSetupBootstrapRouteImport.update({
-    id: '/projects/$projectId/setup/bootstrap',
-    path: '/projects/$projectId/setup/bootstrap',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ProjectsProjectIdRunsRunIdRoute =
   ProjectsProjectIdRunsRunIdRouteImport.update({
     id: '/$runId',
     path: '/$runId',
     getParentRoute: () => ProjectsProjectIdRunsRoute,
   } as any)
-const ProjectsProjectIdOperateRestartRoute =
-  ProjectsProjectIdOperateRestartRouteImport.update({
-    id: '/projects/$projectId/operate/restart',
-    path: '/projects/$projectId/operate/restart',
-    getParentRoute: () => rootRouteImport,
+const ProjectsProjectIdHostsSettingsRoute =
+  ProjectsProjectIdHostsSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => ProjectsProjectIdHostsRoute,
   } as any)
-const ProjectsProjectIdOperateLogsRoute =
-  ProjectsProjectIdOperateLogsRouteImport.update({
-    id: '/projects/$projectId/operate/logs',
-    path: '/projects/$projectId/operate/logs',
-    getParentRoute: () => rootRouteImport,
+const ProjectsProjectIdHostsSecretsRoute =
+  ProjectsProjectIdHostsSecretsRouteImport.update({
+    id: '/secrets',
+    path: '/secrets',
+    getParentRoute: () => ProjectsProjectIdHostsRoute,
   } as any)
-const ProjectsProjectIdOperateDeployRoute =
-  ProjectsProjectIdOperateDeployRouteImport.update({
-    id: '/projects/$projectId/operate/deploy',
-    path: '/projects/$projectId/operate/deploy',
-    getParentRoute: () => rootRouteImport,
+const ProjectsProjectIdHostsRestartRoute =
+  ProjectsProjectIdHostsRestartRouteImport.update({
+    id: '/restart',
+    path: '/restart',
+    getParentRoute: () => ProjectsProjectIdHostsRoute,
   } as any)
-const ProjectsProjectIdOperateAuditRoute =
-  ProjectsProjectIdOperateAuditRouteImport.update({
-    id: '/projects/$projectId/operate/audit',
-    path: '/projects/$projectId/operate/audit',
-    getParentRoute: () => rootRouteImport,
+const ProjectsProjectIdHostsOverviewRoute =
+  ProjectsProjectIdHostsOverviewRouteImport.update({
+    id: '/overview',
+    path: '/overview',
+    getParentRoute: () => ProjectsProjectIdHostsRoute,
+  } as any)
+const ProjectsProjectIdHostsLogsRoute =
+  ProjectsProjectIdHostsLogsRouteImport.update({
+    id: '/logs',
+    path: '/logs',
+    getParentRoute: () => ProjectsProjectIdHostsRoute,
+  } as any)
+const ProjectsProjectIdHostsDeployRoute =
+  ProjectsProjectIdHostsDeployRouteImport.update({
+    id: '/deploy',
+    path: '/deploy',
+    getParentRoute: () => ProjectsProjectIdHostsRoute,
+  } as any)
+const ProjectsProjectIdHostsBootstrapRoute =
+  ProjectsProjectIdHostsBootstrapRouteImport.update({
+    id: '/bootstrap',
+    path: '/bootstrap',
+    getParentRoute: () => ProjectsProjectIdHostsRoute,
+  } as any)
+const ProjectsProjectIdHostsAuditRoute =
+  ProjectsProjectIdHostsAuditRouteImport.update({
+    id: '/audit',
+    path: '/audit',
+    getParentRoute: () => ProjectsProjectIdHostsRoute,
+  } as any)
+const ProjectsProjectIdHostsAgentsRoute =
+  ProjectsProjectIdHostsAgentsRouteImport.update({
+    id: '/agents',
+    path: '/agents',
+    getParentRoute: () => ProjectsProjectIdHostsRoute,
   } as any)
 const ProjectsProjectIdAdvancedEditorRoute =
   ProjectsProjectIdAdvancedEditorRouteImport.update({
@@ -159,173 +192,196 @@ const ProjectsProjectIdAdvancedCommandsRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
   '/sign-in': typeof SignInRoute
   '/projects/import': typeof ProjectsImportRoute
   '/projects/new': typeof ProjectsNewRoute
   '/projects/': typeof ProjectsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/projects/$projectId/dashboard': typeof ProjectsProjectIdDashboardRoute
+  '/projects/$projectId/hosts': typeof ProjectsProjectIdHostsRouteWithChildren
   '/projects/$projectId/runs': typeof ProjectsProjectIdRunsRouteWithChildren
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/advanced/commands': typeof ProjectsProjectIdAdvancedCommandsRoute
   '/projects/$projectId/advanced/editor': typeof ProjectsProjectIdAdvancedEditorRoute
-  '/projects/$projectId/operate/audit': typeof ProjectsProjectIdOperateAuditRoute
-  '/projects/$projectId/operate/deploy': typeof ProjectsProjectIdOperateDeployRoute
-  '/projects/$projectId/operate/logs': typeof ProjectsProjectIdOperateLogsRoute
-  '/projects/$projectId/operate/restart': typeof ProjectsProjectIdOperateRestartRoute
+  '/projects/$projectId/hosts/agents': typeof ProjectsProjectIdHostsAgentsRoute
+  '/projects/$projectId/hosts/audit': typeof ProjectsProjectIdHostsAuditRoute
+  '/projects/$projectId/hosts/bootstrap': typeof ProjectsProjectIdHostsBootstrapRoute
+  '/projects/$projectId/hosts/deploy': typeof ProjectsProjectIdHostsDeployRoute
+  '/projects/$projectId/hosts/logs': typeof ProjectsProjectIdHostsLogsRoute
+  '/projects/$projectId/hosts/overview': typeof ProjectsProjectIdHostsOverviewRoute
+  '/projects/$projectId/hosts/restart': typeof ProjectsProjectIdHostsRestartRoute
+  '/projects/$projectId/hosts/secrets': typeof ProjectsProjectIdHostsSecretsRoute
+  '/projects/$projectId/hosts/settings': typeof ProjectsProjectIdHostsSettingsRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
-  '/projects/$projectId/setup/bootstrap': typeof ProjectsProjectIdSetupBootstrapRoute
-  '/projects/$projectId/setup/bots': typeof ProjectsProjectIdSetupBotsRoute
   '/projects/$projectId/setup/doctor': typeof ProjectsProjectIdSetupDoctorRoute
   '/projects/$projectId/setup/fleet': typeof ProjectsProjectIdSetupFleetRoute
-  '/projects/$projectId/setup/hosts': typeof ProjectsProjectIdSetupHostsRoute
-  '/projects/$projectId/setup/secrets': typeof ProjectsProjectIdSetupSecretsRoute
   '/projects/$projectId/setup/settings': typeof ProjectsProjectIdSetupSettingsRoute
+  '/projects/$projectId/hosts/': typeof ProjectsProjectIdHostsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
   '/sign-in': typeof SignInRoute
   '/projects/import': typeof ProjectsImportRoute
   '/projects/new': typeof ProjectsNewRoute
   '/projects': typeof ProjectsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/projects/$projectId/dashboard': typeof ProjectsProjectIdDashboardRoute
   '/projects/$projectId/runs': typeof ProjectsProjectIdRunsRouteWithChildren
   '/projects/$projectId': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/advanced/commands': typeof ProjectsProjectIdAdvancedCommandsRoute
   '/projects/$projectId/advanced/editor': typeof ProjectsProjectIdAdvancedEditorRoute
-  '/projects/$projectId/operate/audit': typeof ProjectsProjectIdOperateAuditRoute
-  '/projects/$projectId/operate/deploy': typeof ProjectsProjectIdOperateDeployRoute
-  '/projects/$projectId/operate/logs': typeof ProjectsProjectIdOperateLogsRoute
-  '/projects/$projectId/operate/restart': typeof ProjectsProjectIdOperateRestartRoute
+  '/projects/$projectId/hosts/agents': typeof ProjectsProjectIdHostsAgentsRoute
+  '/projects/$projectId/hosts/audit': typeof ProjectsProjectIdHostsAuditRoute
+  '/projects/$projectId/hosts/bootstrap': typeof ProjectsProjectIdHostsBootstrapRoute
+  '/projects/$projectId/hosts/deploy': typeof ProjectsProjectIdHostsDeployRoute
+  '/projects/$projectId/hosts/logs': typeof ProjectsProjectIdHostsLogsRoute
+  '/projects/$projectId/hosts/overview': typeof ProjectsProjectIdHostsOverviewRoute
+  '/projects/$projectId/hosts/restart': typeof ProjectsProjectIdHostsRestartRoute
+  '/projects/$projectId/hosts/secrets': typeof ProjectsProjectIdHostsSecretsRoute
+  '/projects/$projectId/hosts/settings': typeof ProjectsProjectIdHostsSettingsRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
-  '/projects/$projectId/setup/bootstrap': typeof ProjectsProjectIdSetupBootstrapRoute
-  '/projects/$projectId/setup/bots': typeof ProjectsProjectIdSetupBotsRoute
   '/projects/$projectId/setup/doctor': typeof ProjectsProjectIdSetupDoctorRoute
   '/projects/$projectId/setup/fleet': typeof ProjectsProjectIdSetupFleetRoute
-  '/projects/$projectId/setup/hosts': typeof ProjectsProjectIdSetupHostsRoute
-  '/projects/$projectId/setup/secrets': typeof ProjectsProjectIdSetupSecretsRoute
   '/projects/$projectId/setup/settings': typeof ProjectsProjectIdSetupSettingsRoute
+  '/projects/$projectId/hosts': typeof ProjectsProjectIdHostsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
   '/sign-in': typeof SignInRoute
   '/projects/import': typeof ProjectsImportRoute
   '/projects/new': typeof ProjectsNewRoute
   '/projects/': typeof ProjectsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/projects/$projectId/dashboard': typeof ProjectsProjectIdDashboardRoute
+  '/projects/$projectId/hosts': typeof ProjectsProjectIdHostsRouteWithChildren
   '/projects/$projectId/runs': typeof ProjectsProjectIdRunsRouteWithChildren
   '/projects/$projectId/': typeof ProjectsProjectIdIndexRoute
   '/projects/$projectId/advanced/commands': typeof ProjectsProjectIdAdvancedCommandsRoute
   '/projects/$projectId/advanced/editor': typeof ProjectsProjectIdAdvancedEditorRoute
-  '/projects/$projectId/operate/audit': typeof ProjectsProjectIdOperateAuditRoute
-  '/projects/$projectId/operate/deploy': typeof ProjectsProjectIdOperateDeployRoute
-  '/projects/$projectId/operate/logs': typeof ProjectsProjectIdOperateLogsRoute
-  '/projects/$projectId/operate/restart': typeof ProjectsProjectIdOperateRestartRoute
+  '/projects/$projectId/hosts/agents': typeof ProjectsProjectIdHostsAgentsRoute
+  '/projects/$projectId/hosts/audit': typeof ProjectsProjectIdHostsAuditRoute
+  '/projects/$projectId/hosts/bootstrap': typeof ProjectsProjectIdHostsBootstrapRoute
+  '/projects/$projectId/hosts/deploy': typeof ProjectsProjectIdHostsDeployRoute
+  '/projects/$projectId/hosts/logs': typeof ProjectsProjectIdHostsLogsRoute
+  '/projects/$projectId/hosts/overview': typeof ProjectsProjectIdHostsOverviewRoute
+  '/projects/$projectId/hosts/restart': typeof ProjectsProjectIdHostsRestartRoute
+  '/projects/$projectId/hosts/secrets': typeof ProjectsProjectIdHostsSecretsRoute
+  '/projects/$projectId/hosts/settings': typeof ProjectsProjectIdHostsSettingsRoute
   '/projects/$projectId/runs/$runId': typeof ProjectsProjectIdRunsRunIdRoute
-  '/projects/$projectId/setup/bootstrap': typeof ProjectsProjectIdSetupBootstrapRoute
-  '/projects/$projectId/setup/bots': typeof ProjectsProjectIdSetupBotsRoute
   '/projects/$projectId/setup/doctor': typeof ProjectsProjectIdSetupDoctorRoute
   '/projects/$projectId/setup/fleet': typeof ProjectsProjectIdSetupFleetRoute
-  '/projects/$projectId/setup/hosts': typeof ProjectsProjectIdSetupHostsRoute
-  '/projects/$projectId/setup/secrets': typeof ProjectsProjectIdSetupSecretsRoute
   '/projects/$projectId/setup/settings': typeof ProjectsProjectIdSetupSettingsRoute
+  '/projects/$projectId/hosts/': typeof ProjectsProjectIdHostsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/dashboard'
     | '/sign-in'
     | '/projects/import'
     | '/projects/new'
     | '/projects/'
     | '/api/auth/$'
+    | '/projects/$projectId/dashboard'
+    | '/projects/$projectId/hosts'
     | '/projects/$projectId/runs'
     | '/projects/$projectId/'
     | '/projects/$projectId/advanced/commands'
     | '/projects/$projectId/advanced/editor'
-    | '/projects/$projectId/operate/audit'
-    | '/projects/$projectId/operate/deploy'
-    | '/projects/$projectId/operate/logs'
-    | '/projects/$projectId/operate/restart'
+    | '/projects/$projectId/hosts/agents'
+    | '/projects/$projectId/hosts/audit'
+    | '/projects/$projectId/hosts/bootstrap'
+    | '/projects/$projectId/hosts/deploy'
+    | '/projects/$projectId/hosts/logs'
+    | '/projects/$projectId/hosts/overview'
+    | '/projects/$projectId/hosts/restart'
+    | '/projects/$projectId/hosts/secrets'
+    | '/projects/$projectId/hosts/settings'
     | '/projects/$projectId/runs/$runId'
-    | '/projects/$projectId/setup/bootstrap'
-    | '/projects/$projectId/setup/bots'
     | '/projects/$projectId/setup/doctor'
     | '/projects/$projectId/setup/fleet'
-    | '/projects/$projectId/setup/hosts'
-    | '/projects/$projectId/setup/secrets'
     | '/projects/$projectId/setup/settings'
+    | '/projects/$projectId/hosts/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/dashboard'
     | '/sign-in'
     | '/projects/import'
     | '/projects/new'
     | '/projects'
     | '/api/auth/$'
+    | '/projects/$projectId/dashboard'
     | '/projects/$projectId/runs'
     | '/projects/$projectId'
     | '/projects/$projectId/advanced/commands'
     | '/projects/$projectId/advanced/editor'
-    | '/projects/$projectId/operate/audit'
-    | '/projects/$projectId/operate/deploy'
-    | '/projects/$projectId/operate/logs'
-    | '/projects/$projectId/operate/restart'
+    | '/projects/$projectId/hosts/agents'
+    | '/projects/$projectId/hosts/audit'
+    | '/projects/$projectId/hosts/bootstrap'
+    | '/projects/$projectId/hosts/deploy'
+    | '/projects/$projectId/hosts/logs'
+    | '/projects/$projectId/hosts/overview'
+    | '/projects/$projectId/hosts/restart'
+    | '/projects/$projectId/hosts/secrets'
+    | '/projects/$projectId/hosts/settings'
     | '/projects/$projectId/runs/$runId'
-    | '/projects/$projectId/setup/bootstrap'
-    | '/projects/$projectId/setup/bots'
     | '/projects/$projectId/setup/doctor'
     | '/projects/$projectId/setup/fleet'
-    | '/projects/$projectId/setup/hosts'
-    | '/projects/$projectId/setup/secrets'
     | '/projects/$projectId/setup/settings'
+    | '/projects/$projectId/hosts'
   id:
     | '__root__'
     | '/'
+    | '/dashboard'
     | '/sign-in'
     | '/projects/import'
     | '/projects/new'
     | '/projects/'
     | '/api/auth/$'
+    | '/projects/$projectId/dashboard'
+    | '/projects/$projectId/hosts'
     | '/projects/$projectId/runs'
     | '/projects/$projectId/'
     | '/projects/$projectId/advanced/commands'
     | '/projects/$projectId/advanced/editor'
-    | '/projects/$projectId/operate/audit'
-    | '/projects/$projectId/operate/deploy'
-    | '/projects/$projectId/operate/logs'
-    | '/projects/$projectId/operate/restart'
+    | '/projects/$projectId/hosts/agents'
+    | '/projects/$projectId/hosts/audit'
+    | '/projects/$projectId/hosts/bootstrap'
+    | '/projects/$projectId/hosts/deploy'
+    | '/projects/$projectId/hosts/logs'
+    | '/projects/$projectId/hosts/overview'
+    | '/projects/$projectId/hosts/restart'
+    | '/projects/$projectId/hosts/secrets'
+    | '/projects/$projectId/hosts/settings'
     | '/projects/$projectId/runs/$runId'
-    | '/projects/$projectId/setup/bootstrap'
-    | '/projects/$projectId/setup/bots'
     | '/projects/$projectId/setup/doctor'
     | '/projects/$projectId/setup/fleet'
-    | '/projects/$projectId/setup/hosts'
-    | '/projects/$projectId/setup/secrets'
     | '/projects/$projectId/setup/settings'
+    | '/projects/$projectId/hosts/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DashboardRoute: typeof DashboardRoute
   SignInRoute: typeof SignInRoute
   ProjectsImportRoute: typeof ProjectsImportRoute
   ProjectsNewRoute: typeof ProjectsNewRoute
   ProjectsIndexRoute: typeof ProjectsIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ProjectsProjectIdDashboardRoute: typeof ProjectsProjectIdDashboardRoute
+  ProjectsProjectIdHostsRoute: typeof ProjectsProjectIdHostsRouteWithChildren
   ProjectsProjectIdRunsRoute: typeof ProjectsProjectIdRunsRouteWithChildren
   ProjectsProjectIdIndexRoute: typeof ProjectsProjectIdIndexRoute
   ProjectsProjectIdAdvancedCommandsRoute: typeof ProjectsProjectIdAdvancedCommandsRoute
   ProjectsProjectIdAdvancedEditorRoute: typeof ProjectsProjectIdAdvancedEditorRoute
-  ProjectsProjectIdOperateAuditRoute: typeof ProjectsProjectIdOperateAuditRoute
-  ProjectsProjectIdOperateDeployRoute: typeof ProjectsProjectIdOperateDeployRoute
-  ProjectsProjectIdOperateLogsRoute: typeof ProjectsProjectIdOperateLogsRoute
-  ProjectsProjectIdOperateRestartRoute: typeof ProjectsProjectIdOperateRestartRoute
-  ProjectsProjectIdSetupBootstrapRoute: typeof ProjectsProjectIdSetupBootstrapRoute
-  ProjectsProjectIdSetupBotsRoute: typeof ProjectsProjectIdSetupBotsRoute
   ProjectsProjectIdSetupDoctorRoute: typeof ProjectsProjectIdSetupDoctorRoute
   ProjectsProjectIdSetupFleetRoute: typeof ProjectsProjectIdSetupFleetRoute
-  ProjectsProjectIdSetupHostsRoute: typeof ProjectsProjectIdSetupHostsRoute
-  ProjectsProjectIdSetupSecretsRoute: typeof ProjectsProjectIdSetupSecretsRoute
   ProjectsProjectIdSetupSettingsRoute: typeof ProjectsProjectIdSetupSettingsRoute
 }
 
@@ -336,6 +392,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-in'
       fullPath: '/sign-in'
       preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -380,6 +443,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRunsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/projects/$projectId/hosts': {
+      id: '/projects/$projectId/hosts'
+      path: '/projects/$projectId/hosts'
+      fullPath: '/projects/$projectId/hosts'
+      preLoaderRoute: typeof ProjectsProjectIdHostsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects/$projectId/dashboard': {
+      id: '/projects/$projectId/dashboard'
+      path: '/projects/$projectId/dashboard'
+      fullPath: '/projects/$projectId/dashboard'
+      preLoaderRoute: typeof ProjectsProjectIdDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -387,25 +464,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/projects/$projectId/hosts/': {
+      id: '/projects/$projectId/hosts/'
+      path: '/'
+      fullPath: '/projects/$projectId/hosts/'
+      preLoaderRoute: typeof ProjectsProjectIdHostsIndexRouteImport
+      parentRoute: typeof ProjectsProjectIdHostsRoute
+    }
     '/projects/$projectId/setup/settings': {
       id: '/projects/$projectId/setup/settings'
       path: '/projects/$projectId/setup/settings'
       fullPath: '/projects/$projectId/setup/settings'
       preLoaderRoute: typeof ProjectsProjectIdSetupSettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/projects/$projectId/setup/secrets': {
-      id: '/projects/$projectId/setup/secrets'
-      path: '/projects/$projectId/setup/secrets'
-      fullPath: '/projects/$projectId/setup/secrets'
-      preLoaderRoute: typeof ProjectsProjectIdSetupSecretsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/projects/$projectId/setup/hosts': {
-      id: '/projects/$projectId/setup/hosts'
-      path: '/projects/$projectId/setup/hosts'
-      fullPath: '/projects/$projectId/setup/hosts'
-      preLoaderRoute: typeof ProjectsProjectIdSetupHostsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects/$projectId/setup/fleet': {
@@ -422,20 +492,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdSetupDoctorRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/projects/$projectId/setup/bots': {
-      id: '/projects/$projectId/setup/bots'
-      path: '/projects/$projectId/setup/bots'
-      fullPath: '/projects/$projectId/setup/bots'
-      preLoaderRoute: typeof ProjectsProjectIdSetupBotsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/projects/$projectId/setup/bootstrap': {
-      id: '/projects/$projectId/setup/bootstrap'
-      path: '/projects/$projectId/setup/bootstrap'
-      fullPath: '/projects/$projectId/setup/bootstrap'
-      preLoaderRoute: typeof ProjectsProjectIdSetupBootstrapRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/projects/$projectId/runs/$runId': {
       id: '/projects/$projectId/runs/$runId'
       path: '/$runId'
@@ -443,33 +499,68 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRunsRunIdRouteImport
       parentRoute: typeof ProjectsProjectIdRunsRoute
     }
-    '/projects/$projectId/operate/restart': {
-      id: '/projects/$projectId/operate/restart'
-      path: '/projects/$projectId/operate/restart'
-      fullPath: '/projects/$projectId/operate/restart'
-      preLoaderRoute: typeof ProjectsProjectIdOperateRestartRouteImport
-      parentRoute: typeof rootRouteImport
+    '/projects/$projectId/hosts/settings': {
+      id: '/projects/$projectId/hosts/settings'
+      path: '/settings'
+      fullPath: '/projects/$projectId/hosts/settings'
+      preLoaderRoute: typeof ProjectsProjectIdHostsSettingsRouteImport
+      parentRoute: typeof ProjectsProjectIdHostsRoute
     }
-    '/projects/$projectId/operate/logs': {
-      id: '/projects/$projectId/operate/logs'
-      path: '/projects/$projectId/operate/logs'
-      fullPath: '/projects/$projectId/operate/logs'
-      preLoaderRoute: typeof ProjectsProjectIdOperateLogsRouteImport
-      parentRoute: typeof rootRouteImport
+    '/projects/$projectId/hosts/secrets': {
+      id: '/projects/$projectId/hosts/secrets'
+      path: '/secrets'
+      fullPath: '/projects/$projectId/hosts/secrets'
+      preLoaderRoute: typeof ProjectsProjectIdHostsSecretsRouteImport
+      parentRoute: typeof ProjectsProjectIdHostsRoute
     }
-    '/projects/$projectId/operate/deploy': {
-      id: '/projects/$projectId/operate/deploy'
-      path: '/projects/$projectId/operate/deploy'
-      fullPath: '/projects/$projectId/operate/deploy'
-      preLoaderRoute: typeof ProjectsProjectIdOperateDeployRouteImport
-      parentRoute: typeof rootRouteImport
+    '/projects/$projectId/hosts/restart': {
+      id: '/projects/$projectId/hosts/restart'
+      path: '/restart'
+      fullPath: '/projects/$projectId/hosts/restart'
+      preLoaderRoute: typeof ProjectsProjectIdHostsRestartRouteImport
+      parentRoute: typeof ProjectsProjectIdHostsRoute
     }
-    '/projects/$projectId/operate/audit': {
-      id: '/projects/$projectId/operate/audit'
-      path: '/projects/$projectId/operate/audit'
-      fullPath: '/projects/$projectId/operate/audit'
-      preLoaderRoute: typeof ProjectsProjectIdOperateAuditRouteImport
-      parentRoute: typeof rootRouteImport
+    '/projects/$projectId/hosts/overview': {
+      id: '/projects/$projectId/hosts/overview'
+      path: '/overview'
+      fullPath: '/projects/$projectId/hosts/overview'
+      preLoaderRoute: typeof ProjectsProjectIdHostsOverviewRouteImport
+      parentRoute: typeof ProjectsProjectIdHostsRoute
+    }
+    '/projects/$projectId/hosts/logs': {
+      id: '/projects/$projectId/hosts/logs'
+      path: '/logs'
+      fullPath: '/projects/$projectId/hosts/logs'
+      preLoaderRoute: typeof ProjectsProjectIdHostsLogsRouteImport
+      parentRoute: typeof ProjectsProjectIdHostsRoute
+    }
+    '/projects/$projectId/hosts/deploy': {
+      id: '/projects/$projectId/hosts/deploy'
+      path: '/deploy'
+      fullPath: '/projects/$projectId/hosts/deploy'
+      preLoaderRoute: typeof ProjectsProjectIdHostsDeployRouteImport
+      parentRoute: typeof ProjectsProjectIdHostsRoute
+    }
+    '/projects/$projectId/hosts/bootstrap': {
+      id: '/projects/$projectId/hosts/bootstrap'
+      path: '/bootstrap'
+      fullPath: '/projects/$projectId/hosts/bootstrap'
+      preLoaderRoute: typeof ProjectsProjectIdHostsBootstrapRouteImport
+      parentRoute: typeof ProjectsProjectIdHostsRoute
+    }
+    '/projects/$projectId/hosts/audit': {
+      id: '/projects/$projectId/hosts/audit'
+      path: '/audit'
+      fullPath: '/projects/$projectId/hosts/audit'
+      preLoaderRoute: typeof ProjectsProjectIdHostsAuditRouteImport
+      parentRoute: typeof ProjectsProjectIdHostsRoute
+    }
+    '/projects/$projectId/hosts/agents': {
+      id: '/projects/$projectId/hosts/agents'
+      path: '/agents'
+      fullPath: '/projects/$projectId/hosts/agents'
+      preLoaderRoute: typeof ProjectsProjectIdHostsAgentsRouteImport
+      parentRoute: typeof ProjectsProjectIdHostsRoute
     }
     '/projects/$projectId/advanced/editor': {
       id: '/projects/$projectId/advanced/editor'
@@ -488,6 +579,38 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface ProjectsProjectIdHostsRouteChildren {
+  ProjectsProjectIdHostsAgentsRoute: typeof ProjectsProjectIdHostsAgentsRoute
+  ProjectsProjectIdHostsAuditRoute: typeof ProjectsProjectIdHostsAuditRoute
+  ProjectsProjectIdHostsBootstrapRoute: typeof ProjectsProjectIdHostsBootstrapRoute
+  ProjectsProjectIdHostsDeployRoute: typeof ProjectsProjectIdHostsDeployRoute
+  ProjectsProjectIdHostsLogsRoute: typeof ProjectsProjectIdHostsLogsRoute
+  ProjectsProjectIdHostsOverviewRoute: typeof ProjectsProjectIdHostsOverviewRoute
+  ProjectsProjectIdHostsRestartRoute: typeof ProjectsProjectIdHostsRestartRoute
+  ProjectsProjectIdHostsSecretsRoute: typeof ProjectsProjectIdHostsSecretsRoute
+  ProjectsProjectIdHostsSettingsRoute: typeof ProjectsProjectIdHostsSettingsRoute
+  ProjectsProjectIdHostsIndexRoute: typeof ProjectsProjectIdHostsIndexRoute
+}
+
+const ProjectsProjectIdHostsRouteChildren: ProjectsProjectIdHostsRouteChildren =
+  {
+    ProjectsProjectIdHostsAgentsRoute: ProjectsProjectIdHostsAgentsRoute,
+    ProjectsProjectIdHostsAuditRoute: ProjectsProjectIdHostsAuditRoute,
+    ProjectsProjectIdHostsBootstrapRoute: ProjectsProjectIdHostsBootstrapRoute,
+    ProjectsProjectIdHostsDeployRoute: ProjectsProjectIdHostsDeployRoute,
+    ProjectsProjectIdHostsLogsRoute: ProjectsProjectIdHostsLogsRoute,
+    ProjectsProjectIdHostsOverviewRoute: ProjectsProjectIdHostsOverviewRoute,
+    ProjectsProjectIdHostsRestartRoute: ProjectsProjectIdHostsRestartRoute,
+    ProjectsProjectIdHostsSecretsRoute: ProjectsProjectIdHostsSecretsRoute,
+    ProjectsProjectIdHostsSettingsRoute: ProjectsProjectIdHostsSettingsRoute,
+    ProjectsProjectIdHostsIndexRoute: ProjectsProjectIdHostsIndexRoute,
+  }
+
+const ProjectsProjectIdHostsRouteWithChildren =
+  ProjectsProjectIdHostsRoute._addFileChildren(
+    ProjectsProjectIdHostsRouteChildren,
+  )
+
 interface ProjectsProjectIdRunsRouteChildren {
   ProjectsProjectIdRunsRunIdRoute: typeof ProjectsProjectIdRunsRunIdRoute
 }
@@ -503,26 +626,21 @@ const ProjectsProjectIdRunsRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DashboardRoute: DashboardRoute,
   SignInRoute: SignInRoute,
   ProjectsImportRoute: ProjectsImportRoute,
   ProjectsNewRoute: ProjectsNewRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ProjectsProjectIdDashboardRoute: ProjectsProjectIdDashboardRoute,
+  ProjectsProjectIdHostsRoute: ProjectsProjectIdHostsRouteWithChildren,
   ProjectsProjectIdRunsRoute: ProjectsProjectIdRunsRouteWithChildren,
   ProjectsProjectIdIndexRoute: ProjectsProjectIdIndexRoute,
   ProjectsProjectIdAdvancedCommandsRoute:
     ProjectsProjectIdAdvancedCommandsRoute,
   ProjectsProjectIdAdvancedEditorRoute: ProjectsProjectIdAdvancedEditorRoute,
-  ProjectsProjectIdOperateAuditRoute: ProjectsProjectIdOperateAuditRoute,
-  ProjectsProjectIdOperateDeployRoute: ProjectsProjectIdOperateDeployRoute,
-  ProjectsProjectIdOperateLogsRoute: ProjectsProjectIdOperateLogsRoute,
-  ProjectsProjectIdOperateRestartRoute: ProjectsProjectIdOperateRestartRoute,
-  ProjectsProjectIdSetupBootstrapRoute: ProjectsProjectIdSetupBootstrapRoute,
-  ProjectsProjectIdSetupBotsRoute: ProjectsProjectIdSetupBotsRoute,
   ProjectsProjectIdSetupDoctorRoute: ProjectsProjectIdSetupDoctorRoute,
   ProjectsProjectIdSetupFleetRoute: ProjectsProjectIdSetupFleetRoute,
-  ProjectsProjectIdSetupHostsRoute: ProjectsProjectIdSetupHostsRoute,
-  ProjectsProjectIdSetupSecretsRoute: ProjectsProjectIdSetupSecretsRoute,
   ProjectsProjectIdSetupSettingsRoute: ProjectsProjectIdSetupSettingsRoute,
 }
 export const routeTree = rootRouteImport
