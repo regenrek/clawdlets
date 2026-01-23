@@ -75,8 +75,11 @@
 
           cp -r node_modules $out/lib/clf/node_modules
           cp -r packages $out/lib/clf/packages
-          mkdir -p $out/lib/clf/apps
-          cp -r apps/web $out/lib/clf/apps/web
+
+          # pnpm workspace links can point into ./apps/*; we do not ship apps in this output.
+          if [ -d "$out/lib/clf/node_modules/.pnpm/node_modules" ]; then
+            find "$out/lib/clf/node_modules/.pnpm/node_modules" -maxdepth 2 -type l -lname '*apps/*' -delete
+          fi
 
           makeWrapper ${pkgs.nodejs_22}/bin/node $out/bin/clf \
             --add-flags "$out/lib/clf/packages/clf/cli/dist/main.js"
