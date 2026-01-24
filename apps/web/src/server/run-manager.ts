@@ -24,6 +24,60 @@ const DEFAULT_EVENT_LIMITS = {
   flushIntervalMs: 1000,
 } as const;
 
+const SAFE_ENV_KEYS = new Set([
+  "COLORTERM",
+  "HOME",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "LC_MESSAGES",
+  "LOGNAME",
+  "NIX_BIN",
+  "NODE_OPTIONS",
+  "PATH",
+  "PWD",
+  "SHELL",
+  "SOPS_AGE_KEY_FILE",
+  "SSH_AUTH_SOCK",
+  "TERM",
+  "TMP",
+  "TEMP",
+  "TMPDIR",
+  "USER",
+]);
+
+const SAFE_ENV_PREFIXES = ["LC_", "XDG_", "GIT_"];
+
+function isSafeEnvKey(key: string): boolean {
+  if (SAFE_ENV_KEYS.has(key)) return true;
+  return SAFE_ENV_PREFIXES.some((prefix) => key.startsWith(prefix));
+}
+
+function buildSafeEnv(params: {
+  baseEnv: NodeJS.ProcessEnv;
+  extraEnv?: NodeJS.ProcessEnv;
+  allowlist?: string[];
+}): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(params.baseEnv || {})) {
+    if (value === undefined) continue;
+    if (!isSafeEnvKey(key)) continue;
+    env[key] = value;
+  }
+  for (const [key, value] of Object.entries(params.extraEnv || {})) {
+    if (value === undefined) continue;
+    const permitted = isSafeEnvKey(key) || (params.allowlist ? params.allowlist.includes(key) : false);
+    if (!permitted) continue;
+    env[key] = value;
+  }
+  return env;
+}
+
+function resolveCommand(cmd: string): { exec: string; display: string } {
+  if (cmd === "node") return { exec: process.execPath, display: "node" };
+  return { exec: cmd, display: cmd };
+}
+
 type RunEventLimits = {
   maxEvents: number;
   maxBytes: number;
@@ -167,6 +221,7 @@ export async function spawnCommand(params: {
   cmd: string;
   args: string[];
   env?: NodeJS.ProcessEnv;
+  envAllowlist?: string[];
   redactTokens: string[];
   timeoutMs?: number;
 }): Promise<void> {
@@ -175,15 +230,16 @@ export async function spawnCommand(params: {
     runId: params.runId,
     redactTokens: params.redactTokens,
     fn: async (emit) => {
-      await emit({ level: "info", message: `$ ${params.cmd} ${params.args.join(" ")}` });
+      const cmd = resolveCommand(params.cmd);
+      await emit({ level: "info", message: `$ ${cmd.display} [${params.args.length} args]` });
 
       if (active.has(params.runId)) {
         throw new Error("run already active");
       }
 
-      const child = spawn(params.cmd, params.args, {
+      const child = spawn(cmd.exec, params.args, {
         cwd: params.cwd,
-        env: { ...process.env, ...params.env },
+        env: buildSafeEnv({ baseEnv: process.env, extraEnv: params.env, allowlist: params.envAllowlist }),
         stdio: ["ignore", "pipe", "pipe"],
       });
       active.set(params.runId, { child, aborted: false });
@@ -242,6 +298,7 @@ export async function spawnCommandCapture(params: {
   cmd: string;
   args: string[];
   env?: NodeJS.ProcessEnv;
+  envAllowlist?: string[];
   redactTokens: string[];
   maxCaptureBytes?: number;
   allowNonZeroExit?: boolean;
@@ -269,15 +326,16 @@ export async function spawnCommandCapture(params: {
     runId: params.runId,
     redactTokens: params.redactTokens,
     fn: async (emit) => {
-      await emit({ level: "info", message: `$ ${params.cmd} ${params.args.join(" ")}` });
+      const cmd = resolveCommand(params.cmd);
+      await emit({ level: "info", message: `$ ${cmd.display} [${params.args.length} args]` });
 
       if (active.has(params.runId)) {
         throw new Error("run already active");
       }
 
-      const child = spawn(params.cmd, params.args, {
+      const child = spawn(cmd.exec, params.args, {
         cwd: params.cwd,
-        env: { ...process.env, ...params.env },
+        env: buildSafeEnv({ baseEnv: process.env, extraEnv: params.env, allowlist: params.envAllowlist }),
         stdio: ["ignore", "pipe", "pipe"],
       });
       active.set(params.runId, { child, aborted: false });

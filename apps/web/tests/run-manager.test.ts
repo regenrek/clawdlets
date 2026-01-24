@@ -84,4 +84,28 @@ describe("run manager", () => {
       }),
     ).resolves.toBeUndefined()
   })
+
+  it("does not inherit unsafe env values", async () => {
+    const { client, events } = createClient()
+    const runId = "run-env" as RunId
+    const original = process.env.RUN_MANAGER_SECRET
+    process.env.RUN_MANAGER_SECRET = "supersecret"
+
+    try {
+      await spawnCommand({
+        client,
+        runId,
+        cwd: process.cwd(),
+        cmd: "node",
+        args: ["-e", "console.log(process.env.RUN_MANAGER_SECRET || '')"],
+        redactTokens: [],
+        timeoutMs: 5000,
+      })
+    } finally {
+      if (original === undefined) delete process.env.RUN_MANAGER_SECRET
+      else process.env.RUN_MANAGER_SECRET = original
+    }
+
+    expect(events.some((e) => e.message.includes("supersecret"))).toBe(false)
+  })
 })
