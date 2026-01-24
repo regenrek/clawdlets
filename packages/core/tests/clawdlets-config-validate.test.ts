@@ -32,6 +32,32 @@ describe("clawdlets config validate", () => {
     expect(strictRes.errors.some((e) => e.includes("gateway.port"))).toBe(true);
   });
 
+  it("defaults required clawdbot commands", async () => {
+    const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
+    const { validateClawdletsConfig } = await import("../src/lib/clawdlets-config-validate");
+
+    const cfg = ClawdletsConfigSchema.parse({
+      schemaVersion: 9,
+      fleet: {
+        botOrder: ["maren"],
+        secretEnv: { OPENAI_API_KEY: "openai_api_key" },
+        bots: {
+          maren: {
+            clawdbot: {
+              channels: { discord: { enabled: true } },
+            },
+          },
+        },
+      },
+      hosts: {
+        "clawdbot-fleet-host": { tailnet: { mode: "none" }, agentModelPrimary: "openai/gpt-4o" },
+      },
+    });
+
+    const res = validateClawdletsConfig({ config: cfg, hostName: "clawdbot-fleet-host", strict: true });
+    expect(res.errors).toEqual([]);
+  });
+
   it("fails on inline secrets under strict", async () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     const { validateClawdletsConfig } = await import("../src/lib/clawdlets-config-validate");
