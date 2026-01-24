@@ -4,9 +4,10 @@ import type { ConvexClient } from "../src/server/convex"
 import type { RunManagerEvent } from "../src/server/run-manager"
 import { runWithEvents, spawnCommand } from "../src/server/run-manager"
 
+type RunId = Parameters<typeof runWithEvents>[0]["runId"]
+
 const createClient = () => {
   const events: RunManagerEvent[] = []
-  type RunId = Parameters<typeof runWithEvents>[0]["runId"]
   const client = {
     mutation: async (_mutation: unknown, payload: { runId: RunId; events: RunManagerEvent[] }) => {
       events.push(...payload.events)

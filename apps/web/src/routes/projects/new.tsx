@@ -93,7 +93,7 @@ function NewProject() {
           />
         </StackedField>
 
-        <Accordion collapsible className="rounded-lg border bg-muted/20">
+        <Accordion className="rounded-lg border bg-muted/20">
           <AccordionItem value="advanced" className="px-4">
             <AccordionTrigger className="rounded-none border-0 px-0 py-2.5 hover:no-underline">
               Advanced options
