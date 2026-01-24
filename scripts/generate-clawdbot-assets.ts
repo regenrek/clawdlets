@@ -231,9 +231,7 @@ const main = async () => {
     process.exit(1);
   }
   const schemaRes = schemaMod.buildConfigSchema();
-  const schemaGeneratedAt =
-    typeof schemaRes.generatedAt === "string" && schemaRes.generatedAt.trim() ? schemaRes.generatedAt.trim() : "";
-  const generatedAt = schemaGeneratedAt || getGitCommitTimeIso(src, rev) || new Date(0).toISOString();
+  const generatedAt = getGitCommitTimeIso(src, rev) || new Date(0).toISOString();
   const schemaPayload = {
     schema: schemaRes.schema ?? {},
     uiHints: schemaRes.uiHints ?? {},
