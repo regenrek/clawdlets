@@ -43,7 +43,7 @@
         pnpm = pkgs.pnpm_10;
         fetcherVersion = 3;
         pnpmWorkspaces = pnpmWorkspacesClf;
-        hash = pkgs.lib.fakeHash;
+        hash = "sha256-XkTy04HXmlmQ/KKFlvW+f9HJytLW8J+3FJaNoWiW1jE=";
       };
 
       clf = pkgs.buildNpmPackage {
