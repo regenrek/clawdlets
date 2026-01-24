@@ -23,9 +23,9 @@ const AbsolutePathSchema = z
   );
 
 const AllowedTargetPathSchema = AbsolutePathSchema.refine(
-  (v) => v.startsWith("/srv/clawdbot/") || v.startsWith("/var/lib/clawdlets/"),
+  (v) => v.startsWith("/var/lib/clawdlets/"),
   {
-    message: "targetPath must be under /srv/clawdbot/ or /var/lib/clawdlets/",
+    message: "targetPath must be under /var/lib/clawdlets/",
   },
 );
 

@@ -299,7 +299,7 @@ let
           profile = getBotProfile b;
           botSpecs = profile.secretFiles or {};
           ids = builtins.attrNames botSpecs;
-          prefix = "${cfg.stateDirBase}/${b}/";
+          prefix = "/var/lib/clawdlets/secrets/bots/${b}/";
         in
           map (id:
             let
@@ -347,9 +347,12 @@ let
       mkRule = entry:
         let
           dir = builtins.dirOf (toString entry.targetPath);
-          mode = if entry.scope == "fleet" then "0750" else "0700";
+          isBot = entry.scope == "bot";
+          owner = if isBot then "root" else "root";
+          group = if isBot then "bot-${entry.bot}" else "root";
+          mode = if isBot then "0750" else "0750";
         in
-          "d ${dir} ${mode} ${toString entry.owner} ${toString entry.group} - -";
+          "d ${dir} ${mode} ${owner} ${group} - -";
     in
       lib.unique (map mkRule secretFileEntries);
 

@@ -372,7 +372,7 @@ export function buildFleetSecretsPlan(params: { config: ClawdletsConfig; hostNam
         bot,
         fileId,
       });
-      const expectedPrefix = `/srv/clawdbot/${bot}/`;
+      const expectedPrefix = `/var/lib/clawdlets/secrets/bots/${bot}/`;
       const targetPath = String(spec.targetPath || "");
       if (isUnsafeTargetPath(targetPath)) {
         missingSecretConfig.push({

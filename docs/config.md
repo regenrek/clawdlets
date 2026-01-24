@@ -84,7 +84,7 @@ Cattle (`cattle.*`):
 - fleet scope: `fleet.secretEnv` (shared env var -> secret name mappings)
 - bot scope: `fleet.bots.<bot>.profile.secretEnv` (per-bot overrides)
 - host secret files: `fleet.secretFiles` → `targetPath` must be under `/var/lib/clawdlets/`
-- bot secret files: `fleet.bots.<bot>.profile.secretFiles` → `targetPath` must be under `/srv/clawdbot/<bot>/`
+- bot secret files: `fleet.bots.<bot>.profile.secretFiles` → `targetPath` must be under `/var/lib/clawdlets/secrets/bots/<bot>/`
 
 Clawdbot config should use `${ENV_VAR}` (uppercase/underscores). Clawdlets scans `fleet.bots.<bot>.clawdbot` for `${ENV_VAR}` refs plus channel tokens, hooks tokens, skill apiKey fields, and provider `apiKey` fields to build the secrets plan.
 

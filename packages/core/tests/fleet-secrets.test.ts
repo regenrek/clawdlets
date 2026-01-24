@@ -343,7 +343,7 @@ describe("fleet secrets plan", () => {
               profile: {
                 secretEnv: {},
                 secretFiles: {
-                  creds: { secretName: "discord_token_maren", targetPath: "/srv/clawdbot/maren/../secrets/discord_token_maren", mode: "0400" },
+                creds: { secretName: "discord_token_maren", targetPath: "/var/lib/clawdlets/secrets/bots/maren/../etc/shadow", mode: "0400" },
                 },
               },
             },

@@ -16,7 +16,7 @@ All secret values live under `secrets/hosts/<host>/...`. Scope is about wiring, 
 
 Secret file targets:
 - `fleet.secretFiles.*.targetPath` must be under `/var/lib/clawdlets/`
-- `fleet.bots.<bot>.profile.secretFiles.*.targetPath` must be under `/srv/clawdbot/<bot>/`
+- `fleet.bots.<bot>.profile.secretFiles.*.targetPath` must be under `/var/lib/clawdlets/secrets/bots/<bot>/`
 
 ## `${ENV}` wiring + autowire
 
