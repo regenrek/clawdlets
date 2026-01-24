@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start"
 
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
-import { createConvexClient } from "~/server/convex"
+import { createConvexClient, type ConvexClient } from "~/server/convex"
 import { resolveClawdletsCliEntry } from "~/server/clawdlets-cli"
 import { readClawdletsEnvTokens } from "~/server/redaction"
 import { spawnCommand, spawnCommandCapture } from "~/server/run-manager"
