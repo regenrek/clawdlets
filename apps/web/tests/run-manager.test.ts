@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest"
 
-import type { Id } from "../../convex/_generated/dataModel"
 import type { ConvexClient } from "../src/server/convex"
 import type { RunManagerEvent } from "../src/server/run-manager"
 import { runWithEvents, spawnCommand } from "../src/server/run-manager"
 
 const createClient = () => {
   const events: RunManagerEvent[] = []
+  type RunId = Parameters<typeof runWithEvents>[0]["runId"]
   const client = {
-    mutation: async (_mutation: unknown, payload: { runId: Id<"runs">; events: RunManagerEvent[] }) => {
+    mutation: async (_mutation: unknown, payload: { runId: RunId; events: RunManagerEvent[] }) => {
       events.push(...payload.events)
     },
   } as ConvexClient
@@ -18,7 +18,7 @@ const createClient = () => {
 describe("run manager", () => {
   it("caps events and appends truncation notice", async () => {
     const { client, events } = createClient()
-    const runId = "run-cap" as Id<"runs">
+    const runId = "run-cap" as RunId
 
     await runWithEvents({
       client,
@@ -38,7 +38,7 @@ describe("run manager", () => {
 
   it("caps output by total bytes", async () => {
     const { client, events } = createClient()
-    const runId = "run-bytes" as Id<"runs">
+    const runId = "run-bytes" as RunId
 
     await runWithEvents({
       client,
@@ -57,7 +57,7 @@ describe("run manager", () => {
 
   it("cleans up active runs on spawn error", async () => {
     const { client } = createClient()
-    const runId = "run-spawn-error" as Id<"runs">
+    const runId = "run-spawn-error" as RunId
 
     await expect(
       spawnCommand({
