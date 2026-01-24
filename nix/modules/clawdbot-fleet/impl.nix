@@ -99,7 +99,7 @@ in
       in
         {
           assertion = dupes == [];
-          message = "services.clawdbotFleet.botProfiles.${b}: secretEnv conflicts with derived hooks/skill env vars: ${lib.concatStringsSep \",\" dupes}";
+          message = "services.clawdbotFleet.botProfiles.${b}: secretEnv conflicts with derived hooks/skill env vars: ${lib.concatStringsSep "," dupes}";
         }
     ) cfg.bots)
     ++ (map (b:
@@ -114,7 +114,7 @@ in
       in
         {
           assertion = unknown == [];
-          message = "services.clawdbotFleet.botProfiles.${b}.secretEnvAllowlist contains unknown env vars: ${lib.concatStringsSep \",\" unknown}";
+          message = "services.clawdbotFleet.botProfiles.${b}.secretEnvAllowlist contains unknown env vars: ${lib.concatStringsSep "," unknown}";
         }
     ) cfg.bots)
     ++ (map (b:
@@ -129,7 +129,7 @@ in
       in
         {
           assertion = missing == [];
-          message = "services.clawdbotFleet.botProfiles.${b}.secretEnvAllowlist missing hooks/skill env vars: ${lib.concatStringsSep \",\" missing}";
+          message = "services.clawdbotFleet.botProfiles.${b}.secretEnvAllowlist missing hooks/skill env vars: ${lib.concatStringsSep "," missing}";
         }
     ) cfg.bots)
     ++ (lib.concatLists (map (b:
