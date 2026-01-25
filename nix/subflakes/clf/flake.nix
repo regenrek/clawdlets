@@ -3,15 +3,12 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
-    clawdletsSrc = {
-      url = "path:../../..";
-      flake = false;
-    };
   };
 
-  outputs = { self, nixpkgs, clawdletsSrc }:
+  outputs = { self, nixpkgs }:
     let
       lib = nixpkgs.lib;
+      clawdletsSrc = ../../..;
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forAllSystems = f: lib.genAttrs systems (system: f system);
 

@@ -1,17 +1,5 @@
 {
   "nodes": {
-    "clawdletsSrc": {
-      "flake": false,
-      "locked": {
-        "path": "../../..",
-        "type": "path"
-      },
-      "original": {
-        "path": "../../..",
-        "type": "path"
-      },
-      "parent": []
-    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1769089682,
@@ -30,7 +18,6 @@
     },
     "root": {
       "inputs": {
-        "clawdletsSrc": "clawdletsSrc",
         "nixpkgs": "nixpkgs"
       }
     }

@@ -6,6 +6,32 @@ function isAsciiAlphaNum(ch: string): boolean {
   return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || (ch >= "0" && ch <= "9");
 }
 
+function collapseDashes(value: string): string {
+  let out = "";
+  let prevDash = false;
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i]!;
+    if (ch === "-") {
+      if (!prevDash) {
+        out += "-";
+        prevDash = true;
+      }
+      continue;
+    }
+    out += ch;
+    prevDash = false;
+  }
+  return out;
+}
+
+function trimDashes(value: string): string {
+  let start = 0;
+  while (start < value.length && value[start] === "-") start++;
+  let end = value.length;
+  while (end > start && value[end - 1] === "-") end--;
+  return value.slice(start, end);
+}
+
 export function isValidHcloudLabelValue(value: string): boolean {
   const v = String(value ?? "");
   if (v.length === 0) return true;
@@ -46,10 +72,10 @@ export function toHcloudLabelValueSlug(input: string, opts: { fallback: string }
     else if (ch === "-" || ch === "_" || ch === "." || ch === " ") out.push("-");
   }
 
-  let s = out.join("").replace(/-+/g, "-").replace(/^-+/, "").replace(/-+$/, "");
+  let s = trimDashes(collapseDashes(out.join("")));
   if (!s) s = fallback;
   if (s.length > HCLOUD_LABEL_VALUE_MAX_LEN) s = s.slice(0, HCLOUD_LABEL_VALUE_MAX_LEN);
-  s = s.replace(/^-+/, "").replace(/-+$/, "");
+  s = trimDashes(s);
   if (!s) s = fallback;
   if (!isValidHcloudLabelValue(s)) return fallback;
   return s;
