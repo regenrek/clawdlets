@@ -26,8 +26,6 @@
     clf = {
       url = "path:./nix/subflakes/clf";
       inputs.nixpkgs.follows = "nixpkgs";
-      inputs.clawdletsSrc.url = "path:./";
-      inputs.clawdletsSrc.flake = false;
     };
   };
 

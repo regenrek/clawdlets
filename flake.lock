@@ -16,6 +16,22 @@
         "type": "github"
       }
     },
+    "clf": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "path": "./nix/subflakes/clf",
+        "type": "path"
+      },
+      "original": {
+        "path": "./nix/subflakes/clf",
+        "type": "path"
+      },
+      "parent": []
+    },
     "disko": {
       "inputs": {
         "nixpkgs": [
@@ -187,6 +203,7 @@
     "root": {
       "inputs": {
         "clawdbot-src": "clawdbot-src",
+        "clf": "clf",
         "disko": "disko",
         "nix-clawdbot": "nix-clawdbot",
         "nixos-generators": "nixos-generators",
