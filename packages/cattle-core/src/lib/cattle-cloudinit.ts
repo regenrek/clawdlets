@@ -1,6 +1,6 @@
 import YAML from "yaml";
 import type { CattleTask } from "./cattle-task.js";
-import { EnvVarNameSchema } from "./identifiers.js";
+import { EnvVarNameSchema } from "@clawdlets/shared/lib/identifiers";
 
 export const HCLOUD_USER_DATA_MAX_BYTES = 32 * 1024;
 
@@ -8,9 +8,16 @@ export type CattleCloudInitParams = {
   hostname?: string;
   adminAuthorizedKeys: string[];
   tailscaleAuthKey: string;
+  tailscaleAuthKeyExpiresAt: string;
+  tailscaleAuthKeyOneTime: boolean;
   task: CattleTask;
   publicEnv?: Record<string, string>;
-  secretsBootstrap?: { baseUrl: string; token: string };
+  secretsBootstrap?: {
+    baseUrl: string;
+    token: string;
+    tokenExpiresAt: string;
+    tokenOneTime: boolean;
+  };
   extraWriteFiles?: Array<{
     path: string;
     permissions: string;
@@ -20,6 +27,41 @@ export type CattleCloudInitParams = {
 };
 
 const SUPPORTED_PUBLIC_ENV_KEYS = new Set<string>(["CLAWDLETS_CATTLE_AUTO_SHUTDOWN"]);
+export const MAX_BOOTSTRAP_TOKEN_TTL_SECONDS = 15 * 60;
+export const MAX_TAILSCALE_AUTH_KEY_TTL_SECONDS = 60 * 60;
+
+function parseIsoInstant(value: string, label: string): number {
+  const ts = Date.parse(value);
+  if (!Number.isFinite(ts)) {
+    throw new Error(`${label} must be an ISO-8601 timestamp (got: ${value})`);
+  }
+  return ts;
+}
+
+function assertShortLivedToken(params: {
+  label: string;
+  expiresAt: string;
+  oneTime: boolean;
+  maxTtlSeconds: number;
+}): string {
+  if (!params.oneTime) {
+    throw new Error(`${params.label} must be one-time`);
+  }
+  const expiresAt = String(params.expiresAt || "").trim();
+  if (!expiresAt) throw new Error(`${params.label} expiresAt is missing`);
+  const expiresAtMs = parseIsoInstant(expiresAt, `${params.label} expiresAt`);
+  const nowMs = Date.now();
+  if (expiresAtMs <= nowMs) {
+    throw new Error(`${params.label} is expired`);
+  }
+  const ttlSeconds = Math.floor((expiresAtMs - nowMs) / 1000);
+  if (ttlSeconds <= 0 || ttlSeconds > params.maxTtlSeconds) {
+    throw new Error(
+      `${params.label} TTL must be > 0 and <= ${params.maxTtlSeconds}s (got ${ttlSeconds}s)`,
+    );
+  }
+  return expiresAt;
+}
 
 function normalizePublicEnv(env: Record<string, string> | undefined): Record<string, string> {
   const out: Record<string, string> = {};
@@ -53,6 +95,12 @@ export function buildCattleCloudInitUserData(params: CattleCloudInitParams): str
 
   const tailscaleAuthKey = String(params.tailscaleAuthKey || "").trim();
   if (!tailscaleAuthKey) throw new Error("tailscaleAuthKey is missing");
+  const tailscaleAuthKeyExpiresAt = assertShortLivedToken({
+    label: "tailscaleAuthKey",
+    expiresAt: String(params.tailscaleAuthKeyExpiresAt || "").trim(),
+    oneTime: Boolean(params.tailscaleAuthKeyOneTime),
+    maxTtlSeconds: MAX_TAILSCALE_AUTH_KEY_TTL_SECONDS,
+  });
 
   const publicEnv = normalizePublicEnv(params.publicEnv);
   const publicEnvKeys = Object.keys(publicEnv).sort();
@@ -65,6 +113,13 @@ export function buildCattleCloudInitUserData(params: CattleCloudInitParams): str
     ? {
         baseUrl: String(params.secretsBootstrap.baseUrl || "").trim(),
         token: String(params.secretsBootstrap.token || "").trim(),
+        expiresAt: assertShortLivedToken({
+          label: "secretsBootstrap.token",
+          expiresAt: String(params.secretsBootstrap.tokenExpiresAt || "").trim(),
+          oneTime: Boolean(params.secretsBootstrap.tokenOneTime),
+          maxTtlSeconds: MAX_BOOTSTRAP_TOKEN_TTL_SECONDS,
+        }),
+        oneTime: Boolean(params.secretsBootstrap.tokenOneTime),
       }
     : null;
   if (bootstrap) {
@@ -80,12 +135,18 @@ export function buildCattleCloudInitUserData(params: CattleCloudInitParams): str
       owner: "root:root",
       content: `${JSON.stringify({ ...params.task, callbackUrl: "" }, null, 2)}\n`,
     },
-    {
-      path: "/run/secrets/tailscale_auth_key",
-      permissions: "0400",
-      owner: "root:root",
-      content: `${tailscaleAuthKey}\n`,
-    },
+      {
+        path: "/run/secrets/tailscale_auth_key",
+        permissions: "0400",
+        owner: "root:root",
+        content: `${tailscaleAuthKey}\n`,
+      },
+      {
+        path: "/run/secrets/tailscale_auth_key.expiresAt",
+        permissions: "0400",
+        owner: "root:root",
+        content: `${tailscaleAuthKeyExpiresAt}\n`,
+      },
     ...(bootstrap
       ? [
           {

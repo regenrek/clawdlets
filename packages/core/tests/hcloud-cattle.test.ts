@@ -6,8 +6,8 @@ const ensureHcloudFirewallIdMock = vi.fn();
 const createHcloudServerMock = vi.fn();
 const waitForHcloudServerStatusMock = vi.fn();
 
-vi.mock("../src/lib/hcloud.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/lib/hcloud.js")>();
+vi.mock("@clawdlets/cattle-core/lib/hcloud", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@clawdlets/cattle-core/lib/hcloud")>();
   return {
     ...actual,
     listHcloudServers: listHcloudServersMock,
@@ -25,7 +25,7 @@ afterEach(() => {
 
 describe("reapExpiredCattle", () => {
   it("deletes with bounded concurrency", async () => {
-    const { reapExpiredCattle } = await import("../src/lib/hcloud-cattle");
+    const { reapExpiredCattle } = await import("@clawdlets/cattle-core/lib/hcloud-cattle");
     const now = new Date(1_700_000_000_000);
     const nowSec = Math.floor(now.getTime() / 1000);
 
@@ -62,7 +62,7 @@ describe("reapExpiredCattle", () => {
 
 describe("listExpiredCattle", () => {
   it("treats malformed expires-at labels as expired (never-reap hardening)", async () => {
-    const { listExpiredCattle } = await import("../src/lib/hcloud-cattle");
+    const { listExpiredCattle } = await import("@clawdlets/cattle-core/lib/hcloud-cattle");
     const now = new Date(1_700_000_000_000);
     const nowSec = Math.floor(now.getTime() / 1000);
 
@@ -89,7 +89,7 @@ describe("listExpiredCattle", () => {
 
 describe("createCattleServer", () => {
   it("caches firewall id between spawns", async () => {
-    const { createCattleServer } = await import("../src/lib/hcloud-cattle");
+    const { createCattleServer } = await import("@clawdlets/cattle-core/lib/hcloud-cattle");
 
     ensureHcloudFirewallIdMock.mockResolvedValue("99");
     createHcloudServerMock.mockImplementation(async (params: any) => ({

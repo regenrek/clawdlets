@@ -2,7 +2,7 @@ import process from "node:process";
 import { defineCommand } from "citty";
 import { loadDeployCreds } from "@clawdlets/core/lib/deploy-creds";
 import { openCattleState } from "../../lib/cattle-state.js";
-import { buildCattleLabelSelector, reapExpiredCattle } from "@clawdlets/core/lib/hcloud-cattle";
+import { buildCattleLabelSelector, reapExpiredCattle } from "@clawdlets/cattle-core/lib/hcloud-cattle";
 import { loadHostContextOrExit } from "@clawdlets/core/lib/context";
 import { formatTable, requireEnabled, unixSecondsNow } from "./common.js";
 

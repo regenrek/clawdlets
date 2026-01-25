@@ -9,7 +9,7 @@ import { parseDotenv } from "@clawdlets/core/lib/dotenv-file"
 import { ageKeygen } from "@clawdlets/core/lib/age-keygen"
 import { parseAgeKeyFile } from "@clawdlets/core/lib/age"
 import { getLocalOperatorAgeKeyPath } from "@clawdlets/core/repo-layout"
-import { sanitizeOperatorId } from "@clawdlets/core/lib/identifiers"
+import { sanitizeOperatorId } from "@clawdlets/shared/lib/identifiers"
 import os from "node:os"
 
 import { api } from "../../convex/_generated/api"

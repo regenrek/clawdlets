@@ -1,4 +1,4 @@
-import { SecretNameSchema } from "./identifiers.js";
+import { SecretNameSchema } from "@clawdlets/shared/lib/identifiers";
 import { assertSafeRecordKey, createNullProtoRecord } from "./safe-record.js";
 
 export type SecretsInitJson = {

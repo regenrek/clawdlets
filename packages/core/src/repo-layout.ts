@@ -1,5 +1,5 @@
 import path from "node:path";
-import { assertSafeHostName, assertSafeOperatorId, assertSafeSecretName, BotIdSchema } from "./lib/identifiers.js";
+import { assertSafeHostName, assertSafeOperatorId, assertSafeSecretName, BotIdSchema } from "@clawdlets/shared/lib/identifiers";
 
 export type RepoLayout = {
   repoRoot: string;

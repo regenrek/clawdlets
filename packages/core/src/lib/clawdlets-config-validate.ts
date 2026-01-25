@@ -3,7 +3,7 @@ import { buildClawdbotBotConfig, type ClawdbotInvariantWarning } from "./clawdbo
 import { validateClawdbotConfig } from "./clawdbot-schema-validate.js";
 import { buildFleetSecretsPlan } from "./fleet-secrets-plan.js";
 import { buildBaseSecretEnv, buildDerivedSecretEnv, buildEnvVarAliasMap, canonicalizeEnvVar } from "./fleet-secrets-plan-helpers.js";
-import { EnvVarNameSchema } from "./identifiers.js";
+import { EnvVarNameSchema } from "@clawdlets/shared/lib/identifiers";
 import type { MissingSecretConfig, SecretsPlanWarning } from "./secrets-plan.js";
 
 export type ClawdletsConfigValidation = {

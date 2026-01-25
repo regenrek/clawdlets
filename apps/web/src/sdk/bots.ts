@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start"
-import { BotIdSchema } from "@clawdlets/core/lib/identifiers"
+import { BotIdSchema } from "@clawdlets/shared/lib/identifiers"
 import { CHANNEL_PRESETS, applyChannelPreset } from "@clawdlets/core/lib/config-patch"
 import { validateClawdbotConfig } from "@clawdlets/core/lib/clawdbot-schema-validate"
 import {

@@ -4,12 +4,12 @@ import { z } from "zod";
 import { writeFileAtomic } from "./fs-safe.js";
 import type { RepoLayout } from "../repo-layout.js";
 import { getRepoLayout } from "../repo-layout.js";
-import { BotIdSchema, HostNameSchema, SecretNameSchema, assertSafeHostName } from "./identifiers.js";
+import { BotIdSchema, HostNameSchema, SecretNameSchema, assertSafeHostName } from "@clawdlets/shared/lib/identifiers";
 import { assertNoLegacyEnvSecrets, assertNoLegacyHostKeys } from "./clawdlets-config-legacy.js";
 import { SecretEnvSchema, SecretFilesSchema } from "./secret-wiring.js";
 import { isValidTargetHost } from "./ssh-remote.js";
-import { TtlStringSchema } from "./ttl.js";
-import { HcloudLabelsSchema, validateHcloudLabelsAtPath } from "./hcloud-labels.js";
+import { TtlStringSchema } from "@clawdlets/cattle-core/lib/ttl";
+import { HcloudLabelsSchema, validateHcloudLabelsAtPath } from "@clawdlets/cattle-core/lib/hcloud-labels";
 
 export const SSH_EXPOSURE_MODES = ["tailnet", "bootstrap", "public"] as const;
 export const SshExposureModeSchema = z.enum(SSH_EXPOSURE_MODES);

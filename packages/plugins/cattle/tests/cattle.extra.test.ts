@@ -17,7 +17,7 @@ vi.mock("@clawdlets/core/lib/deploy-creds", () => ({
   loadDeployCreds: loadDeployCredsMock,
 }));
 
-vi.mock("@clawdlets/core/lib/hcloud-cattle", () => ({
+vi.mock("@clawdlets/cattle-core/lib/hcloud-cattle", () => ({
   listCattleServers: listCattleServersMock,
   buildCattleLabelSelector: buildCattleLabelSelectorMock,
 }));

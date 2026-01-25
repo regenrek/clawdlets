@@ -121,6 +121,8 @@ describe("clf-orchestrator main", () => {
       adminAuthorizedKeysFile: "",
       adminAuthorizedKeysInline: "ssh-ed25519 AAAA",
       tailscaleAuthKey: "tskey-auth-123",
+      tailscaleAuthKeyExpiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+      tailscaleAuthKeyOneTime: true,
     };
   });
 

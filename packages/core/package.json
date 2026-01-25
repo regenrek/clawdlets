@@ -24,6 +24,8 @@
     "coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@clawdlets/cattle-core": "workspace:*",
+    "@clawdlets/shared": "workspace:*",
     "ajv": "^8.17.1",
     "dotenv": "^17.2.3",
     "giget": "^2.0.0",

@@ -6,11 +6,20 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 ## Unreleased
 ### Breaking
 - Config schema bumped to v9: replace `guildId` / `discordTokenSecret` / `modelSecrets` with `secretEnv` + `secretFiles` (generic secret wiring).
+- Package split: `@clawdlets/core` cattle-related modules moved to `@clawdlets/cattle-core`; shared utilities (identifiers, llm-provider-env) moved to `@clawdlets/shared`.
 
 ### Changed
 - Web setup: remove Providers/Models pages; configure channels via bot config + integrations UI.
 - Nix runtime: inject secrets via per-bot env files + secret files (sops-nix templates/secrets); stop injecting secret values into clawdbot config.
 - CLI: `server channels {status|capabilities|login|logout}` for stateful channel auth (e.g. WhatsApp).
+- CLF build moved to Nix subflake (`nix/subflakes/clf`) with its own lock file; avoids hash update churn for non-cattle users.
+- Bootstrap token TTL now uses single source of truth constant from `cattle-cloudinit` (max 15 min).
+- Tailscale auth key expiry resolved at spawn time (not config load) to prevent stale fallback after 55 min.
+
+### Fixed
+- Core tests now import from `@clawdlets/shared` / `@clawdlets/cattle-core` (fixes CI breakage from package split).
+- `cattle-run.sh` tolerates missing `expiresAt`/`oneTime` fields for backward compatibility with older control planes.
+- CI hash updater uses `persist-credentials: false` and injects token only for push step (reduced credential exposure).
 
 ## [0.3.4] - 2026-01-21
 ### Fixed

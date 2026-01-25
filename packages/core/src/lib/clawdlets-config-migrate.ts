@@ -1,4 +1,4 @@
-import { getProviderRequiredEnvVars } from "./llm-provider-env.js";
+import { getProviderRequiredEnvVars } from "@clawdlets/shared/lib/llm-provider-env";
 import { assertSafeRecordKey, createNullProtoRecord } from "./safe-record.js";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

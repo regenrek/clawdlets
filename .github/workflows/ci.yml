@@ -82,7 +82,9 @@ jobs:
       - name: Nix flake check
         run: nix flake check -L
 
-  nix-clf-deps-hash:
+  # CLF hash validation - checks the clf subflake
+  # Auto-update is handled by .github/workflows/update-clf-hash.yml
+  nix-clf-build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -99,9 +101,9 @@ jobs:
         uses: nix-community/cache-nix-action@b426b118b6dc86d6952988d396aa7c6b09776d08 # v5
         with:
           nix: false
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/flake.lock') }}
+          primary-key: nix-clf-${{ runner.os }}-${{ hashFiles('nix/subflakes/clf/flake.lock') }}
           restore-prefixes-first-match: |
-            nix-${{ runner.os }}-
+            nix-clf-${{ runner.os }}-
           paths-linux: |
             /nix/store
 
@@ -124,39 +126,43 @@ jobs:
               pnpm-lock.yaml \
               pnpm-workspace.yaml \
               package.json \
-              flake.nix \
-              flake.lock \
-              packages/core/package.json \
+              nix/subflakes/clf/flake.nix \
+              nix/subflakes/clf/flake.lock \
+              packages/shared/package.json \
+              packages/cattle-core/package.json \
               packages/clf/**/package.json \
               | grep -q .; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
+            echo "run=false" >> "$GITHUB_STEP_SUMMARY"
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build pnpm deps (clf) and print hash on mismatch
+      - name: Build CLF subflake
         if: ${{ steps.changed.outputs.run == 'true' }}
+        working-directory: nix/subflakes/clf
         run: |
           set -euo pipefail
 
-          target=".#pnpmDepsClf"
-
-          if nix build "${target}" -L --no-link 2>&1 | tee nix-build.log; then
-            echo "✅ ${target} built successfully" >> "$GITHUB_STEP_SUMMARY"
+          if nix build .#clf -L --no-link 2>&1 | tee nix-build.log; then
+            echo "✅ CLF subflake built successfully" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
+          # Build failed - show the correct hash for manual update or wait for auto-update
           got="$(grep -Eo 'got: sha256-[A-Za-z0-9+/=]+' nix-build.log | tail -n1 | awk '{print $2}')"
 
-          echo "### fetchPnpmDeps hash mismatch for ${target}" >> "$GITHUB_STEP_SUMMARY"
+          echo "### CLF pnpmDeps hash mismatch" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "The hash in \`nix/subflakes/clf/flake.nix\` needs to be updated." >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
           if [[ -n "${got}" ]]; then
-            echo "Set \`pnpmDepsClf.hash\` in \`flake.nix\` to:" >> "$GITHUB_STEP_SUMMARY"
+            echo "Expected hash: \`${got}\`" >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "\`${got}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "This will be auto-updated on main branch by the update-clf-hash workflow." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "Could not parse the 'got: sha256-...' value from the log. Check the raw log." >> "$GITHUB_STEP_SUMMARY"
+            echo "Could not parse hash from log. Check the raw output." >> "$GITHUB_STEP_SUMMARY"
           fi
 
           exit 1

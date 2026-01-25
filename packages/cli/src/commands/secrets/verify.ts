@@ -5,7 +5,7 @@ import { defineCommand } from "citty";
 import YAML from "yaml";
 import { agePublicKeyFromIdentityFile } from "@clawdlets/core/lib/age-keygen";
 import { sopsDecryptYamlFile } from "@clawdlets/core/lib/sops";
-import { sanitizeOperatorId } from "@clawdlets/core/lib/identifiers";
+import { sanitizeOperatorId } from "@clawdlets/shared/lib/identifiers";
 import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets-plan";
 import { isPlaceholderSecretValue } from "@clawdlets/core/lib/secrets-init";
 import { loadDeployCreds } from "@clawdlets/core/lib/deploy-creds";

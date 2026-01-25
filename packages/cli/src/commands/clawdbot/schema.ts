@@ -1,7 +1,7 @@
 import process from "node:process";
 import { defineCommand } from "citty";
 import { shellQuote, sshRun } from "@clawdlets/core/lib/ssh-remote";
-import { BotIdSchema } from "@clawdlets/core/lib/identifiers";
+import { BotIdSchema } from "@clawdlets/shared/lib/identifiers";
 import { loadHostContextOrExit } from "@clawdlets/core/lib/context";
 import { buildClawdbotBotConfig } from "@clawdlets/core/lib/clawdbot-config-invariants";
 import { needsSudo, requireTargetHost } from "../server/common.js";

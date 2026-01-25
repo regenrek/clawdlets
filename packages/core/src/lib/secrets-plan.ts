@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { BotIdSchema, EnvVarNameSchema, SecretNameSchema } from "./identifiers.js";
+import { BotIdSchema, EnvVarNameSchema, SecretNameSchema } from "@clawdlets/shared/lib/identifiers";
 
 export const SECRET_KINDS = ["env", "file", "extra"] as const;
 export const SecretKindSchema = z.enum(SECRET_KINDS);

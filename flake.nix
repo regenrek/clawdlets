@@ -20,92 +20,31 @@
       url = "github:clawdbot/clawdbot";
       flake = false;
     };
+
+    # CLF is a separate subflake with its own lock file (opt-in for cattle users)
+    # This avoids hash update pain for non-cattle users
+    clf = {
+      url = "path:./nix/subflakes/clf";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, nix-clawdbot, clawdbot-src, ... }:
+  outputs = { self, nixpkgs, nix-clawdbot, clawdbot-src, clf, ... }:
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
       dev = import ./devenv.nix { inherit pkgs; };
       clawdbotSourceInfo = import "${nix-clawdbot}/nix/sources/clawdbot-source.nix";
-
-      pnpmWorkspacesClf = [
-        "@clawdlets/core"
-        "@clawdlets/clf-queue"
-        "clf"
-        "clf-orchestrator"
-      ];
-
-      pnpmDepsClf = pkgs.fetchPnpmDeps {
-        pname = "clawdlets-clf";
-        version = "0.1.0";
-        src = self;
-        pnpm = pkgs.pnpm_10;
-        fetcherVersion = 3;
-        pnpmWorkspaces = pnpmWorkspacesClf;
-        hash = "sha256-XkTy04HXmlmQ/KKFlvW+f9HJytLW8J+3FJaNoWiW1jE=";
-      };
-
-      clf = pkgs.buildNpmPackage {
-        pname = "clf";
-        version = "0.1.0";
-        src = self;
-
-        nodejs = pkgs.nodejs_22;
-
-        npmDeps = null;
-        pnpmDeps = pnpmDepsClf;
-        nativeBuildInputs = [ pkgs.pnpm_10 pkgs.makeWrapper ];
-        npmConfigHook = pkgs.pnpmConfigHook;
-        pnpmWorkspaces = pnpmWorkspacesClf;
-
-        dontNpmBuild = true;
-        dontNpmInstall = true;
-        dontNpmPrune = true;
-
-        buildPhase = ''
-          runHook preBuild
-
-          pnpm --filter=@clawdlets/core build
-          pnpm --filter=@clawdlets/clf-queue build
-          pnpm --filter=clf build
-          pnpm --filter=clf-orchestrator build
-
-          pnpm rebuild better-sqlite3
-
-          runHook postBuild
-        '';
-
-        installPhase = ''
-          runHook preInstall
-
-          mkdir -p $out/lib/clf
-          mkdir -p $out/bin
-
-          cp -r node_modules $out/lib/clf/node_modules
-          cp -r packages $out/lib/clf/packages
-
-          makeWrapper ${pkgs.nodejs_22}/bin/node $out/bin/clf \
-            --add-flags "$out/lib/clf/packages/clf/cli/dist/main.js"
-
-          makeWrapper ${pkgs.nodejs_22}/bin/node $out/bin/clf-orchestrator \
-            --add-flags "$out/lib/clf/packages/clf/orchestrator/dist/main.js"
-
-          runHook postInstall
-        '';
-
-        meta = {
-          description = "ClawdletFleet (bot-facing control plane + orchestrator)";
-          mainProgram = "clf";
-        };
-      };
     in {
       devShells.${system}.default = pkgs.mkShell {
         packages = dev.packages or [ ];
       };
 
+      # CLF packages are provided by the clf subflake
+      # Access via: clawdlets.inputs.clf.packages.${system}.clf
       packages.${system} = {
-        inherit clf pnpmDepsClf;
+        # Re-export clf for convenience (optional)
+        clf = clf.packages.${system}.clf or null;
       };
 
       checks.${system} = {

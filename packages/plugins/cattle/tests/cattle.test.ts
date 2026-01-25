@@ -37,8 +37,8 @@ const reapExpiredCattleMock = vi.fn(async (params: { dryRun?: boolean; now?: Dat
   for (const s of expired) await destroyCattleServerMock({ id: s.id });
   return { expired, deletedIds: expired.map((s) => s.id) };
 });
-vi.mock("@clawdlets/core/lib/hcloud-cattle", async () => {
-  const actual = await vi.importActual<typeof import("@clawdlets/core/lib/hcloud-cattle")>("@clawdlets/core/lib/hcloud-cattle");
+vi.mock("@clawdlets/cattle-core/lib/hcloud-cattle", async () => {
+  const actual = await vi.importActual<typeof import("@clawdlets/cattle-core/lib/hcloud-cattle")>("@clawdlets/cattle-core/lib/hcloud-cattle");
   return {
     ...actual,
     listCattleServers: listCattleServersMock,

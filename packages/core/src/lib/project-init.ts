@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { downloadTemplate } from "giget";
 import { ensureDir, writeFileAtomic } from "./fs-safe.js";
 import { capture, run } from "./run.js";
-import { assertSafeHostName } from "./identifiers.js";
+import { assertSafeHostName } from "@clawdlets/shared/lib/identifiers";
 
 type DownloadedTemplate = { dir: string };
 

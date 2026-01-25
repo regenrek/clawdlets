@@ -1,4 +1,4 @@
-import { BotIdSchema, HostNameSchema, SecretNameSchema } from "@clawdlets/core/lib/identifiers"
+import { BotIdSchema, HostNameSchema, SecretNameSchema } from "@clawdlets/shared/lib/identifiers"
 import { assertSafeRecordKey, createNullProtoRecord } from "@clawdlets/core/lib/safe-record"
 
 import type { SystemTableNames } from "convex/server"

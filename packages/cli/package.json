@@ -29,6 +29,7 @@
   "dependencies": {
     "@clack/prompts": "^0.11.0",
     "@clawdlets/core": "workspace:*",
+    "@clawdlets/shared": "workspace:*",
     "citty": "^0.1.6",
     "giget": "^2.0.0",
     "yaml": "^2.8.0",
@@ -54,6 +55,7 @@
   "license": "MIT",
   "packageManager": "pnpm@10.25.0",
   "bundledDependencies": [
-    "@clawdlets/core"
+    "@clawdlets/core",
+    "@clawdlets/shared"
   ]
 }

@@ -11,4 +11,3 @@ export const CattleTaskSchema = z.object({
 });
 
 export type CattleTask = z.infer<typeof CattleTaskSchema>;
-

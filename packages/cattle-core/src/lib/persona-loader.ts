@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { assertSafePersonaName } from "./identifiers.js";
+import { assertSafePersonaName } from "@clawdlets/shared/lib/identifiers";
 
 export const PERSONA_CONFIG_SCHEMA_VERSION = 1 as const;
 

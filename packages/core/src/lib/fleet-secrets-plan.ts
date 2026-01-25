@@ -23,7 +23,7 @@ import {
   getLlmProviderFromModelId,
   getProviderAuthMode,
   getProviderCredentials,
-} from "./llm-provider-env.js";
+} from "@clawdlets/shared/lib/llm-provider-env";
 import type { ClawdletsConfig } from "./clawdlets-config.js";
 import type { SecretFileSpec } from "./secret-wiring.js";
 import type { MissingSecretConfig, SecretSource, SecretSpec, SecretsPlanWarning } from "./secrets-plan.js";

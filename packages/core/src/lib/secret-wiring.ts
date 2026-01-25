@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { EnvVarNameSchema, SecretNameSchema } from "./identifiers.js";
+import { EnvVarNameSchema, SecretNameSchema } from "@clawdlets/shared/lib/identifiers";
 
 export const SecretEnvSchema = z.record(EnvVarNameSchema, SecretNameSchema).default(() => ({}));
 

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ensureHcloudSshKeyId } from "./hcloud.js";
+import { ensureHcloudSshKeyId } from "@clawdlets/cattle-core/lib/hcloud";
 import type { SshExposureMode, TailnetMode } from "./clawdlets-config.js";
 import { run } from "./run.js";
 import { withFlakesEnv } from "./nix-flakes.js";
@@ -98,8 +98,6 @@ export async function applyOpenTofuVars(params: {
     "-var",
     `host_name=${hostName}`,
     "-var",
-    `hcloud_token=${env.HCLOUD_TOKEN}`,
-    "-var",
     `admin_cidr=${env.ADMIN_CIDR}`,
     "-var",
     `admin_cidr_is_world_open=${params.vars.adminCidrIsWorldOpen ? "true" : "false"}`,
@@ -182,8 +180,6 @@ export async function destroyOpenTofuVars(params: {
     "-input=false",
     "-var",
     `host_name=${hostName}`,
-    "-var",
-    `hcloud_token=${env.HCLOUD_TOKEN}`,
     "-var",
     `admin_cidr=${env.ADMIN_CIDR}`,
     "-var",

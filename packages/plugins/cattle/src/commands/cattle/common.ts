@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import { capture } from "@clawdlets/core/lib/run";
-import { parseTtlToSeconds } from "@clawdlets/core/lib/ttl";
-import { CattleTaskSchema, CATTLE_TASK_SCHEMA_VERSION, type CattleTask } from "@clawdlets/core/lib/cattle-task";
-import type { CattleServer } from "@clawdlets/core/lib/hcloud-cattle";
+import { parseTtlToSeconds } from "@clawdlets/cattle-core/lib/ttl";
+import { CattleTaskSchema, CATTLE_TASK_SCHEMA_VERSION, type CattleTask } from "@clawdlets/cattle-core/lib/cattle-task";
+import type { CattleServer } from "@clawdlets/cattle-core/lib/hcloud-cattle";
 
 export function requireEnabled(params: { enabled: boolean; hint: string }): void {
   if (params.enabled) return;

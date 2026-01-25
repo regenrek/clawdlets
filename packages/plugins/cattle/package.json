@@ -21,8 +21,10 @@
     "coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@clawdlets/core": "workspace:*",
+    "@clawdlets/cattle-core": "workspace:*",
     "@clawdlets/clf-queue": "workspace:*",
+    "@clawdlets/core": "workspace:*",
+    "@clawdlets/shared": "workspace:*",
     "better-sqlite3": "^12.6.2",
     "citty": "^0.1.6"
   },

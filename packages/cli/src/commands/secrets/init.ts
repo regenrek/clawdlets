@@ -10,7 +10,7 @@ import { mkpasswdYescryptHash } from "@clawdlets/core/lib/mkpasswd";
 import { upsertSopsCreationRule } from "@clawdlets/core/lib/sops-config";
 import { sopsDecryptYamlFile, sopsEncryptYamlToFile } from "@clawdlets/core/lib/sops";
 import { getHostAgeKeySopsCreationRulePathRegex, getHostSecretsSopsCreationRulePathRegex } from "@clawdlets/core/lib/sops-rules";
-import { sanitizeOperatorId } from "@clawdlets/core/lib/identifiers";
+import { sanitizeOperatorId } from "@clawdlets/shared/lib/identifiers";
 import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets-plan";
 import { applySecretsAutowire, planSecretsAutowire } from "@clawdlets/core/lib/secrets-autowire";
 import { buildSecretsInitTemplate, isPlaceholderSecretValue, listSecretsInitPlaceholders, parseSecretsInitJson, resolveSecretsInitFromJsonArg, validateSecretsInitNonInteractive, type SecretsInitJson } from "@clawdlets/core/lib/secrets-init";

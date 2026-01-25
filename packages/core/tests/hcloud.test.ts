@@ -8,7 +8,7 @@ import {
   waitForHcloudServerStatus,
   deleteHcloudServer,
   HCLOUD_REQUEST_TIMEOUT_MS,
-} from "../src/lib/hcloud";
+} from "@clawdlets/cattle-core/lib/hcloud";
 
 afterEach(() => {
   vi.unstubAllGlobals();

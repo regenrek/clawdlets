@@ -1,0 +1,109 @@
+name: Update CLF pnpm hash
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'packages/shared/package.json'
+      - 'packages/cattle-core/package.json'
+      - 'packages/clf/**/package.json'
+      - 'nix/subflakes/clf/flake.nix'
+      - 'nix/subflakes/clf/flake.lock'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-clf-hash
+  cancel-in-progress: true
+
+jobs:
+  update-hash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v4
+        with:
+          token: ${{ secrets.BUMP_TEMPLATE_REF_TOKEN }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31.9.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Cache Nix store
+        uses: nix-community/cache-nix-action@b426b118b6dc86d6952988d396aa7c6b09776d08 # v5
+        with:
+          nix: false
+          primary-key: nix-clf-${{ runner.os }}-${{ hashFiles('nix/subflakes/clf/flake.lock') }}
+          restore-prefixes-first-match: |
+            nix-clf-${{ runner.os }}-
+          paths-linux: |
+            /nix/store
+
+      - name: Try build CLF and extract new hash on failure
+        id: hash
+        working-directory: nix/subflakes/clf
+        run: |
+          set -euo pipefail
+
+          # Try to build - if it succeeds, no hash update needed
+          if nix build .#clf -L --no-link 2>&1 | tee nix-build.log; then
+            echo "✅ CLF built successfully - no hash update needed" >> "$GITHUB_STEP_SUMMARY"
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Build failed - extract the correct hash from the error
+          got="$(grep -Eo 'got: sha256-[A-Za-z0-9+/=]+' nix-build.log | tail -n1 | awk '{print $2}')"
+
+          if [[ -z "${got}" ]]; then
+            echo "❌ Build failed but could not parse hash from log" >> "$GITHUB_STEP_SUMMARY"
+            echo "needs_update=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "new_hash=${got}" >> "$GITHUB_OUTPUT"
+          echo "needs_update=true" >> "$GITHUB_OUTPUT"
+          echo "🔄 Hash update needed: ${got}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update nix/subflakes/clf/flake.nix with new hash
+        if: steps.hash.outputs.needs_update == 'true'
+        run: |
+          set -euo pipefail
+          new_hash="${{ steps.hash.outputs.new_hash }}"
+
+          # Update the hash in nix/subflakes/clf/flake.nix
+          sed -i "s|hash = \"sha256-[A-Za-z0-9+/=]*\";|hash = \"${new_hash}\";|" nix/subflakes/clf/flake.nix
+
+          echo "Updated nix/subflakes/clf/flake.nix with hash: ${new_hash}"
+          git diff nix/subflakes/clf/flake.nix
+
+      - name: Update clf flake.lock
+        if: steps.hash.outputs.needs_update == 'true'
+        working-directory: nix/subflakes/clf
+        run: |
+          nix flake lock --update-input nixpkgs || true
+
+      - name: Commit and push
+        if: steps.hash.outputs.needs_update == 'true'
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add nix/subflakes/clf/flake.nix nix/subflakes/clf/flake.lock
+          git commit -m "chore(clf): update pnpmDeps hash [skip ci]" || {
+            echo "No changes to commit"
+            exit 0
+          }
+
+          git remote set-url origin "https://x-access-token:${{ secrets.BUMP_TEMPLATE_REF_TOKEN }}@github.com/${{ github.repository }}.git"
+          git push
+
+          echo "✅ Committed and pushed hash update" >> "$GITHUB_STEP_SUMMARY"

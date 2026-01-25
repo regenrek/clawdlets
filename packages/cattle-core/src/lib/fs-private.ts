@@ -25,4 +25,3 @@ export function ensurePrivateFile(filePath: string): void {
   const mode2 = (fs.statSync(filePath).mode & 0o777) >>> 0;
   if ((mode2 & 0o077) !== 0) throw new Error(`failed to secure file permissions: ${filePath} (mode 0${mode2.toString(8)})`);
 }
-

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 
 describe("llm provider env", () => {
   it("parses provider from provider/model ids", async () => {
-    const { getLlmProviderFromModelId } = await import("../src/lib/llm-provider-env");
+    const { getLlmProviderFromModelId } = await import("@clawdlets/shared/lib/llm-provider-env");
     expect(getLlmProviderFromModelId("")).toBe(null);
     expect(getLlmProviderFromModelId("glm-4.7")).toBe(null);
     expect(getLlmProviderFromModelId("/glm-4.7")).toBe(null);
@@ -12,7 +12,7 @@ describe("llm provider env", () => {
   });
 
   it("returns required env vars for known providers and empty for unknown", async () => {
-    const { getLlmProviderInfo, getProviderRequiredEnvVars, getModelRequiredEnvVars } = await import("../src/lib/llm-provider-env");
+    const { getLlmProviderInfo, getProviderRequiredEnvVars, getModelRequiredEnvVars } = await import("@clawdlets/shared/lib/llm-provider-env");
     expect(getProviderRequiredEnvVars("unknown")).toEqual([]);
     expect(getProviderRequiredEnvVars("openai")).toEqual(["OPENAI_API_KEY"]);
     expect(getProviderRequiredEnvVars("minimax")).toEqual(["MINIMAX_API_KEY"]);

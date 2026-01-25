@@ -2,10 +2,22 @@
 
 let
   system = pkgs.system;
-  clawdletsPkgs =
-    if clawdlets == null then null else (clawdlets.packages.${system} or null);
+
+  # CLF package resolution:
+  # 1. Try clawdlets.inputs.clf (subflake - recommended)
+  # 2. Fall back to clawdlets.packages.clf (re-exported)
+  # 3. null if neither available
+  clfSubflake =
+    if clawdlets != null && (clawdlets ? inputs) && (clawdlets.inputs ? clf)
+    then clawdlets.inputs.clf
+    else null;
+
   defaultClfPackage =
-    if clawdletsPkgs == null then null else (clawdletsPkgs.clf or null);
+    if clfSubflake != null
+    then clfSubflake.packages.${system}.clf or null
+    else if clawdlets != null
+    then clawdlets.packages.${system}.clf or null
+    else null;
 
   fleetCfg = project.config;
   cattleCfg = fleetCfg.cattle or { };
@@ -48,6 +60,8 @@ let
   mkEnvLine = envVar: value: "${envVar}=${value}";
 
   cfg = config.services.clfOrchestrator;
+  clawdbotBots = lib.attrByPath [ "services" "clawdbotFleet" "bots" ] [ ] config;
+  adminAuthorizedKeys = lib.attrByPath [ "users" "users" "admin" "openssh" "authorizedKeys" "keys" ] [ ] config;
 in
 {
   options.services.clfOrchestrator = {
@@ -177,7 +191,7 @@ in
         (builtins.listToAttrs (map (b: {
           name = "bot-${b}";
           value = { extraGroups = lib.mkAfter [ "clf-bots" ]; };
-        }) (config.services.clawdbotFleet.bots or [ ])))
+        }) clawdbotBots))
       ];
 
       environment.systemPackages = [ cfg.package ];
@@ -187,7 +201,7 @@ in
           {
             "clf/admin_authorized_keys" = {
               mode = "0444";
-              text = lib.concatStringsSep "\n" ((config.users.users.admin.openssh.authorizedKeys.keys or [ ]) ++ [ "" ]);
+              text = lib.concatStringsSep "\n" (adminAuthorizedKeys ++ [ "" ]);
             };
           }
         ]
@@ -226,8 +240,10 @@ in
         mode = "0400";
         content =
           lib.concatStringsSep "\n" (
-            [
+            (lib.optional (cfg.hcloudTokenSecret != "")
               "HCLOUD_TOKEN=${config.sops.placeholder.${cfg.hcloudTokenSecret}}"
+            )
+            ++ [
               "TAILSCALE_AUTH_KEY=${config.sops.placeholder.${tailscaleSecret}}"
             ]
             ++ (lib.mapAttrsToList (envVar: secretName: mkEnvLine envVar config.sops.placeholder.${toString secretName}) secretEnv)

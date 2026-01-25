@@ -20,6 +20,9 @@ importers:
       '@clawdlets/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@clawdlets/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@convex-dev/better-auth':
         specifier: 0.10.10
         version: 0.10.10(@better-auth/core@1.4.9(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.7(zod@4.3.5))(jose@6.1.3)(kysely@0.28.10)(nanostores@1.1.0))(@better-auth/utils@0.3.0)(@standard-schema/spec@1.1.0)(better-auth@1.4.9(@tanstack/react-start@1.154.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vite@7.3.1(@types/node@24.10.9)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2)))(better-sqlite3@12.6.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vitest@4.0.17(@types/node@24.10.9)(jiti@2.6.1)(lightningcss@1.30.2)(msw@2.12.7(@types/node@24.10.9)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.8.2)))(better-call@1.1.7(zod@4.3.5))(convex@1.31.5(react@19.2.3))(hono@4.11.4)(nanostores@1.1.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.3)
@@ -181,14 +184,36 @@ importers:
         specifier: 4.0.17
         version: 4.0.17(@types/node@24.10.9)(jiti@2.6.1)(lightningcss@1.30.2)(msw@2.12.7(@types/node@24.10.9)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/cattle-core:
+    dependencies:
+      '@clawdlets/shared':
+        specifier: workspace:*
+        version: link:../shared
+      yaml:
+        specifier: ^2.8.0
+        version: 2.8.2
+      zod:
+        specifier: ^4.3.5
+        version: 4.3.5
+    devDependencies:
+      '@types/node':
+        specifier: ^25.0.9
+        version: 25.0.9
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.17
+        version: 4.0.17(@types/node@25.0.9)(jiti@2.6.1)(lightningcss@1.30.2)(msw@2.12.7(@types/node@25.0.9)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.8.2)
+
   packages/clf/cli:
     dependencies:
+      '@clawdlets/cattle-core':
+        specifier: workspace:*
+        version: link:../../cattle-core
       '@clawdlets/clf-queue':
         specifier: workspace:*
         version: link:../queue
-      '@clawdlets/core':
-        specifier: workspace:*
-        version: link:../../core
       citty:
         specifier: ^0.1.6
         version: 0.1.6
@@ -208,12 +233,15 @@ importers:
 
   packages/clf/orchestrator:
     dependencies:
+      '@clawdlets/cattle-core':
+        specifier: workspace:*
+        version: link:../../cattle-core
       '@clawdlets/clf-queue':
         specifier: workspace:*
         version: link:../queue
-      '@clawdlets/core':
+      '@clawdlets/shared':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../shared
     devDependencies:
       '@types/node':
         specifier: ^25.0.9
@@ -230,9 +258,12 @@ importers:
 
   packages/clf/queue:
     dependencies:
-      '@clawdlets/core':
+      '@clawdlets/cattle-core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../cattle-core
+      '@clawdlets/shared':
+        specifier: workspace:*
+        version: link:../../shared
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
@@ -264,6 +295,9 @@ importers:
       '@clawdlets/core':
         specifier: workspace:*
         version: link:../core
+      '@clawdlets/shared':
+        specifier: workspace:*
+        version: link:../shared
       citty:
         specifier: ^0.1.6
         version: 0.1.6
@@ -295,6 +329,12 @@ importers:
 
   packages/core:
     dependencies:
+      '@clawdlets/cattle-core':
+        specifier: workspace:*
+        version: link:../cattle-core
+      '@clawdlets/shared':
+        specifier: workspace:*
+        version: link:../shared
       ajv:
         specifier: ^8.17.1
         version: 8.17.1
@@ -326,12 +366,18 @@ importers:
 
   packages/plugins/cattle:
     dependencies:
+      '@clawdlets/cattle-core':
+        specifier: workspace:*
+        version: link:../../cattle-core
       '@clawdlets/clf-queue':
         specifier: workspace:*
         version: link:../../clf/queue
       '@clawdlets/core':
         specifier: workspace:*
         version: link:../../core
+      '@clawdlets/shared':
+        specifier: workspace:*
+        version: link:../../shared
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
@@ -357,6 +403,19 @@ importers:
       vitest:
         specifier: ^4.0.17
         version: 4.0.17(@types/node@25.0.9)(jiti@2.6.1)(lightningcss@1.30.2)(msw@2.12.7(@types/node@25.0.9)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/shared:
+    dependencies:
+      zod:
+        specifier: ^4.3.5
+        version: 4.3.5
+    devDependencies:
+      '@types/node':
+        specifier: ^25.0.9
+        version: 25.0.9
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
 
 packages:
 

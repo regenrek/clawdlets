@@ -18,8 +18,8 @@
     "help": "node dist/main.js --help"
   },
   "dependencies": {
+    "@clawdlets/cattle-core": "workspace:*",
     "@clawdlets/clf-queue": "workspace:*",
-    "@clawdlets/core": "workspace:*",
     "citty": "^0.1.6"
   },
   "devDependencies": {

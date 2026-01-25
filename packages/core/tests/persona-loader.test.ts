@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 
 describe("persona-loader", () => {
   it("loads persona files + config", async () => {
-    const { loadPersona } = await import("../src/lib/persona-loader");
+    const { loadPersona } = await import("@clawdlets/cattle-core/lib/persona-loader");
 
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "clawdlets-persona-"));
     const dir = path.join(repoRoot, "cattle", "personas", "rex");
@@ -23,7 +23,7 @@ describe("persona-loader", () => {
   });
 
   it("enforces file size limits", async () => {
-    const { loadPersona } = await import("../src/lib/persona-loader");
+    const { loadPersona } = await import("@clawdlets/cattle-core/lib/persona-loader");
 
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "clawdlets-persona-"));
     const dir = path.join(repoRoot, "cattle", "personas", "rex");

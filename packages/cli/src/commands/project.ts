@@ -3,7 +3,7 @@ import process from "node:process";
 import { defineCommand } from "citty";
 import * as p from "@clack/prompts";
 import { initProject, planProjectInit } from "@clawdlets/core/lib/project-init";
-import { assertSafeHostName } from "@clawdlets/core/lib/identifiers";
+import { assertSafeHostName } from "@clawdlets/shared/lib/identifiers";
 import { resolveTemplateSpec } from "../lib/template-spec.js";
 import { cancelFlow, navOnCancel, NAV_EXIT } from "../lib/wizard.js";
 

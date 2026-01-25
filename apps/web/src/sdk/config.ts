@@ -6,7 +6,7 @@ import {
 } from "@clawdlets/core/lib/clawdlets-config"
 import { splitDotPath } from "@clawdlets/core/lib/dot-path"
 import { deleteAtPath, getAtPath, setAtPath } from "@clawdlets/core/lib/object-path"
-import { BotIdSchema } from "@clawdlets/core/lib/identifiers"
+import { BotIdSchema } from "@clawdlets/shared/lib/identifiers"
 import { parseSshPublicKeysFromText } from "@clawdlets/core/lib/ssh"
 import { readKnownHostsFromFile, readSshPublicKeysFromFile } from "@clawdlets/core/lib/ssh-files"
 import { api } from "../../convex/_generated/api"

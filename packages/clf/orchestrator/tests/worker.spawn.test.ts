@@ -14,8 +14,8 @@ const createCattleServerMock = vi.fn(async () => ({
   labels: {},
 }));
 
-vi.mock("@clawdlets/core/lib/hcloud-cattle", async () => {
-  const actual = await vi.importActual<typeof import("@clawdlets/core/lib/hcloud-cattle")>("@clawdlets/core/lib/hcloud-cattle");
+vi.mock("@clawdlets/cattle-core/lib/hcloud-cattle", async () => {
+  const actual = await vi.importActual<typeof import("@clawdlets/cattle-core/lib/hcloud-cattle")>("@clawdlets/cattle-core/lib/hcloud-cattle");
   return {
     ...actual,
     listCattleServers: listCattleServersMock,
@@ -23,11 +23,11 @@ vi.mock("@clawdlets/core/lib/hcloud-cattle", async () => {
   };
 });
 
-vi.mock("@clawdlets/core/lib/cattle-cloudinit", () => ({
+vi.mock("@clawdlets/cattle-core/lib/cattle-cloudinit", () => ({
   buildCattleCloudInitUserData: () => "#cloud-config\n",
 }));
 
-vi.mock("@clawdlets/core/lib/persona-loader", () => ({
+vi.mock("@clawdlets/cattle-core/lib/persona-loader", () => ({
   loadPersona: () => ({
     name: "rex",
     config: { model: { primary: "openai/gpt-4o" } },
@@ -35,11 +35,11 @@ vi.mock("@clawdlets/core/lib/persona-loader", () => ({
   }),
 }));
 
-vi.mock("@clawdlets/core/lib/llm-provider-env", () => ({
+vi.mock("@clawdlets/shared/lib/llm-provider-env", () => ({
   getModelRequiredEnvVars: () => ["OPENAI_API_KEY"],
 }));
 
-vi.mock("@clawdlets/core/lib/ttl", () => ({
+vi.mock("@clawdlets/cattle-core/lib/ttl", () => ({
   parseTtlToSeconds: () => ({ seconds: 60 }),
 }));
 
@@ -60,6 +60,8 @@ describe("clf-orchestrator worker spawn errors", () => {
     personasRoot: "/tmp/personas",
     adminAuthorizedKeys: ["ssh-ed25519 AAAA"],
     tailscaleAuthKey: "tskey-auth-123",
+    tailscaleAuthKeyExpiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+    tailscaleAuthKeyOneTime: true,
     env: { OPENAI_API_KEY: "x", GITHUB_TOKEN: "gh-token" },
   };
 

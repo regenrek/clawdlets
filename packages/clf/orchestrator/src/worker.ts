@@ -1,10 +1,10 @@
 import fs from "node:fs";
 import { type ClfQueue } from "@clawdlets/clf-queue";
 import { parseClfJobPayload } from "@clawdlets/clf-queue";
-import { buildCattleCloudInitUserData } from "@clawdlets/core/lib/cattle-cloudinit";
-import { parseTtlToSeconds } from "@clawdlets/core/lib/ttl";
-import { getModelRequiredEnvVars } from "@clawdlets/core/lib/llm-provider-env";
-import { loadPersona } from "@clawdlets/core/lib/persona-loader";
+import { buildCattleCloudInitUserData } from "@clawdlets/cattle-core/lib/cattle-cloudinit";
+import { parseTtlToSeconds } from "@clawdlets/cattle-core/lib/ttl";
+import { getModelRequiredEnvVars } from "@clawdlets/shared/lib/llm-provider-env";
+import { loadPersona } from "@clawdlets/cattle-core/lib/persona-loader";
 import {
   createCattleServer,
   listCattleServers,
@@ -18,8 +18,8 @@ import {
   CATTLE_LABEL_MANAGED_BY,
   CATTLE_LABEL_MANAGED_BY_VALUE,
   CATTLE_LABEL_TASK_ID,
-} from "@clawdlets/core/lib/hcloud-cattle";
-import { buildCattleServerName, safeCattleLabelValue } from "@clawdlets/core/lib/cattle-planner";
+} from "@clawdlets/cattle-core/lib/hcloud-cattle";
+import { buildCattleServerName, safeCattleLabelValue } from "@clawdlets/cattle-core/lib/cattle-planner";
 
 export type ClfWorkerRuntime = {
   hcloudToken: string;
@@ -37,6 +37,8 @@ export type ClfWorkerRuntime = {
   personasRoot: string;
   adminAuthorizedKeys: string[];
   tailscaleAuthKey: string;
+  tailscaleAuthKeyExpiresAt: string;
+  tailscaleAuthKeyOneTime: boolean;
   env: NodeJS.ProcessEnv;
 };
 
@@ -44,6 +46,12 @@ const MAX_ADMIN_AUTHORIZED_KEYS_BYTES = 64 * 1024;
 
 function unixSecondsNow(): number {
   return Math.floor(Date.now() / 1000);
+}
+
+function resolveTailscaleAuthKeyExpiresAt(rt: ClfWorkerRuntime): string {
+  const raw = String(rt.tailscaleAuthKeyExpiresAt || "").trim();
+  if (raw) return raw;
+  return new Date(Date.now() + 55 * 60_000).toISOString();
 }
 
 class Mutex {
@@ -144,9 +152,16 @@ async function handleCattleSpawn(params: {
       hostname: name,
       adminAuthorizedKeys: params.rt.adminAuthorizedKeys,
       tailscaleAuthKey: params.rt.tailscaleAuthKey,
+      tailscaleAuthKeyExpiresAt: resolveTailscaleAuthKeyExpiresAt(params.rt),
+      tailscaleAuthKeyOneTime: params.rt.tailscaleAuthKeyOneTime,
       task: p.task,
       publicEnv,
-      secretsBootstrap: { baseUrl: params.rt.cattle.secretsBaseUrl, token: bootstrap.token },
+      secretsBootstrap: {
+        baseUrl: params.rt.cattle.secretsBaseUrl,
+        token: bootstrap.token,
+        tokenExpiresAt: new Date(bootstrap.expiresAt).toISOString(),
+        tokenOneTime: true,
+      },
       extraWriteFiles: persona.cloudInitFiles,
     });
 
