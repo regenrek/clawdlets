@@ -17,7 +17,9 @@
         filter = path: type:
           let
             full = toString path;
-            rel = lib.removePrefix (toString clawdletsSrc + "/") full;
+            root = toString clawdletsSrc;
+            rel = lib.removePrefix (root + "/") full;
+            isRoot = full == root;
             isRootFile =
               rel == "package.json"
               || rel == "pnpm-lock.yaml"
@@ -36,7 +38,7 @@
               || lib.hasSuffix "/packages" full
               || lib.hasInfix "/packages/" full;
           in
-            rel == ""
+            isRoot
             || isRootFile
             || isScripts
             || isPackages;
