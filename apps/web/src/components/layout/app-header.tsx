@@ -161,7 +161,7 @@ function AppHeader({ showSidebarToggle = true }: { showSidebarToggle?: boolean }
   return (
     <header className="bg-background sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2 border-b px-4">
       {showSidebarToggle ? <SidebarTrigger className="-ml-1" /> : null}
-      <Separator orientation="vertical" className="mr-2 h-4" />
+      <Separator orientation="vertical" className="mx-2 h-5" />
       <div className="min-w-0 flex items-center gap-2">
         <Link
           to={projectSlug ? buildProjectBasePath(projectSlug) : "/"}
