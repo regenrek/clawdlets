@@ -1,0 +1,27 @@
+# Forbidden staged paths (regex; matched against git paths).
+# Secrets/** is allowed but must be sops-encrypted.
+#
+# Local runtime + plaintext secrets
+(^|/)\\.clawdlets/
+(^|/)\\.env($|/)
+(^|/)\\.env\\.
+
+# Common credential files
+(^|/)\\.aws/credentials$
+(^|/)\\.npmrc$
+(^|/)\\.netrc$
+(^|/)\\.git-credentials$
+
+# Terraform/OpenTofu state/plan
+\\.tfstate($|\\.|/)
+\\.tfplan$
+
+# Private keys / keystores
+\\.pem$
+\\.key$
+\\.p12$
+\\.jks$
+\\.keystore$
+(^|/)id_rsa$
+(^|/)id_ed25519$
+\\.agekey$

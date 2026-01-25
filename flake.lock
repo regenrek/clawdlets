@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "clawdbot-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1769246972,
+        "narHash": "sha256-nFGfEOVsnR0b3pzkGIo1EWz7WQCdhlKxKKOxxQq64q4=",
+        "owner": "clawdbot",
+        "repo": "clawdbot",
+        "rev": "faa90fc206753981a5f323581de1c76112bbfbff",
+        "type": "github"
+      },
+      "original": {
+        "owner": "clawdbot",
+        "repo": "clawdbot",
+        "type": "github"
+      }
+    },
     "disko": {
       "inputs": {
         "nixpkgs": [
@@ -69,11 +85,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1769340638,
-        "narHash": "sha256-njd/3IEp+s7QYK0qKW4wREYcs74usvIPiuaZXbesrAc=",
+        "lastModified": 1769247295,
+        "narHash": "sha256-ONjzNCIJMODA5/fhdYYCKEhFwm5E7AyDIl5rAWxyWBE=",
         "owner": "clawdbot",
         "repo": "nix-clawdbot",
-        "rev": "acfa9b363d7b827d61bbd239ec8e7b1869a33769",
+        "rev": "d8940d79afdd21b18748463544946be6d247efc3",
         "type": "github"
       },
       "original": {
@@ -170,6 +186,7 @@
     },
     "root": {
       "inputs": {
+        "clawdbot-src": "clawdbot-src",
         "disko": "disko",
         "nix-clawdbot": "nix-clawdbot",
         "nixos-generators": "nixos-generators",
@@ -184,11 +201,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1769314333,
-        "narHash": "sha256-+Uvq9h2eGsbhacXpuS7irYO7fFlz514nrhPCSTkASlw=",
+        "lastModified": 1768863606,
+        "narHash": "sha256-1IHAeS8WtBiEo5XiyJBHOXMzECD6aaIOJmpQKzRRl64=",
         "owner": "Mic92",
         "repo": "sops-nix",
-        "rev": "2eb9eed7ef48908e0f02985919f7eb9d33fa758f",
+        "rev": "c7067be8db2c09ab1884de67ef6c4f693973f4a2",
         "type": "github"
       },
       "original": {

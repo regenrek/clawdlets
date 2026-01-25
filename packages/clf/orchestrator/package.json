@@ -18,8 +18,9 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@clawdlets/core": "workspace:*",
-    "@clawdlets/clf-queue": "workspace:*"
+    "@clawdlets/cattle-core": "workspace:*",
+    "@clawdlets/clf-queue": "workspace:*",
+    "@clawdlets/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.0.9",

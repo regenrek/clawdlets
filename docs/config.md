@@ -18,7 +18,7 @@ This file is **committed to git**. Secrets are not stored here (see `docs/secret
 
 Top-level:
 
-- `schemaVersion`: currently `8`
+- `schemaVersion`: currently `9`
 - `defaultHost` (optional): used when `--host` is omitted
 - `baseFlake` (optional): flake URI for remote builds (e.g. `github:<owner>/<repo>`)
   - if empty, CLI falls back to `git remote origin` (recommended)
@@ -28,12 +28,14 @@ Top-level:
 
 Fleet (`fleet.*`):
 
-- `fleet.modelSecrets`: model provider -> sops secret name (e.g. `zai`, `openai`, `anthropic`)
+- `fleet.secretEnv`: env var name -> sops secret name (global defaults)
+- `fleet.secretFiles`: host-scoped secret files (id -> `{ secretName, targetPath, ... }`)
 - `fleet.botOrder`: ordered bot ids (deterministic ports/services)
 - `fleet.bots.<bot>`: per-bot config object
   - `profile`: clawdlets/template infra knobs (systemd/env/secrets/limits)
-    - `profile.discordTokenSecret`: sops secret name for the bot’s Discord token
-    - `profile.modelSecrets`: per-bot provider -> secret overrides (optional)
+    - `profile.secretEnv`: per-bot env var -> sops secret name overrides (merged onto `fleet.secretEnv`)
+    - `profile.secretEnvAllowlist`: optional allowlist of env vars written into the bot env file (least-privilege)
+    - `profile.secretFiles`: bot-scoped secret files (id -> `{ secretName, targetPath, ... }`)
     - other keys are forwarded into Nix `services.clawdbotFleet.botProfiles.<bot>` (forward compatible)
   - `clawdbot`: raw clawdbot config (canonical; channels/routing/agents/tools/etc)
   - `clf`: clawdlets/clf policy (bot access to orchestrator/queue)
@@ -77,23 +79,73 @@ Cattle (`cattle.*`):
 - `cattle.defaults.autoShutdown`: power off after task completes (recommended)
 - `cattle.defaults.callbackUrl`: optional callback URL for task results
 
+## Secret scoping + `${ENV}` wiring
+
+- fleet scope: `fleet.secretEnv` (shared env var -> secret name mappings)
+- bot scope: `fleet.bots.<bot>.profile.secretEnv` (per-bot overrides)
+- host secret files: `fleet.secretFiles` → `targetPath` must be under `/var/lib/clawdlets/`
+- bot secret files: `fleet.bots.<bot>.profile.secretFiles` → `targetPath` must be under `/var/lib/clawdlets/secrets/bots/<bot>/`
+
+Clawdbot config should use `${ENV_VAR}` (uppercase/underscores). Clawdlets scans `fleet.bots.<bot>.clawdbot` for `${ENV_VAR}` refs plus channel tokens, hooks tokens, skill apiKey fields, and provider `apiKey` fields to build the secrets plan.
+
+- Inline tokens/API keys emit warnings; strict mode fails them.
+- Escape literal `${ENV_VAR}` as `$${ENV_VAR}`.
+
+Hooks + skills env wiring:
+- `hooks.token` → `${CLAWDBOT_HOOKS_TOKEN}`
+- `hooks.gmail.pushToken` → `${CLAWDBOT_HOOKS_GMAIL_PUSH_TOKEN}`
+- `skills.entries.<skill>.apiKey` → `${CLAWDBOT_SKILL_<SKILL>_API_KEY}`
+
+If you set `profile.hooks.*Secret` or `profile.skills.entries.*.apiKeySecret`, clawdlets derives the env mapping automatically.
+
+## Autowire missing secretEnv
+
+CLI:
+- `clawdlets config wire-secrets --write` (adds missing mappings; auto scope)
+- `clawdlets secrets init --autowire` (runs autowire before init)
+
+UI:
+- Host secrets panel: Missing secret wiring -> Wire all
+- Bot integrations panel: Secret wiring (advanced)
+
+Default autowire scope:
+- channel secrets → bot
+- model/provider secrets → fleet
+
+## Least-privilege env injection (optional)
+
+- Set `profile.secretEnvAllowlist` to restrict which env vars are written into each bot env file.
+- Generate from current config: `clawdlets config derive-allowlist --write`.
+- `clawdlets config validate --strict` fails if the allowlist doesn’t match derived requirements.
+
+## Strict mode
+
+- `clawdlets config validate --strict`: treat inline secrets + invariant overrides + allowlist mismatches as errors.
+- `clawdlets doctor --scope server-deploy --strict`: deploy gate; fails on warn.
+
+## Migration notes
+
+- v9: inline secrets are deprecated; move tokens/api keys to `${ENV_VAR}` wiring and secretEnv mappings (hooks/skills included).
+
 ## Example
 
 ```json
 {
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "defaultHost": "clawdbot-fleet-host",
   "baseFlake": "",
   "fleet": {
-    "modelSecrets": { "zai": "z_ai_api_key" },
+    "secretEnv": { "ZAI_API_KEY": "z_ai_api_key" },
+    "secretFiles": {},
     "botOrder": ["maren"],
     "bots": {
       "maren": {
-        "profile": { "discordTokenSecret": "discord_token_maren" },
+        "profile": { "secretEnv": { "DISCORD_BOT_TOKEN": "discord_token_maren" }, "secretFiles": {} },
         "clawdbot": {
           "channels": {
             "discord": {
               "enabled": true,
+              "token": "${DISCORD_BOT_TOKEN}",
               "dm": { "enabled": true, "policy": "pairing" }
             }
           }

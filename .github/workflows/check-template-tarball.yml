@@ -21,8 +21,9 @@ jobs:
           set -euo pipefail
           repo="$(jq -r '.repo' config/template-source.json)"
           ref="$(jq -r '.ref' config/template-source.json)"
-          if [[ ! "${ref}" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "error: template ref must be 40-hex sha (got ${ref})"
+          # Allow branch names (main, master), tags (v1.0.0), or full 40-hex SHA
+          if [[ ! "${ref}" =~ ^[A-Za-z0-9_./-]+$ ]]; then
+            echo "error: template ref must be a valid git ref (got ${ref})"
             exit 1
           fi
           url="https://codeload.github.com/${repo}/tar.gz/${ref}"

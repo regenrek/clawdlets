@@ -15,7 +15,11 @@
     "clawdlets:server": "node packages/cli/dist/main.mjs server",
     "clawdlets:secrets": "node packages/cli/dist/main.mjs secrets",
     "clawdlets:infra": "node packages/cli/dist/main.mjs infra",
-    "clawdlets:help": "node packages/cli/dist/main.mjs --help"
+    "clawdlets:help": "node packages/cli/dist/main.mjs --help",
+    "clawdlets:clawdbot-assets": "tsx scripts/generate-clawdbot-assets.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

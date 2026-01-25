@@ -4,6 +4,7 @@ import process from "node:process";
 import { defineCommand } from "citty";
 import { ensureDir } from "@clawdlets/core/lib/fs-safe";
 import { splitDotPath } from "@clawdlets/core/lib/dot-path";
+import { deleteAtPath, getAtPath, setAtPath } from "@clawdlets/core/lib/object-path";
 import { findRepoRoot } from "@clawdlets/core/lib/repo";
 import { getRepoLayout } from "@clawdlets/core/repo-layout";
 import {
@@ -11,42 +12,13 @@ import {
   ClawdletsConfigSchema,
   loadClawdletsConfig,
   loadClawdletsConfigRaw,
+  resolveHostName,
   writeClawdletsConfig,
 } from "@clawdlets/core/lib/clawdlets-config";
-
-function getAtPath(obj: any, parts: string[]): unknown {
-  let cur: any = obj;
-  for (const k of parts) {
-    if (cur == null || typeof cur !== "object") return undefined;
-    cur = cur[k];
-  }
-  return cur;
-}
-
-function setAtPath(obj: any, parts: string[], value: unknown): void {
-  let cur: any = obj;
-  for (let i = 0; i < parts.length - 1; i++) {
-    const k = parts[i]!;
-    if (cur[k] == null || typeof cur[k] !== "object" || Array.isArray(cur[k])) cur[k] = {};
-    cur = cur[k];
-  }
-  cur[parts[parts.length - 1]!] = value;
-}
-
-function deleteAtPath(obj: any, parts: string[]): boolean {
-  let cur: any = obj;
-  for (let i = 0; i < parts.length - 1; i++) {
-    const k = parts[i]!;
-    if (cur == null || typeof cur !== "object") return false;
-    cur = cur[k];
-  }
-  const last = parts[parts.length - 1]!;
-  if (cur && typeof cur === "object" && Object.prototype.hasOwnProperty.call(cur, last)) {
-    delete cur[last];
-    return true;
-  }
-  return false;
-}
+import { migrateClawdletsConfigToV9 } from "@clawdlets/core/lib/clawdlets-config-migrate";
+import { validateClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config-validate";
+import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets-plan";
+import { applySecretsAutowire, planSecretsAutowire, type SecretsAutowireScope } from "@clawdlets/core/lib/secrets-autowire";
 
 const init = defineCommand({
   meta: { name: "init", description: "Initialize fleet/clawdlets.json (canonical config)." },
@@ -91,12 +63,187 @@ const show = defineCommand({
 });
 
 const validate = defineCommand({
-  meta: { name: "validate", description: "Validate fleet/clawdlets.json schema." },
-  args: {},
-  async run() {
+  meta: { name: "validate", description: "Validate fleet/clawdlets.json + rendered Clawdbot config." },
+  args: {
+    host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
+    strict: { type: "boolean", description: "Fail on warnings (inline secrets, invariant overrides).", default: false },
+  },
+  async run({ args }) {
     const repoRoot = findRepoRoot(process.cwd());
-    loadClawdletsConfig({ repoRoot });
+    const { config } = loadClawdletsConfig({ repoRoot });
+    const resolved = resolveHostName({ config, host: args.host });
+    if (!resolved.ok) {
+      const tips = resolved.tips.length > 0 ? `; ${resolved.tips.join("; ")}` : "";
+      throw new Error(`${resolved.message}${tips}`);
+    }
+    const res = validateClawdletsConfig({ config, hostName: resolved.host, strict: Boolean(args.strict) });
+    for (const w of res.warnings) console.error(`warn: ${w}`);
+    if (!res.ok) {
+      for (const e of res.errors) console.error(`error: ${e}`);
+      throw new Error("config validation failed");
+    }
     console.log("ok");
+  },
+});
+
+const wireSecrets = defineCommand({
+  meta: { name: "wire-secrets", description: "Autowire missing secretEnv mappings." },
+  args: {
+    host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
+    bot: { type: "string", description: "Only wire secrets for this bot id." },
+    scope: { type: "string", description: "Override scope (bot|fleet)." },
+    only: { type: "string", description: "Only wire a specific ENV_VAR (comma-separated)." },
+    write: { type: "boolean", description: "Apply changes to fleet/clawdlets.json.", default: false },
+    json: { type: "boolean", description: "Output JSON summary.", default: false },
+    yes: { type: "boolean", description: "Skip confirmation (non-interactive).", default: false },
+  },
+  async run({ args }) {
+    const repoRoot = findRepoRoot(process.cwd());
+    const { configPath, config } = loadClawdletsConfigRaw({ repoRoot });
+    const validated = ClawdletsConfigSchema.parse(config);
+    const resolved = resolveHostName({ config: validated, host: args.host });
+    if (!resolved.ok) {
+      const tips = resolved.tips.length > 0 ? `; ${resolved.tips.join("; ")}` : "";
+      throw new Error(`${resolved.message}${tips}`);
+    }
+
+    const scopeRaw = String(args.scope || "").trim();
+    const scope = scopeRaw ? (scopeRaw === "bot" || scopeRaw === "fleet" ? (scopeRaw as SecretsAutowireScope) : null) : null;
+    if (scopeRaw && !scope) throw new Error(`invalid --scope: ${scopeRaw} (expected bot|fleet)`);
+
+    const onlyEnvVars = String(args.only || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const plan = planSecretsAutowire({
+      config: validated,
+      hostName: resolved.host,
+      scope: scope ?? undefined,
+      bot: args.bot ? String(args.bot).trim() : undefined,
+      onlyEnvVars,
+    });
+
+    if (plan.updates.length === 0) {
+      if (args.json) {
+        console.log(JSON.stringify({ ok: true, updates: [] }, null, 2));
+      } else {
+        console.log("ok: no missing secretEnv mappings");
+      }
+      return;
+    }
+
+    const summary = plan.updates.map((u) => ({
+      bot: u.bot,
+      envVar: u.envVar,
+      scope: u.scope,
+      secretName: u.secretName,
+    }));
+
+    if (!args.write) {
+      if (args.json) {
+        console.log(JSON.stringify({ ok: true, write: false, updates: summary }, null, 2));
+        return;
+      }
+      console.log(`planned: update ${path.relative(repoRoot, configPath)}`);
+      for (const entry of summary) {
+        const target =
+          entry.scope === "fleet"
+            ? `fleet.secretEnv.${entry.envVar}`
+            : `fleet.bots.${entry.bot}.profile.secretEnv.${entry.envVar}`;
+        console.log(`- ${target} = ${entry.secretName}`);
+      }
+      console.log("run with --write to apply changes");
+      return;
+    }
+
+    const next = applySecretsAutowire({ config: validated, plan });
+    const validation = validateClawdletsConfig({ config: next, hostName: resolved.host });
+    if (!validation.ok) {
+      for (const e of validation.errors) console.error(`error: ${e}`);
+      throw new Error("autowire failed: validation errors");
+    }
+
+    await writeClawdletsConfig({ configPath, config: next });
+    if (args.json) {
+      console.log(JSON.stringify({ ok: true, write: true, updates: summary }, null, 2));
+      return;
+    }
+    console.log(`ok: updated ${path.relative(repoRoot, configPath)}`);
+    for (const entry of summary) {
+      const target =
+        entry.scope === "fleet"
+          ? `fleet.secretEnv.${entry.envVar}`
+          : `fleet.bots.${entry.bot}.profile.secretEnv.${entry.envVar}`;
+      console.log(`- ${target} = ${entry.secretName}`);
+    }
+  },
+});
+
+const deriveAllowlist = defineCommand({
+  meta: { name: "derive-allowlist", description: "Derive per-bot secretEnvAllowlist from current config." },
+  args: {
+    host: { type: "string", description: "Host name (defaults to clawdlets.json defaultHost / sole host)." },
+    bot: { type: "string", description: "Only derive allowlist for this bot id." },
+    write: { type: "boolean", description: "Apply changes to fleet/clawdlets.json.", default: false },
+    json: { type: "boolean", description: "Output JSON summary.", default: false },
+  },
+  async run({ args }) {
+    const repoRoot = findRepoRoot(process.cwd());
+    const { configPath, config } = loadClawdletsConfigRaw({ repoRoot });
+    const validated = ClawdletsConfigSchema.parse(config);
+    const resolved = resolveHostName({ config: validated, host: args.host });
+    if (!resolved.ok) {
+      const tips = resolved.tips.length > 0 ? `; ${resolved.tips.join("; ")}` : "";
+      throw new Error(`${resolved.message}${tips}`);
+    }
+
+    const plan = buildFleetSecretsPlan({ config: validated, hostName: resolved.host });
+    const botArg = args.bot ? String(args.bot).trim() : "";
+    const bots = botArg ? [botArg] : validated.fleet.botOrder || [];
+    if (bots.length === 0) throw new Error("fleet.botOrder is empty (set bots in fleet/clawdlets.json)");
+
+    const updates = bots.map((bot) => {
+      const envVars = plan.byBot?.[bot]?.envVarsRequired;
+      if (!envVars) throw new Error(`unknown bot id: ${bot}`);
+      return { bot, allowlist: envVars };
+    });
+
+    if (!args.write) {
+      if (args.json) {
+        console.log(JSON.stringify({ ok: true, write: false, updates }, null, 2));
+        return;
+      }
+      console.log(`planned: update ${path.relative(repoRoot, configPath)}`);
+      for (const entry of updates) {
+        console.log(`- fleet.bots.${entry.bot}.profile.secretEnvAllowlist = ${JSON.stringify(entry.allowlist)}`);
+      }
+      console.log("run with --write to apply changes");
+      return;
+    }
+
+    const next = structuredClone(validated) as any;
+    for (const entry of updates) {
+      if (!next.fleet.bots[entry.bot]) next.fleet.bots[entry.bot] = {};
+      if (!next.fleet.bots[entry.bot].profile) next.fleet.bots[entry.bot].profile = {};
+      next.fleet.bots[entry.bot].profile.secretEnvAllowlist = entry.allowlist;
+    }
+
+    const validation = validateClawdletsConfig({ config: next, hostName: resolved.host });
+    if (!validation.ok) {
+      for (const e of validation.errors) console.error(`error: ${e}`);
+      throw new Error("allowlist derive failed: validation errors");
+    }
+
+    await writeClawdletsConfig({ configPath, config: next });
+    if (args.json) {
+      console.log(JSON.stringify({ ok: true, write: true, updates }, null, 2));
+      return;
+    }
+    console.log(`ok: updated ${path.relative(repoRoot, configPath)}`);
+    for (const entry of updates) {
+      console.log(`- fleet.bots.${entry.bot}.profile.secretEnvAllowlist = ${JSON.stringify(entry.allowlist)}`);
+    }
   },
 });
 
@@ -168,7 +315,50 @@ const set = defineCommand({
   },
 });
 
+const migrate = defineCommand({
+  meta: { name: "migrate", description: "Migrate fleet/clawdlets.json to a new schema version." },
+  args: {
+    to: { type: "string", description: "Target schema version (only v9 supported).", default: "v9" },
+    "dry-run": { type: "boolean", description: "Print planned write without writing.", default: false },
+  },
+  async run({ args }) {
+    const repoRoot = findRepoRoot(process.cwd());
+    const configPath = getRepoLayout(repoRoot).clawdletsConfigPath;
+    if (!fs.existsSync(configPath)) throw new Error(`missing config: ${configPath}`);
+
+    const rawText = fs.readFileSync(configPath, "utf8");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      throw new Error(`invalid JSON: ${configPath}`);
+    }
+
+    const to = String((args as any).to || "v9").trim().toLowerCase();
+    if (to !== "v9" && to !== "9") throw new Error(`unsupported --to: ${to} (expected v9)`);
+
+    const res = migrateClawdletsConfigToV9(parsed);
+    if (!res.changed) {
+      console.log("ok: already schemaVersion 9");
+      return;
+    }
+
+    const validated = ClawdletsConfigSchema.parse(res.migrated);
+
+    if ((args as any)["dry-run"]) {
+      console.log(`planned: write ${path.relative(repoRoot, configPath)}`);
+      for (const w of res.warnings) console.log(`warn: ${w}`);
+      return;
+    }
+
+    await ensureDir(path.dirname(configPath));
+    await writeClawdletsConfig({ configPath, config: validated });
+    console.log(`ok: migrated to schemaVersion 9: ${path.relative(repoRoot, configPath)}`);
+    for (const w of res.warnings) console.log(`warn: ${w}`);
+  },
+});
+
 export const config = defineCommand({
   meta: { name: "config", description: "Canonical config (fleet/clawdlets.json)." },
-  subCommands: { init, show, validate, get, set },
+  subCommands: { init, show, validate, get, set, migrate, "wire-secrets": wireSecrets, "derive-allowlist": deriveAllowlist },
 });

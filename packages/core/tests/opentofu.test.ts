@@ -12,7 +12,7 @@ vi.mock("../src/lib/run.js", () => ({
   captureWithInput: vi.fn(async () => ""),
 }));
 
-vi.mock("../src/lib/hcloud.js", () => ({
+vi.mock("@clawdlets/cattle-core/lib/hcloud", () => ({
   ensureHcloudSshKeyId: ensureKeyMock,
 }));
 
@@ -58,13 +58,14 @@ describe("opentofu", () => {
       expect(args2.slice(0, 5)).toEqual(["run", "--impure", "nixpkgs#opentofu", "--", "destroy"]);
       expect(args2).toContain("-auto-approve");
       expect(args2).toContain("-input=false");
-      expect(args2).toContain("hcloud_token=token");
+      expect(args2).not.toContain("hcloud_token=token");
       expect(args2).toContain("admin_cidr=203.0.113.10/32");
       expect(args2).toContain("admin_cidr_is_world_open=false");
       expect(args2).toContain("ssh_key_id=123");
       expect(args2).toContain("ssh_exposure_mode=tailnet");
       expect(args2).toContain("tailnet_mode=tailscale");
       expect(args2).toContain("server_type=cx43");
+      expect(opts2.env?.HCLOUD_TOKEN).toBe("token");
 
       expect(ensureKeyMock).toHaveBeenCalledTimes(1);
       expect(ensureKeyMock.mock.calls[0]?.[0]).toMatchObject({ token: "token", name: "clawdbot-admin" });

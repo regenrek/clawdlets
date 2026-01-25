@@ -2,11 +2,19 @@ import fs from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
 import { getRepoLayout } from "../repo-layout.js";
+import { formatDotenvValue } from "./dotenv-file.js";
 import { expandPath } from "./path-expand.js";
 import { findRepoRoot } from "./repo.js";
 
 export const DEPLOY_CREDS_KEYS = ["HCLOUD_TOKEN", "GITHUB_TOKEN", "NIX_BIN", "SOPS_AGE_KEY_FILE"] as const;
 export type DeployCredsKey = (typeof DEPLOY_CREDS_KEYS)[number];
+
+export type DeployCredsEnvFileKeys = {
+  HCLOUD_TOKEN: string;
+  GITHUB_TOKEN: string;
+  NIX_BIN: string;
+  SOPS_AGE_KEY_FILE: string;
+};
 
 export type DeployEnvFileOrigin = "default" | "explicit";
 export type DeployEnvFileStatus = "ok" | "missing" | "invalid";
@@ -32,6 +40,20 @@ export type DeployCredsResult = {
   };
   sources: Record<DeployCredsKey, DeployCredsSource>;
 };
+
+export function renderDeployCredsEnvFile(keys: DeployCredsEnvFileKeys): string {
+  const lines = [
+    "# clawdlets deploy creds (local-only; never commit)",
+    "# Used by: bootstrap, infra, lockdown, doctor",
+    "",
+    `HCLOUD_TOKEN=${formatDotenvValue(keys.HCLOUD_TOKEN)}`,
+    `GITHUB_TOKEN=${formatDotenvValue(keys.GITHUB_TOKEN)}`,
+    `NIX_BIN=${formatDotenvValue(keys.NIX_BIN)}`,
+    `SOPS_AGE_KEY_FILE=${formatDotenvValue(keys.SOPS_AGE_KEY_FILE)}`,
+    "",
+  ];
+  return lines.join("\n");
+}
 
 function trimEnv(v: unknown): string | undefined {
   const trimmed = String(v ?? "").trim();
@@ -145,4 +167,3 @@ export function loadDeployCreds(params: { cwd: string; runtimeDir?: string; envF
     },
   };
 }
-

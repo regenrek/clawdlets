@@ -1,5 +1,6 @@
 import { bot } from "./bot.js";
 import { bootstrap } from "./bootstrap.js";
+import { clawdbot } from "./clawdbot.js";
 import { config } from "./config.js";
 import { doctor } from "./doctor.js";
 import { env } from "./env.js";
@@ -16,6 +17,7 @@ import { server } from "./server.js";
 export const baseCommands = {
   bot,
   bootstrap,
+  clawdbot,
   config,
   doctor,
   env,

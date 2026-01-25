@@ -1,7 +1,7 @@
 import process from "node:process";
 import { defineCommand } from "citty";
 import { loadDeployCreds } from "@clawdlets/core/lib/deploy-creds";
-import { safeCattleLabelValue } from "@clawdlets/core/lib/cattle-planner";
+import { safeCattleLabelValue } from "@clawdlets/cattle-core/lib/cattle-planner";
 import { openCattleState } from "../../lib/cattle-state.js";
 import {
   CATTLE_LABEL_PERSONA,
@@ -9,7 +9,7 @@ import {
   destroyCattleServer,
   listCattleServers,
   type CattleServer,
-} from "@clawdlets/core/lib/hcloud-cattle";
+} from "@clawdlets/cattle-core/lib/hcloud-cattle";
 import { loadHostContextOrExit } from "@clawdlets/core/lib/context";
 import { formatTable, requireEnabled, resolveOne, unixSecondsNow } from "./common.js";
 

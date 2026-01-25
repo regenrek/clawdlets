@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { CATTLE_TASK_SCHEMA_VERSION } from "@clawdlets/core/lib/cattle-task";
+import { CATTLE_TASK_SCHEMA_VERSION } from "@clawdlets/cattle-core/lib/cattle-task";
 
 const client = {
   enqueue: vi.fn(),

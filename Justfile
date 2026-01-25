@@ -71,3 +71,6 @@ clawdlets-help:
 
 clawdlets-dev-install:
   cd {{justfile_directory()}} && ./scripts/dev-install-clawdlets-wrapper.sh
+
+clean-node-modules:
+  cd {{justfile_directory()}} && if command -v trash >/dev/null; then trash node_modules; else echo "error: trash not installed (brew install trash)"; exit 1; fi

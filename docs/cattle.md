@@ -66,7 +66,7 @@ Notes
   - `tailscale_auth_key` (for the cattle VM to join tailnet)
     - Recommended: tag-scoped + short-lived/ephemeral preauth key; rotate regularly (it’s a tailnet-join capability).
     - Threat model: Hetzner `user_data` must be assumed readable by Hetzner project/API access; this key + the one-time bootstrap token live there briefly.
-  - provider keys for the chosen model (`fleet.modelSecrets` -> secret files under `secrets/hosts/<host>/`)
+  - provider keys for the chosen model (wired via `fleet.secretEnv` → secret files under `secrets/hosts/<host>/`)
     - These are consumed by `clf-orchestrator` (cattle fetches them at runtime; not embedded in `user_data`).
 
 Build + upload (Linux/CI recommended)
@@ -164,7 +164,7 @@ Notes
 
 Common errors
 - `cloud-init user_data too large`: reduce persona/task payload (user_data still carries task+persona + bootstrap bits; keep it small).
-- `missing modelSecrets entry for <provider>`: set `fleet.modelSecrets.<provider>=<secretName>` and create that secret file.
+- `missing secretEnv mapping for <ENV_VAR>`: set `fleet.secretEnv.<ENV_VAR>=<secretName>` (or per-bot override) and create that secret file.
 - `tailscale ip returned empty output`: the VM didn’t join tailnet (check `tailscale_auth_key`, then use Hetzner console for boot logs).
 
 Debug commands

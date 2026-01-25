@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { EnvVarNameSchema } from "@clawdlets/core/lib/identifiers";
+import { EnvVarNameSchema } from "@clawdlets/shared/lib/identifiers";
 
 export function safeParseJson(value: string | null): unknown {
   if (!value) return null;

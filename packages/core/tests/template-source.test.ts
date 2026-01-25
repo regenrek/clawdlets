@@ -25,12 +25,20 @@ describe("template source validation", () => {
   });
 
   it("validates ref format", () => {
+    // Accept 40-hex SHA
     expect(normalizeTemplateRef("0123456789abcdef0123456789abcdef01234567")).toBe(
       "0123456789abcdef0123456789abcdef01234567",
     );
+    // Accept branch names
+    expect(normalizeTemplateRef("main")).toBe("main");
+    expect(normalizeTemplateRef("master")).toBe("master");
+    expect(normalizeTemplateRef("feature/my-branch")).toBe("feature/my-branch");
+    // Accept tags
+    expect(normalizeTemplateRef("v1.0.0")).toBe("v1.0.0");
+    // Reject empty and invalid characters
     expect(() => normalizeTemplateRef("")).toThrow(/missing/);
-    expect(() => normalizeTemplateRef("main")).toThrow(/40-hex/);
-    expect(() => normalizeTemplateRef("bad^ref")).toThrow(/40-hex/);
+    expect(() => normalizeTemplateRef("bad^ref")).toThrow(/valid git ref/);
+    expect(() => normalizeTemplateRef("bad ref")).toThrow(/valid git ref/);
   });
 
   it("accepts config/template-source.json", () => {

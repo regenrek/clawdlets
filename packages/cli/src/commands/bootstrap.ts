@@ -9,7 +9,7 @@ import { checkGithubRepoVisibility, tryParseGithubFlakeUri } from "@clawdlets/co
 import { loadDeployCreds } from "@clawdlets/core/lib/deploy-creds";
 import { expandPath } from "@clawdlets/core/lib/path-expand";
 import { findRepoRoot } from "@clawdlets/core/lib/repo";
-import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets";
+import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets-plan";
 import { withFlakesEnv } from "@clawdlets/core/lib/nix-flakes";
 import { getSshExposureMode, getTailnetMode, loadClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config";
 import { resolveBaseFlake } from "@clawdlets/core/lib/base-flake";

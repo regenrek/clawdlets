@@ -19,10 +19,6 @@ removed {
   }
 }
 
-variable "hcloud_token" {
-  type = string
-}
-
 variable "host_name" {
   type = string
 }
@@ -74,9 +70,7 @@ variable "location" {
   default = "nbg1"
 }
 
-provider "hcloud" {
-  token = var.hcloud_token
-}
+provider "hcloud" {}
 
 module "clawdbot_fleet_host" {
   source        = "./modules/bot_host"

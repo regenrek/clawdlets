@@ -1,5 +1,5 @@
 import path from "node:path";
-import { assertSafeSecretName } from "./identifiers.js";
+import { assertSafeSecretName } from "@clawdlets/shared/lib/identifiers";
 
 function assertPathWithinDir(rootDir: string, absPath: string): void {
   const root = path.resolve(rootDir);

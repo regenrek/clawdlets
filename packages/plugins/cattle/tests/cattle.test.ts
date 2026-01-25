@@ -37,8 +37,8 @@ const reapExpiredCattleMock = vi.fn(async (params: { dryRun?: boolean; now?: Dat
   for (const s of expired) await destroyCattleServerMock({ id: s.id });
   return { expired, deletedIds: expired.map((s) => s.id) };
 });
-vi.mock("@clawdlets/core/lib/hcloud-cattle", async () => {
-  const actual = await vi.importActual<typeof import("@clawdlets/core/lib/hcloud-cattle")>("@clawdlets/core/lib/hcloud-cattle");
+vi.mock("@clawdlets/cattle-core/lib/hcloud-cattle", async () => {
+  const actual = await vi.importActual<typeof import("@clawdlets/cattle-core/lib/hcloud-cattle")>("@clawdlets/cattle-core/lib/hcloud-cattle");
   return {
     ...actual,
     listCattleServers: listCattleServersMock,
@@ -58,8 +58,9 @@ describe("cattle command", () => {
   } as any;
 
   const config = {
-    schemaVersion: 8,
-    fleet: { modelSecrets: { zai: "z_ai_api_key" }, botOrder: [], bots: {} },
+    schemaVersion: 9,
+    defaultHost: hostName,
+    fleet: { secretEnv: { ZAI_API_KEY: "z_ai_api_key" }, secretFiles: {}, botOrder: [], bots: {} },
     cattle: {
       enabled: true,
       hetzner: { image: "img-1", serverType: "cx22", location: "nbg1", maxInstances: 10, defaultTtl: "2h", labels: { "managed-by": "clawdlets" } },

@@ -3,6 +3,15 @@ let
   cfg = project.config;
   fleetCfg = (cfg.fleet or { });
 
+  _ =
+    if builtins.hasAttr "guildId" fleetCfg
+    then builtins.throw "fleet.guildId was removed; configure Discord in fleet.bots.<bot>.clawdbot instead"
+    else null;
+  _ =
+    if builtins.hasAttr "modelSecrets" fleetCfg
+    then builtins.throw "fleet.modelSecrets was removed; use fleet.secretEnv (ENV_VAR -> sops secret name)"
+    else null;
+
   botsById = fleetCfg.bots or { };
 
   # Single source of truth for bot instances (deterministic order).
@@ -18,8 +27,9 @@ let
       else derived;
 
   baseBot = {
-    discordTokenSecret = null;
-    modelSecrets = fleetCfg.modelSecrets or { };
+    secretEnv = {};
+    secretEnvAllowlist = null;
+    secretFiles = {};
     skills = {
       # Explicit allowlist required on servers. Avoid null (typically means “allow all bundled skills”).
       allowBundled = [ ];
@@ -33,6 +43,14 @@ let
     let
       botCfg = botsById.${b} or { };
       profile = botCfg.profile or { };
+      _ =
+        if builtins.hasAttr "discordTokenSecret" profile
+        then builtins.throw "fleet.bots.<bot>.profile.discordTokenSecret was removed; use profile.secretEnv.DISCORD_BOT_TOKEN"
+        else null;
+      _ =
+        if builtins.hasAttr "modelSecrets" profile
+        then builtins.throw "fleet.bots.<bot>.profile.modelSecrets was removed; use profile.secretEnv (OPENAI_API_KEY/etc)"
+        else null;
       clawdbot = botCfg.clawdbot or { };
       merged = lib.recursiveUpdate baseBot profile;
     in
@@ -42,6 +60,9 @@ in {
 
   # Workspace seed root (common + per-bot overlay). See fleet/workspaces/.
   documentsDir = project.root + "/fleet/workspaces";
+
+  secretEnv = fleetCfg.secretEnv or {};
+  secretFiles = fleetCfg.secretFiles or {};
 
   codex = {
     enable = (fleetCfg.codex or { }).enable or false;

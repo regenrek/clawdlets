@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 9,
+  "defaultHost": "clawdbot-fleet-host",
+  "baseFlake": "",
+  "fleet": {
+    "secretEnv": {},
+    "secretFiles": {},
+    "botOrder": ["agent"],
+    "bots": {
+      "agent": {
+        "profile": { "secretEnv": {}, "secretFiles": {} },
+        "clawdbot": {
+          "channels": {}
+        }
+      }
+    },
+    "codex": { "enable": false, "bots": [] },
+    "backups": { "restic": { "enable": false, "repository": "" } }
+  },
+  "cattle": {
+    "enabled": false,
+    "hetzner": {
+      "image": "",
+      "serverType": "cx22",
+      "location": "nbg1",
+      "maxInstances": 10,
+      "defaultTtl": "2h",
+      "labels": { "managed-by": "clawdlets" }
+    },
+    "defaults": { "autoShutdown": true, "callbackUrl": "" }
+  },
+  "hosts": {
+    "clawdbot-fleet-host": {
+      "enable": false,
+      "diskDevice": "/dev/sda",
+      "sshAuthorizedKeys": [],
+      "sshKnownHosts": [],
+      "flakeHost": "",
+      "hetzner": { "serverType": "cx22" },
+      "provisioning": {
+        "adminCidr": "",
+        "adminCidrAllowWorldOpen": false,
+        "sshPubkeyFile": "~/.ssh/id_ed25519.pub"
+      },
+      "cache": {
+        "garnix": {
+          "private": {
+            "enable": false,
+            "netrcSecret": "garnix_netrc",
+            "netrcPath": "/etc/nix/netrc",
+            "narinfoCachePositiveTtl": 3600
+          }
+        }
+      },
+      "operator": { "deploy": { "enable": false } },
+      "sshExposure": { "mode": "bootstrap" },
+      "tailnet": { "mode": "none" }
+    }
+  }
+}

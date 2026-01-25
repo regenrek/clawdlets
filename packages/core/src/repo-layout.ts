@@ -1,5 +1,5 @@
 import path from "node:path";
-import { assertSafeHostName, assertSafeOperatorId, assertSafeSecretName } from "./lib/identifiers.js";
+import { assertSafeHostName, assertSafeOperatorId, assertSafeSecretName, BotIdSchema } from "@clawdlets/shared/lib/identifiers";
 
 export type RepoLayout = {
   repoRoot: string;
@@ -23,6 +23,9 @@ export type RepoLayout = {
 
   // Fleet (app layer): bot roster, routing, skills, workspace docs.
   fleetDir: string;
+  fleetWorkspacesDir: string;
+  fleetWorkspacesCommonDir: string;
+  fleetWorkspacesBotsDir: string;
   clawdletsConfigPath: string;
   bundledSkillsPath: string;
 
@@ -48,6 +51,9 @@ export function getRepoLayout(repoRoot: string, runtimeDir?: string): RepoLayout
   const opentofuDir = path.join(runtimeInfraDir, "opentofu");
   const pluginsDir = path.join(resolvedRuntimeDir, "plugins");
   const fleetDir = path.join(repoRoot, "fleet");
+  const fleetWorkspacesDir = path.join(fleetDir, "workspaces");
+  const fleetWorkspacesCommonDir = path.join(fleetWorkspacesDir, "common");
+  const fleetWorkspacesBotsDir = path.join(fleetWorkspacesDir, "bots");
   const clawdletsConfigPath = path.join(fleetDir, "clawdlets.json");
   const bundledSkillsPath = path.join(fleetDir, "bundled-skills.json");
   const secretsDir = path.join(repoRoot, "secrets");
@@ -69,6 +75,9 @@ export function getRepoLayout(repoRoot: string, runtimeDir?: string): RepoLayout
     opentofuDir,
     pluginsDir,
     fleetDir,
+    fleetWorkspacesDir,
+    fleetWorkspacesCommonDir,
+    fleetWorkspacesBotsDir,
     clawdletsConfigPath,
     bundledSkillsPath,
     secretsDir,
@@ -85,6 +94,11 @@ export function getRepoLayout(repoRoot: string, runtimeDir?: string): RepoLayout
 export function getHostOpenTofuDir(layout: RepoLayout, host: string): string {
   assertSafeHostName(host);
   return path.join(layout.opentofuDir, host);
+}
+
+export function getBotWorkspaceDir(layout: RepoLayout, botId: string): string {
+  void BotIdSchema.parse(botId);
+  return path.join(layout.fleetWorkspacesBotsDir, botId);
 }
 
 export function getHostSecretsDir(layout: RepoLayout, host: string): string {

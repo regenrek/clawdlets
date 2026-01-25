@@ -1,6 +1,6 @@
 import path from "node:path";
 import { createRequire } from "node:module";
-import { ensurePrivateDir, ensurePrivateFile } from "@clawdlets/core/lib/fs-private";
+import { ensurePrivateDir, ensurePrivateFile } from "@clawdlets/cattle-core/lib/fs-private";
 
 const require = createRequire(import.meta.url);
 const BetterSqlite3 = require("better-sqlite3") as typeof import("better-sqlite3");

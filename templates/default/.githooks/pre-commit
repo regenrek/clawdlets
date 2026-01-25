@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+node scripts/hooks/block-forbidden-staged-files.mjs
+node scripts/hooks/check-sops-encrypted-staged.mjs

@@ -1,8 +1,8 @@
-import fs from "node:fs";
 import process from "node:process";
 import { defineCommand } from "citty";
 import { findRepoRoot } from "@clawdlets/core/lib/repo";
 import { looksLikeSshPrivateKey, parseSshPublicKeysFromText } from "@clawdlets/core/lib/ssh";
+import { readKnownHostsFromFile, readSshPublicKeysFromFile } from "@clawdlets/core/lib/ssh-files";
 import { validateTargetHost } from "@clawdlets/core/lib/ssh-remote";
 import {
   assertSafeHostName,
@@ -21,36 +21,6 @@ function parseBoolOrUndefined(v: unknown): boolean | undefined {
   if (s === "true" || s === "1" || s === "yes") return true;
   if (s === "false" || s === "0" || s === "no") return false;
   throw new Error(`invalid boolean: ${String(v)} (use true/false)`);
-}
-
-function readSshPublicKeysFromFile(filePath: string): string[] {
-  const stat = fs.statSync(filePath);
-  if (!stat.isFile()) throw new Error(`not a file: ${filePath}`);
-  if (stat.size > 64 * 1024) throw new Error(`ssh key file too large (>64KB): ${filePath}`);
-
-  const raw = fs.readFileSync(filePath, "utf8");
-  if (looksLikeSshPrivateKey(raw)) {
-    throw new Error(`refusing to read ssh private key (expected .pub): ${filePath}`);
-  }
-
-  const keys = parseSshPublicKeysFromText(raw);
-  if (keys.length === 0) throw new Error(`no ssh public keys found in file: ${filePath}`);
-  return keys;
-}
-
-function readKnownHostsFromFile(filePath: string): string[] {
-  const stat = fs.statSync(filePath);
-  if (!stat.isFile()) throw new Error(`not a file: ${filePath}`);
-  if (stat.size > 256 * 1024) throw new Error(`known_hosts file too large (>256KB): ${filePath}`);
-
-  const raw = fs.readFileSync(filePath, "utf8");
-  const lines = raw
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("#"));
-
-  if (lines.length === 0) throw new Error(`no known_hosts entries found in file: ${filePath}`);
-  return lines;
 }
 
 function toStringArray(v: unknown): string[] {

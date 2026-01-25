@@ -11,7 +11,7 @@ import {
 } from "../repo-layout.js";
 import { getHostAgeKeySopsCreationRulePathRegex, getHostAgeKeySopsCreationRulePathSuffix, getHostSecretsSopsCreationRulePathRegex, getHostSecretsSopsCreationRulePathSuffix } from "../lib/sops-rules.js";
 import { validateHostSecretsYamlFiles } from "../lib/secrets-policy.js";
-import { buildFleetSecretsPlan } from "../lib/fleet-secrets.js";
+import { buildFleetSecretsPlan } from "../lib/fleet-secrets-plan.js";
 import { capture } from "../lib/run.js";
 import { looksLikeSshKeyContents, normalizeSshPublicKey } from "../lib/ssh.js";
 import type { DoctorCheck } from "./types.js";
@@ -31,6 +31,7 @@ import { agePublicKeyFromIdentityFile } from "../lib/age-keygen.js";
 import { sopsDecryptYamlFile } from "../lib/sops.js";
 import { getSopsCreationRuleAgeRecipients } from "../lib/sops-config.js";
 import { readYamlScalarFromMapping } from "../lib/yaml-scalar.js";
+import { mapWithConcurrency } from "../lib/concurrency.js";
 import type { DoctorPush } from "./types.js";
 
 export async function addDeployChecks(params: {
@@ -262,20 +263,6 @@ export async function addDeployChecks(params: {
       detail: getHostRemoteSecretsDir(host),
     });
 
-    {
-      const garnixPrivate = (clawdletsHostCfg.cache?.garnix?.private as any) || null;
-      const enabled = Boolean(garnixPrivate?.enable);
-      if (enabled) {
-        const secretName = String(garnixPrivate?.netrcSecret || "garnix_netrc").trim();
-        if (!secretName) {
-          push({ status: "missing", label: "garnix netrc secret", detail: "(unset; expected cache.garnix.private.netrcSecret)" });
-        } else {
-          const f = path.join(secretsLocalDir, `${secretName}.yaml`);
-          push({ status: fs.existsSync(f) ? "ok" : "missing", label: `secret: ${secretName}`, detail: fs.existsSync(f) ? undefined : f });
-        }
-      }
-    }
-
     let secretsPlan: ReturnType<typeof buildFleetSecretsPlan> | null = null;
     try {
       if (clawdletsCfg) secretsPlan = buildFleetSecretsPlan({ config: clawdletsCfg as any, hostName: host });
@@ -287,9 +274,9 @@ export async function addDeployChecks(params: {
     if (secretsPlan && secretsPlan.missingSecretConfig.length > 0) {
       for (const m of secretsPlan.missingSecretConfig.slice(0, 10)) {
         const detail =
-          m.kind === "discord"
-            ? `missing for bot=${m.bot} (set fleet.bots.${m.bot}.profile.discordTokenSecret)`
-            : `missing for bot=${m.bot} (provider=${m.provider}, model=${m.model}); set fleet.modelSecrets.${m.provider}`;
+          m.kind === "envVar"
+            ? `missing mapping bot=${m.bot} envVar=${m.envVar} (set fleet.secretEnv.${m.envVar} or fleet.bots.${m.bot}.profile.secretEnv.${m.envVar})`
+            : `invalid secret file scope=${m.scope}${m.bot ? ` bot=${m.bot}` : ""} id=${m.fileId} targetPath=${m.targetPath} (${m.message})`;
         push({
           status: "missing",
           label: "fleet secrets",
@@ -306,14 +293,13 @@ export async function addDeployChecks(params: {
     }
 
     const botsForSecrets = secretsPlan?.bots?.length ? secretsPlan.bots : params.fleetBots || [];
-    const envSecretsForHost = secretsPlan?.secretNamesAll || [];
+    const hostSecretNamesRequired = secretsPlan?.hostSecretNamesRequired || ["admin_password_hash"];
+    const secretNamesAll = secretsPlan?.secretNamesAll || [];
 
     if (botsForSecrets.length > 0) {
-      const tailnetMode = String(clawdletsHostCfg?.tailnet?.mode || "none");
       const required = Array.from(new Set([
-        ...(tailnetMode === "tailscale" ? ["tailscale_auth_key"] : []),
-        "admin_password_hash",
-        ...envSecretsForHost,
+        ...hostSecretNamesRequired,
+        ...secretNamesAll,
       ]));
       for (const secretName of required) {
         const f = path.join(secretsLocalDir, `${secretName}.yaml`);
@@ -327,34 +313,44 @@ export async function addDeployChecks(params: {
       push({ status: "warn", label: "required secrets", detail: "(fleet bots list missing; cannot validate per-bot secrets)" });
     }
 
-    if (secretsPlan && secretsPlan.secretNamesRequired.length > 0 && params.sopsAgeKeyFile && fs.existsSync(params.sopsAgeKeyFile)) {
+    const requiredForValues = Array.from(new Set([
+      ...(secretsPlan?.hostSecretNamesRequired || []),
+      ...(secretsPlan?.secretNamesRequired || []),
+    ]));
+
+    if (requiredForValues.length > 0 && params.sopsAgeKeyFile && fs.existsSync(params.sopsAgeKeyFile)) {
       const nix = { nixBin: params.nixBin, cwd: params.repoRoot, dryRun: false, env: process.env } as const;
-      for (const secretName of secretsPlan.secretNamesRequired) {
-        const filePath = path.join(secretsLocalDir, `${secretName}.yaml`);
-        if (!fs.existsSync(filePath)) continue;
-        try {
-          const decrypted = await sopsDecryptYamlFile({
-            filePath,
-            configPath: params.layout.sopsConfigPath,
-            ageKeyFile: params.sopsAgeKeyFile,
-            nix,
-          });
-          const v = readYamlScalarFromMapping({ yamlText: decrypted, key: secretName }) || "";
-          const value = v.trim();
-          if (!value) {
-            push({ status: "missing", label: `secret value: ${secretName}`, detail: "(empty)" });
-            continue;
+      const checks = await mapWithConcurrency({
+        items: requiredForValues,
+        concurrency: 4,
+        fn: async (secretName) => {
+          const filePath = path.join(secretsLocalDir, `${secretName}.yaml`);
+          if (!fs.existsSync(filePath)) return null;
+          try {
+            const decrypted = await sopsDecryptYamlFile({
+              filePath,
+              configPath: params.layout.sopsConfigPath,
+              ageKeyFile: params.sopsAgeKeyFile,
+              nix,
+            });
+            const v = readYamlScalarFromMapping({ yamlText: decrypted, key: secretName }) || "";
+            const value = v.trim();
+            if (!value) return { status: "missing" as const, label: `secret value: ${secretName}`, detail: "(empty)" };
+            if (value === "<OPTIONAL>" || isPlaceholderSecretValue(value)) {
+              return { status: "missing" as const, label: `secret value: ${secretName}`, detail: `(placeholder: ${value})` };
+            }
+            return { status: "ok" as const, label: `secret value: ${secretName}` };
+          } catch (e) {
+            return { status: "warn" as const, label: `secret value: ${secretName}`, detail: String((e as Error)?.message || e) };
           }
-          if (value === "<OPTIONAL>" || isPlaceholderSecretValue(value)) {
-            push({ status: "missing", label: `secret value: ${secretName}`, detail: `(placeholder: ${value})` });
-            continue;
-          }
-          push({ status: "ok", label: `secret value: ${secretName}` });
-        } catch (e) {
-          push({ status: "warn", label: `secret value: ${secretName}`, detail: String((e as Error)?.message || e) });
-        }
+        },
+      });
+
+      for (const c of checks) {
+        if (!c) continue;
+        push(c);
       }
-    } else if (secretsPlan && secretsPlan.secretNamesRequired.length > 0) {
+    } else if (requiredForValues.length > 0) {
       push({
         status: "warn",
         label: "required secrets",

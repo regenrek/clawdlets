@@ -159,6 +159,18 @@ async function evalWheelAccess(params: { repoRoot: string; nixBin: string; host:
   }
 }
 
+function getClawdletsRevFromFlakeLock(repoRoot: string): string | null {
+  const flakeLockPath = path.join(repoRoot, "flake.lock");
+  if (!fs.existsSync(flakeLockPath)) return null;
+  try {
+    const lock = JSON.parse(fs.readFileSync(flakeLockPath, "utf8"));
+    const rev = lock?.nodes?.clawdlets?.locked?.rev;
+    return typeof rev === "string" && rev.trim() ? rev.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function addRepoChecks(params: {
   repoRoot: string;
   layout: RepoLayout;
@@ -177,6 +189,31 @@ export async function addRepoChecks(params: {
     label: "repo root",
     detail: repoRoot,
   });
+
+  // Check clawdlets input in flake.lock (informational)
+  {
+    const flakeRev = getClawdletsRevFromFlakeLock(repoRoot);
+    if (flakeRev) {
+      params.push({
+        scope: "repo",
+        status: "ok",
+        label: "clawdlets flake input",
+        detail: `rev: ${flakeRev.slice(0, 12)}...`,
+      });
+    } else {
+      const flakeLockExists = fs.existsSync(path.join(repoRoot, "flake.lock"));
+      if (flakeLockExists) {
+        // flake.lock exists but no clawdlets input - might be a different project type
+        params.push({
+          scope: "repo",
+          status: "warn",
+          label: "clawdlets flake input",
+          detail: "(no clawdlets input found in flake.lock)",
+        });
+      }
+      // If flake.lock doesn't exist, skip this check silently (test environments, etc.)
+    }
+  }
 
   params.push({
     scope: "repo",

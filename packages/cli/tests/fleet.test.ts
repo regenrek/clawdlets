@@ -25,11 +25,11 @@ describe("fleet set", () => {
     loadClawdletsConfigMock.mockReturnValue({ configPath: "/repo/fleet/clawdlets.json", config: baseConfig });
   });
 
-  it("sets guildId", async () => {
+  it("sets codex enable", async () => {
     const { fleet } = await import("../src/commands/fleet");
-    await fleet.subCommands.set.run({ args: { "guild-id": "1234567890" } as any });
+    await fleet.subCommands.set.run({ args: { "codex-enable": "true" } as any });
     expect(writeClawdletsConfigMock).toHaveBeenCalledTimes(1);
     const call = writeClawdletsConfigMock.mock.calls[0][0];
-    expect(call.config.fleet.guildId).toBe("1234567890");
+    expect(call.config.fleet.codex.enable).toBe(true);
   });
 });

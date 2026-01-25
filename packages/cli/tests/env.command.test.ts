@@ -10,9 +10,13 @@ vi.mock("@clawdlets/core/lib/repo", () => ({
   findRepoRoot: findRepoRootMock,
 }));
 
-vi.mock("@clawdlets/core/lib/deploy-creds", () => ({
-  loadDeployCreds: loadDeployCredsMock,
-}));
+vi.mock("@clawdlets/core/lib/deploy-creds", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@clawdlets/core/lib/deploy-creds")>();
+  return {
+    ...actual,
+    loadDeployCreds: loadDeployCredsMock,
+  };
+});
 
 describe("env commands", () => {
   let logSpy: ReturnType<typeof vi.spyOn>;

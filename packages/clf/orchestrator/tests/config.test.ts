@@ -20,7 +20,7 @@ describe("clf-orchestrator config", () => {
       CLF_CATTLE_SECRETS_BASE_URL: "",
       CLF_CATTLE_BOOTSTRAP_TTL_MS: String(99 * 60 * 60_000),
     } as any);
-    expect(max.cattle.bootstrapTtlMs).toBe(60 * 60_000);
+    expect(max.cattle.bootstrapTtlMs).toBe(15 * 60_000);
   });
 
   it("rejects invalid secrets base url", async () => {

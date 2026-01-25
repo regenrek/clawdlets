@@ -2,7 +2,7 @@
 
 let
   defs = import ./impl/defs.nix { inherit config lib pkgs project flakeInfo; };
-  botConfig = import ./impl/bot-config.nix { inherit config lib defs; };
+  botConfig = import ./impl/bot-config.nix { inherit lib defs; };
   runtime = import ./impl/runtime.nix { inherit config lib pkgs defs botConfig; };
   gatewayToken = import ./impl/gateway-token.nix { inherit config lib pkgs defs; };
   github = import ./impl/github.nix { inherit config lib pkgs defs; };
@@ -91,10 +91,65 @@ in
           || (cfg.backups.restic.repository != "" && cfg.backups.restic.passwordSecret != "");
         message = "services.clawdbotFleet.backups.restic requires repository + passwordSecret when enabled.";
       }
-    ];
+    ]
+    ++ (map (b:
+      let
+        profile = defs.getBotProfile b;
+        dupes = defs.secretEnvDerivedDupes profile;
+      in
+        {
+          assertion = dupes == [];
+          message = "services.clawdbotFleet.botProfiles.${b}: secretEnv conflicts with derived hooks/skill env vars: ${lib.concatStringsSep "," dupes}";
+        }
+    ) cfg.bots)
+    ++ (map (b:
+      let
+        profile = defs.getBotProfile b;
+        allowlist = profile.secretEnvAllowlist or null;
+        effective = defs.buildEffectiveSecretEnv profile;
+        unknown =
+          if allowlist == null
+          then []
+          else lib.filter (k: !(builtins.hasAttr k effective)) allowlist;
+      in
+        {
+          assertion = unknown == [];
+          message = "services.clawdbotFleet.botProfiles.${b}.secretEnvAllowlist contains unknown env vars: ${lib.concatStringsSep "," unknown}";
+        }
+    ) cfg.bots)
+    ++ (map (b:
+      let
+        profile = defs.getBotProfile b;
+        allowlist = profile.secretEnvAllowlist or null;
+        required = builtins.attrNames (defs.buildDerivedSecretEnv profile);
+        missing =
+          if allowlist == null
+          then []
+          else lib.filter (k: !lib.elem k allowlist) required;
+      in
+        {
+          assertion = missing == [];
+          message = "services.clawdbotFleet.botProfiles.${b}.secretEnvAllowlist missing hooks/skill env vars: ${lib.concatStringsSep "," missing}";
+        }
+    ) cfg.bots)
+    ++ (lib.concatLists (map (b:
+      let
+        entries = (defs.getBotProfile b).skills.entries or {};
+      in
+        lib.mapAttrsToList (skill: entry:
+          let
+            hasInline = defs.isNonEmptyString (entry.apiKey or null);
+          in
+            {
+              assertion = !hasInline;
+              message = "services.clawdbotFleet.botProfiles.${b}.skills.entries.${skill}: inline apiKey is not supported; use apiKeySecret (env var injection).";
+            }
+        ) entries
+    ) cfg.bots));
 
     sops.secrets = lib.mkMerge [
       runtime.perBotSkillSecrets
+      runtime.secretFileSecrets
       (lib.optionalAttrs (cfg.backups.restic.enable && cfg.backups.restic.passwordSecret != "") {
         "${cfg.backups.restic.passwordSecret}" = defs.mkSopsSecretFor cfg.backups.restic.passwordSecret;
       })
@@ -114,6 +169,7 @@ in
         "d ${cfg.stateDirBase} 0755 root root - -"
       ]
       ++ (lib.concatLists (map runtime.mkStateDir cfg.bots))
+      ++ runtime.secretFileTmpfilesRules
       ++ lib.optionals cfg.opsSnapshot.enable [
         "d ${cfg.opsSnapshot.outDir} 0750 root root - -"
       ];
@@ -156,6 +212,11 @@ in
 
         "clawdlets/bin/ensure-gateway-token" = {
           source = ../../scripts/ensure-gateway-token.sh;
+          mode = "0755";
+        };
+
+        "clawdlets/bin/clawdbot-channels" = {
+          source = ../../scripts/clawdbot-channels.sh;
           mode = "0755";
         };
 

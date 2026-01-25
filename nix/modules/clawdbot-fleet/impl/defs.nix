@@ -23,12 +23,58 @@ let
   getBotProfile = b: cfg.botProfiles.${b} or {
     skipBootstrap = null;
     workspace = { dir = null; seedDir = null; };
+    secretEnv = {};
+    secretEnvAllowlist = null;
+    secretFiles = {};
     skills = {};
     hooks = {};
     github = {};
     passthrough = {};
     resources = {};
   };
+
+  isNonEmptyString = v: v != null && toString v != "";
+
+  normalizeEnvKey = name:
+    let
+      raw = toString name;
+      replaced = lib.replaceStrings [ "-" "." "/" " " ] [ "_" "_" "_" "_" ] raw;
+    in
+      lib.toUpper replaced;
+
+  envRef = envVar: "\${${envVar}}";
+
+  hooksTokenEnvVar = "CLAWDBOT_HOOKS_TOKEN";
+  hooksGmailPushTokenEnvVar = "CLAWDBOT_HOOKS_GMAIL_PUSH_TOKEN";
+  skillApiKeyEnvVar = skill: "CLAWDBOT_SKILL_${normalizeEnvKey skill}_API_KEY";
+
+  buildDerivedSecretEnv = profile:
+    let
+      hooks = profile.hooks or {};
+      entries = (profile.skills.entries or {});
+      hooksEnv =
+        lib.optionalAttrs (isNonEmptyString (hooks.tokenSecret or null)) { "${hooksTokenEnvVar}" = hooks.tokenSecret; }
+        // lib.optionalAttrs (isNonEmptyString (hooks.gmailPushTokenSecret or null)) {
+          "${hooksGmailPushTokenEnvVar}" = hooks.gmailPushTokenSecret;
+        };
+      skillEnv =
+        builtins.listToAttrs (lib.concatLists (lib.mapAttrsToList (skill: entry:
+          let
+            secret = entry.apiKeySecret or null;
+          in
+            if isNonEmptyString secret
+            then [ { name = skillApiKeyEnvVar skill; value = secret; } ]
+            else [ ]
+        ) entries));
+    in
+      hooksEnv // skillEnv;
+
+  buildBaseSecretEnv = profile: (cfg.secretEnv or {}) // (profile.secretEnv or {});
+  buildEffectiveSecretEnv = profile: (buildBaseSecretEnv profile) // (buildDerivedSecretEnv profile);
+  secretEnvDerivedDupes = profile:
+    lib.intersectLists
+      (builtins.attrNames (buildBaseSecretEnv profile))
+      (builtins.attrNames (buildDerivedSecretEnv profile));
 
   resolveBotWorkspace = b:
     let
@@ -136,5 +182,15 @@ in
     hasCodex
     toolsInventoryMd
     buildInfoJson
-    botGatewayPort;
+    botGatewayPort
+    isNonEmptyString
+    normalizeEnvKey
+    envRef
+    hooksTokenEnvVar
+    hooksGmailPushTokenEnvVar
+    skillApiKeyEnvVar
+    buildDerivedSecretEnv
+    buildBaseSecretEnv
+    buildEffectiveSecretEnv
+    secretEnvDerivedDupes;
 }

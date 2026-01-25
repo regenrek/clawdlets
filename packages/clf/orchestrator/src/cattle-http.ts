@@ -1,6 +1,6 @@
 import http from "node:http";
 import { type ClfQueue } from "@clawdlets/clf-queue";
-import { EnvVarNameSchema } from "@clawdlets/core/lib/identifiers";
+import { EnvVarNameSchema } from "@clawdlets/shared/lib/identifiers";
 
 function json(res: http.ServerResponse, status: number, body: unknown): void {
   const text = JSON.stringify(body, null, 2) + "\n";

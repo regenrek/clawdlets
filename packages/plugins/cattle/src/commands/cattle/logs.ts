@@ -1,7 +1,7 @@
 import process from "node:process";
 import { defineCommand } from "citty";
 import { loadDeployCreds } from "@clawdlets/core/lib/deploy-creds";
-import { buildCattleLabelSelector, listCattleServers } from "@clawdlets/core/lib/hcloud-cattle";
+import { buildCattleLabelSelector, listCattleServers } from "@clawdlets/cattle-core/lib/hcloud-cattle";
 import { shellQuote, sshRun } from "@clawdlets/core/lib/ssh-remote";
 import { loadHostContextOrExit } from "@clawdlets/core/lib/context";
 import { requireEnabled, resolveOne, resolveTailscaleIpv4 } from "./common.js";

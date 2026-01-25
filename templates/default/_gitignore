@@ -1,0 +1,13 @@
+.clawdlets/
+.DS_Store
+Thumbs.db
+node_modules/
+.cache/
+
+# terraform/opentofu state (should never be committed)
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate
+*.tfstate.backup
+
+# never in git (if you create it)

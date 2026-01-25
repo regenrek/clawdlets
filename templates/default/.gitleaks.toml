@@ -1,0 +1,4 @@
+[allowlist]
+description = "Template allowlist"
+paths = []
+regexes = []

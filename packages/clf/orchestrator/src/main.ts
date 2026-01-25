@@ -150,6 +150,8 @@ async function main(): Promise<void> {
     personasRoot: cfg.personasRoot,
     adminAuthorizedKeys,
     tailscaleAuthKey: cfg.tailscaleAuthKey,
+    tailscaleAuthKeyExpiresAt: cfg.tailscaleAuthKeyExpiresAt,
+    tailscaleAuthKeyOneTime: cfg.tailscaleAuthKeyOneTime,
     env: process.env,
   };
 

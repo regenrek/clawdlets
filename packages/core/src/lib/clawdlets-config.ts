@@ -4,10 +4,12 @@ import { z } from "zod";
 import { writeFileAtomic } from "./fs-safe.js";
 import type { RepoLayout } from "../repo-layout.js";
 import { getRepoLayout } from "../repo-layout.js";
-import { BotIdSchema, HostNameSchema, SecretNameSchema, assertSafeHostName } from "./identifiers.js";
+import { BotIdSchema, HostNameSchema, SecretNameSchema, assertSafeHostName } from "@clawdlets/shared/lib/identifiers";
+import { assertNoLegacyEnvSecrets, assertNoLegacyHostKeys } from "./clawdlets-config-legacy.js";
+import { SecretEnvSchema, SecretFilesSchema } from "./secret-wiring.js";
 import { isValidTargetHost } from "./ssh-remote.js";
-import { TtlStringSchema } from "./ttl.js";
-import { HcloudLabelsSchema, validateHcloudLabelsAtPath } from "./hcloud-labels.js";
+import { TtlStringSchema } from "@clawdlets/cattle-core/lib/ttl";
+import { HcloudLabelsSchema, validateHcloudLabelsAtPath } from "@clawdlets/cattle-core/lib/hcloud-labels";
 
 export const SSH_EXPOSURE_MODES = ["tailnet", "bootstrap", "public"] as const;
 export const SshExposureModeSchema = z.enum(SSH_EXPOSURE_MODES);
@@ -17,7 +19,7 @@ export const TAILNET_MODES = ["none", "tailscale"] as const;
 export const TailnetModeSchema = z.enum(TAILNET_MODES);
 export type TailnetMode = z.infer<typeof TailnetModeSchema>;
 
-export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 8 as const;
+export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 9 as const;
 
 const JsonObjectSchema: z.ZodType<Record<string, unknown>> = z.record(z.string(), z.any());
 
@@ -39,21 +41,13 @@ function isWorldOpenCidr(parsed: { ip: string; prefix: number; family: 4 | 6 }):
   return (parsed.ip === "::" || parsed.ip === "0:0:0:0:0:0:0:0") && parsed.prefix === 0;
 }
 
-const ProviderKeySchema = z
-  .string()
-  .trim()
-  .min(1)
-  .regex(/^[a-z0-9_-]+$/, { message: "invalid provider key (use [a-z0-9_-]+)" });
-const ModelSecretsSchema = z.record(ProviderKeySchema, SecretNameSchema).default(() => ({}));
-const OptionalSecretNameSchema = z.union([SecretNameSchema, z.literal("")]).default("");
-
 const FleetBotProfileSchema = z
   .object({
-    discordTokenSecret: OptionalSecretNameSchema,
-    modelSecrets: ModelSecretsSchema,
+    secretEnv: SecretEnvSchema,
+    secretFiles: SecretFilesSchema,
   })
   .passthrough()
-  .default(() => ({ discordTokenSecret: "", modelSecrets: {} }));
+  .default(() => ({ secretEnv: {}, secretFiles: {} }));
 
 const FleetBotSchema = z
   .object({
@@ -62,12 +56,12 @@ const FleetBotSchema = z
     clf: JsonObjectSchema.default(() => ({})),
   })
   .passthrough()
-  .default(() => ({ profile: { discordTokenSecret: "", modelSecrets: {} }, clawdbot: {}, clf: {} }));
+  .default(() => ({ profile: { secretEnv: {}, secretFiles: {} }, clawdbot: {}, clf: {} }));
 
 const FleetSchema = z
   .object({
-    modelSecrets: ModelSecretsSchema,
-    guildId: z.string().trim().default(""),
+    secretEnv: SecretEnvSchema,
+    secretFiles: SecretFilesSchema,
     botOrder: z.array(BotIdSchema).default(() => []),
     bots: z.record(BotIdSchema, FleetBotSchema).default(() => ({})),
     codex: z
@@ -236,7 +230,7 @@ const HostSchema = z.object({
       signatureUrl: z.string().trim().default(""),
     })
     .default(() => ({ enable: false, manifestUrl: "", interval: "30min", publicKey: "", signatureUrl: "" })),
-  agentModelPrimary: z.string().trim().default("zai/glm-4.7"),
+  agentModelPrimary: z.string().trim().default("anthropic/claude-opus-4-5"),
 });
 
 const CattleSchema = z
@@ -284,8 +278,8 @@ export const ClawdletsConfigSchema = z.object({
   defaultHost: HostNameSchema.optional(),
   baseFlake: z.string().trim().default(""),
   fleet: FleetSchema.default(() => ({
-    modelSecrets: {},
-    guildId: "",
+    secretEnv: {},
+    secretFiles: {},
     botOrder: [],
     bots: {},
     codex: { enable: false, bots: [] },
@@ -347,17 +341,24 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
   const host = params.host.trim() || "clawdbot-fleet-host";
   const bots = (params.bots || ["maren", "sonja", "gunnar", "melinda"]).map((b) => b.trim()).filter(Boolean);
   const botsRecord = Object.fromEntries(
-    bots.map((b) => [b, { profile: { discordTokenSecret: `discord_token_${b}` } }]),
+    bots.map((b) => [
+      b,
+      {
+        profile: {
+          secretEnv: {
+            DISCORD_BOT_TOKEN: `discord_token_${b}`,
+          },
+        },
+      },
+    ]),
   );
   return ClawdletsConfigSchema.parse({
     schemaVersion: CLAWDLETS_CONFIG_SCHEMA_VERSION,
     defaultHost: host,
     baseFlake: "",
     fleet: {
-      modelSecrets: {
-        zai: "z_ai_api_key",
-      },
-      guildId: "",
+      secretEnv: { ZAI_API_KEY: "z_ai_api_key" },
+      secretFiles: {},
       botOrder: bots,
       bots: botsRecord,
       codex: { enable: false, bots: [] },
@@ -402,53 +403,6 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
       },
     },
   });
-}
-
-function assertNoLegacyHostKeys(parsed: unknown): void {
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
-  const hostsRaw = (parsed as { hosts?: unknown }).hosts;
-  if (!hostsRaw || typeof hostsRaw !== "object" || Array.isArray(hostsRaw)) return;
-  for (const [host, hostCfg] of Object.entries(hostsRaw as Record<string, unknown>)) {
-    if (!hostCfg || typeof hostCfg !== "object" || Array.isArray(hostCfg)) continue;
-    if ("publicSsh" in hostCfg) {
-      throw new Error(`legacy host config key publicSsh found for ${host}; use sshExposure.mode`);
-    }
-    if ("opentofu" in hostCfg) {
-      throw new Error(`legacy host config key opentofu found for ${host}; use provisioning`);
-    }
-  }
-}
-
-function assertNoLegacyEnvSecrets(parsed: unknown): void {
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
-  const fleet = (parsed as { fleet?: unknown }).fleet as any;
-  if (fleet && typeof fleet === "object" && !Array.isArray(fleet)) {
-    if ("envSecrets" in fleet) {
-      throw new Error("fleet.envSecrets was removed; set fleet.modelSecrets + per-bot profile.discordTokenSecret instead");
-    }
-    const bots = fleet.bots;
-    if (bots && typeof bots === "object" && !Array.isArray(bots)) {
-      for (const [bot, botCfg] of Object.entries(bots as Record<string, unknown>)) {
-        if (!botCfg || typeof botCfg !== "object" || Array.isArray(botCfg)) continue;
-        const profile = (botCfg as any).profile;
-        if (profile && typeof profile === "object" && !Array.isArray(profile)) {
-          if ("envSecrets" in profile) {
-            throw new Error(`fleet.bots.${bot}.profile.envSecrets was removed; set profile.discordTokenSecret or profile.modelSecrets instead`);
-          }
-          const skills = (profile as any).skills;
-          const entries = skills?.entries;
-          if (entries && typeof entries === "object" && !Array.isArray(entries)) {
-            for (const [skill, entry] of Object.entries(entries as Record<string, unknown>)) {
-              if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
-              if ("envSecrets" in (entry as any)) {
-                throw new Error(`fleet.bots.${bot}.profile.skills.entries.${skill}.envSecrets was removed; use apiKeySecret or inline config`);
-              }
-            }
-          }
-        }
-      }
-    }
-  }
 }
 
 export type ResolveHostNameResult =

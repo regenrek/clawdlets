@@ -25,6 +25,9 @@ const sopsDecryptMock = vi.fn();
 const upsertSopsCreationRuleMock = vi.fn();
 const buildFleetSecretsPlanMock = vi.fn();
 const validateSecretsInitNonInteractiveMock = vi.fn();
+const planSecretsAutowireMock = vi.fn();
+const applySecretsAutowireMock = vi.fn();
+const writeClawdletsConfigMock = vi.fn();
 
 vi.mock("@clawdlets/core/lib/age-keygen", () => ({
   ageKeygen: ageKeygenMock,
@@ -50,9 +53,24 @@ vi.mock("@clawdlets/core/lib/sops-config", async () => {
   };
 });
 
-vi.mock("@clawdlets/core/lib/fleet-secrets", () => ({
+vi.mock("@clawdlets/core/lib/fleet-secrets-plan", () => ({
   buildFleetSecretsPlan: buildFleetSecretsPlanMock,
 }));
+
+vi.mock("@clawdlets/core/lib/secrets-autowire", () => ({
+  planSecretsAutowire: planSecretsAutowireMock,
+  applySecretsAutowire: applySecretsAutowireMock,
+}));
+
+vi.mock("@clawdlets/core/lib/clawdlets-config", async () => {
+  const actual = await vi.importActual<typeof import("@clawdlets/core/lib/clawdlets-config")>(
+    "@clawdlets/core/lib/clawdlets-config",
+  );
+  return {
+    ...actual,
+    writeClawdletsConfig: writeClawdletsConfigMock,
+  };
+});
 
 vi.mock("@clawdlets/core/lib/secrets-init", async () => {
   const actual = await vi.importActual<typeof import("@clawdlets/core/lib/secrets-init")>(
@@ -67,6 +85,39 @@ vi.mock("@clawdlets/core/lib/secrets-init", async () => {
 vi.mock("@clawdlets/core/lib/context", () => ({
   loadHostContextOrExit: loadHostContextMock,
 }));
+
+const buildPlan = (overrides: Record<string, unknown>) => {
+  const hostSecretNamesRequired = (overrides["hostSecretNamesRequired"] as string[] | undefined) || ["admin_password_hash"];
+  const secretNamesAll = (overrides["secretNamesAll"] as string[] | undefined) || [];
+  const secretNamesRequired = (overrides["secretNamesRequired"] as string[] | undefined) || [];
+  const required =
+    (overrides["required"] as Array<Record<string, unknown>> | undefined) ||
+    [
+      ...hostSecretNamesRequired.map((name) => ({ name, kind: "extra", scope: "host", source: "custom" })),
+      ...secretNamesRequired
+        .filter((name) => !hostSecretNamesRequired.includes(name))
+        .map((name) => ({ name, kind: "env", scope: "bot", source: "custom" })),
+    ];
+  const optional =
+    (overrides["optional"] as Array<Record<string, unknown>> | undefined) ||
+    secretNamesAll
+      .filter((name) => !secretNamesRequired.includes(name) && !hostSecretNamesRequired.includes(name))
+      .map((name) => ({ name, kind: "env", scope: "bot", source: "custom", optional: true }));
+  return {
+    bots: [],
+    hostSecretNamesRequired,
+    secretNamesAll,
+    secretNamesRequired,
+    required,
+    optional,
+    missing: (overrides["missingSecretConfig"] as unknown[]) || [],
+    warnings: [],
+    missingSecretConfig: [],
+    byBot: {},
+    hostSecretFiles: {},
+    ...overrides,
+  };
+};
 
 describe("secrets init", () => {
   beforeEach(() => {
@@ -86,12 +137,12 @@ describe("secrets init", () => {
 
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
 
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
+      hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
-      discordSecretsByBot: { maren: "discord_token_maren" },
       missingSecretConfig: [],
-    });
+    }));
 
     ageKeygenMock.mockResolvedValue({
       secretKey: "AGE-SECRET-KEY-1",
@@ -110,7 +161,6 @@ describe("secrets init", () => {
     const secretsJson = {
       adminPasswordHash: "hash",
       secrets: { discord_token_maren: "token" },
-      discordTokens: { maren: "token" },
     };
     const jsonPath = path.join(repoRoot, ".clawdlets", "secrets.json");
     fs.mkdirSync(path.dirname(jsonPath), { recursive: true });
@@ -176,14 +226,92 @@ describe("secrets init", () => {
     });
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
+      hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: [],
       secretNamesRequired: [],
-      discordSecretsByBot: {},
-      missingSecretConfig: [{ kind: "discord", bot: "maren" }],
-    });
+      missingSecretConfig: [{ kind: "envVar", bot: "maren", envVar: "DISCORD_BOT_TOKEN", sources: ["custom"], paths: [] }],
+    }));
     const { secretsInit } = await import("../src/commands/secrets/init.js");
-    await expect(secretsInit.run({ args: { host: "alpha" } } as any)).rejects.toThrow(/missing discordTokenSecret/i);
+    await expect(secretsInit.run({ args: { host: "alpha" } } as any)).rejects.toThrow(/wire-secrets/i);
+  });
+
+  it("autowires missing secretEnv mappings when --autowire", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(tmpdir(), "clawdlets-secrets-"));
+    const layout = getRepoLayout(repoRoot);
+    const config = makeConfig({
+      hostName: "alpha",
+      hostOverrides: { ...baseHost, tailnet: { mode: "none" } },
+      fleetOverrides: { botOrder: ["maren"], bots: { maren: {} } },
+    });
+    const hostCfg = config.hosts.alpha;
+    loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
+
+    const planAfterAutowire = buildPlan({
+      hostSecretNamesRequired: ["admin_password_hash"],
+      secretNamesAll: ["discord_token_maren"],
+      secretNamesRequired: ["discord_token_maren"],
+      missingSecretConfig: [],
+    });
+    buildFleetSecretsPlanMock
+      .mockReturnValueOnce(
+        buildPlan({
+          hostSecretNamesRequired: ["admin_password_hash"],
+          secretNamesAll: [],
+          secretNamesRequired: [],
+          missingSecretConfig: [{ kind: "envVar", bot: "maren", envVar: "DISCORD_BOT_TOKEN", sources: ["channel"], paths: [] }],
+        }),
+      )
+      .mockReturnValueOnce(planAfterAutowire)
+      .mockReturnValue(planAfterAutowire);
+
+    planSecretsAutowireMock.mockReturnValue({
+      updates: [
+        {
+          bot: "maren",
+          envVar: "DISCORD_BOT_TOKEN",
+          secretName: "discord_token_maren",
+          scope: "bot",
+          sources: ["channel"],
+        },
+      ],
+      skipped: [],
+    });
+    const nextConfig = structuredClone(config) as typeof config;
+    nextConfig.fleet.bots.maren.profile = {
+      ...(nextConfig.fleet.bots.maren.profile || {}),
+      secretEnv: {
+        ...(nextConfig.fleet.bots.maren.profile?.secretEnv || {}),
+        DISCORD_BOT_TOKEN: "discord_token_maren",
+      },
+    };
+    applySecretsAutowireMock.mockReturnValue(nextConfig);
+    writeClawdletsConfigMock.mockResolvedValue(undefined);
+
+    ageKeygenMock.mockResolvedValue({
+      secretKey: "AGE-SECRET-KEY-1",
+      publicKey: "age1publickey",
+      fileText: "AGE-SECRET-KEY-1",
+    });
+    mkpasswdMock.mockResolvedValue("hash");
+    upsertSopsCreationRuleMock.mockReturnValue("sops");
+    sopsEncryptMock.mockImplementation(async ({ plaintextYaml, outPath }: { plaintextYaml: string; outPath: string }) => {
+      fs.mkdirSync(path.dirname(outPath), { recursive: true });
+      fs.writeFileSync(outPath, plaintextYaml, "utf8");
+    });
+    sopsDecryptMock.mockResolvedValue("secret: value\n");
+
+    const secretsJsonPath = path.join(repoRoot, "secrets.json");
+    fs.writeFileSync(
+      secretsJsonPath,
+      JSON.stringify({ adminPasswordHash: "hash", secrets: { discord_token_maren: "token" } }, null, 2),
+      "utf8",
+    );
+
+    const { secretsInit } = await import("../src/commands/secrets/init.js");
+    await secretsInit.run({ args: { host: "alpha", fromJson: secretsJsonPath, autowire: true, yes: true } } as any);
+    expect(planSecretsAutowireMock).toHaveBeenCalled();
+    expect(writeClawdletsConfigMock).toHaveBeenCalled();
   });
 
   it("writes template and exits when no from-json and not interactive", async () => {
@@ -196,12 +324,12 @@ describe("secrets init", () => {
     });
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
+      hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
-      discordSecretsByBot: { maren: "discord_token_maren" },
       missingSecretConfig: [],
-    });
+    }));
 
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { secretsInit } = await import("../src/commands/secrets/init.js");
@@ -221,12 +349,12 @@ describe("secrets init", () => {
     });
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
+      hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: [],
       secretNamesRequired: [],
-      discordSecretsByBot: {},
       missingSecretConfig: [],
-    });
+    }));
     const { secretsInit } = await import("../src/commands/secrets/init.js");
     await expect(secretsInit.run({ args: { host: "alpha", fromJson: path.join(repoRoot, "missing.json") } } as any)).rejects.toThrow(
       /missing --from-json file/i,
@@ -243,18 +371,18 @@ describe("secrets init", () => {
     });
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
+      hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
-      discordSecretsByBot: { maren: "discord_token_maren" },
       missingSecretConfig: [],
-    });
+    }));
     fs.mkdirSync(layout.runtimeDir, { recursive: true });
     fs.writeFileSync(
       path.join(layout.runtimeDir, "secrets.json"),
       JSON.stringify({
         adminPasswordHash: "<FILL_ME>",
-        discordTokens: { maren: "<FILL_ME>" },
+        secrets: { discord_token_maren: "<FILL_ME>" },
       }),
       "utf8",
     );
@@ -276,12 +404,12 @@ describe("secrets init", () => {
     });
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
+      hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
-      discordSecretsByBot: { maren: "discord_token_maren" },
       missingSecretConfig: [],
-    });
+    }));
     ageKeygenMock.mockResolvedValue({
       secretKey: "AGE-SECRET-KEY-1",
       publicKey: "age1publickey",
@@ -294,7 +422,6 @@ describe("secrets init", () => {
       jsonPath,
       JSON.stringify({
         adminPasswordHash: "hash",
-        discordTokens: {},
         secrets: {},
       }),
       "utf8",
@@ -302,7 +429,7 @@ describe("secrets init", () => {
     const { secretsInit } = await import("../src/commands/secrets/init.js");
     await expect(
       secretsInit.run({ args: { host: "alpha", fromJson: jsonPath, allowPlaceholders: false, dryRun: true } } as any),
-    ).rejects.toThrow(/missing discord token/i);
+    ).rejects.toThrow(/missing required secret: discord_token_maren/i);
   });
 
   it("collects interactive secrets including netrc and discord token", async () => {
@@ -321,12 +448,12 @@ describe("secrets init", () => {
     });
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
+      hostSecretNamesRequired: ["admin_password_hash", "tailscale_auth_key", "garnix_netrc"],
       secretNamesAll: ["discord_token_maren", "api_key"],
       secretNamesRequired: ["discord_token_maren", "api_key"],
-      discordSecretsByBot: { maren: "discord_token_maren" },
       missingSecretConfig: [],
-    });
+    }));
     ageKeygenMock.mockResolvedValue({
       secretKey: "AGE-SECRET-KEY-1",
       publicKey: "age1publickey",
@@ -373,12 +500,12 @@ describe("secrets init", () => {
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
 
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
+      hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
-      discordSecretsByBot: { maren: "discord_token_maren" },
       missingSecretConfig: [],
-    });
+    }));
 
     agePublicKeyFromIdentityFileMock.mockResolvedValue("age1correct");
     ageKeygenMock.mockResolvedValue({
@@ -405,7 +532,6 @@ describe("secrets init", () => {
     const secretsJson = {
       adminPasswordHash: "hash",
       secrets: { discord_token_maren: "token" },
-      discordTokens: { maren: "token" },
     };
     const jsonPath = path.join(repoRoot, ".clawdlets", "secrets.json");
     fs.mkdirSync(path.dirname(jsonPath), { recursive: true });
@@ -431,12 +557,12 @@ describe("secrets init", () => {
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
 
-    buildFleetSecretsPlanMock.mockReturnValue({
+    buildFleetSecretsPlanMock.mockReturnValue(buildPlan({
+      hostSecretNamesRequired: ["admin_password_hash"],
       secretNamesAll: ["discord_token_maren"],
       secretNamesRequired: ["discord_token_maren"],
-      discordSecretsByBot: { maren: "discord_token_maren" },
       missingSecretConfig: [],
-    });
+    }));
 
     agePublicKeyFromIdentityFileMock.mockImplementation(async (p: string) => (p.includes("extra-files") ? "age1host" : "age1operator"));
     ageKeygenMock.mockResolvedValue({
@@ -472,7 +598,6 @@ describe("secrets init", () => {
     const secretsJson = {
       adminPasswordHash: "hash",
       secrets: { discord_token_maren: "token" },
-      discordTokens: { maren: "token" },
     };
     const jsonPath = path.join(repoRoot, ".clawdlets", "secrets.json");
     fs.mkdirSync(path.dirname(jsonPath), { recursive: true });

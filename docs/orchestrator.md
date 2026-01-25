@@ -38,7 +38,7 @@ services.clfOrchestrator.enable = true;
 Required secrets (sops, per host)
 - `hcloud_token` (Hetzner API)
 - `tailscale_auth_key` (cattle tailnet join key; tag-scoped + ephemeral recommended)
-- provider keys mapped via `fleet.modelSecrets` (e.g. `zai`)
+- provider keys wired via `fleet.secretEnv` (e.g. `ZAI_API_KEY -> z_ai_api_key`)
 
 After deploy:
 

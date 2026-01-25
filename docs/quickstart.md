@@ -47,7 +47,7 @@ Override with `--template`, `--template-path`, or `--template-ref` (or env `CLAW
 - add `secrets/hosts/<host>/garnix_netrc.yaml` with your netrc credentials (required)
 
 1) Configure fleet + host (CLI-first):
-- set guild id: `clawdlets fleet set --guild-id <discord-guild-id>`
+- configure channels (Discord/Telegram/Slack/WhatsApp) in each bot’s `fleet.bots.<bot>.clawdbot` (recommended via web UI: Setup → Bots → Integrations)
 - add bots: `clawdlets bot add --bot <id>` (repeat)
 - host basics:
   - add SSH key: `clawdlets host set --add-ssh-key-file ~/.ssh/id_ed25519.pub`
@@ -67,7 +67,7 @@ clawdlets doctor --scope bootstrap
 
 Non-interactive: keep inputs in `.clawdlets/secrets.json` and run `clawdlets secrets init --from-json .clawdlets/secrets.json` (if the file is missing, `secrets init` will write a template and exit).
 
-LLM API keys are provided via `secrets.<secretName>` in that JSON (e.g. `secrets.z_ai_api_key`) and wired to env via `fleet.modelSecrets` in `fleet/clawdlets.json`.
+LLM API keys are provided via `secrets.<secretName>` in that JSON (e.g. `secrets.z_ai_api_key`) and wired to env via `fleet.secretEnv` (e.g. `fleet.secretEnv.ZAI_API_KEY = "z_ai_api_key"`).
 
 3) Provision + install:
 ```bash

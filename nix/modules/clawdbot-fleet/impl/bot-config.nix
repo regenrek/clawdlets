@@ -1,18 +1,28 @@
-{ config, lib, defs }:
+{ lib, defs }:
 
 let
-  inherit (defs) cfg getBotProfile resolveBotWorkspace botGatewayPort;
+  inherit (defs)
+    cfg
+    getBotProfile
+    resolveBotWorkspace
+    botGatewayPort
+    isNonEmptyString
+    envRef
+    hooksTokenEnvVar
+    hooksGmailPushTokenEnvVar
+    skillApiKeyEnvVar;
 
   mkSkillEntries = b:
     let
       profile = getBotProfile b;
       entries = profile.skills.entries or {};
-      mkEntry = _: entry:
+      mkEntry = skill: entry:
         let
           env = entry.env or {};
+          apiKeySecret = entry.apiKeySecret or null;
           apiKey =
-            if (entry.apiKeySecret or null) != null
-            then config.sops.placeholder.${entry.apiKeySecret}
+            if isNonEmptyString apiKeySecret
+            then envRef (skillApiKeyEnvVar skill)
             else entry.apiKey or null;
           base = lib.optionalAttrs ((entry.enabled or null) != null) { enabled = entry.enabled; }
             // lib.optionalAttrs (apiKey != null) { apiKey = apiKey; }
@@ -52,27 +62,13 @@ let
       hooksEnabled = profile.hooks.enabled or null;
       hooksConfig =
         lib.optionalAttrs (hooksEnabled != null) { enabled = hooksEnabled; }
-        // lib.optionalAttrs (hooksTokenSecret != null) { token = config.sops.placeholder.${hooksTokenSecret}; }
-        // lib.optionalAttrs (hooksGmailPushTokenSecret != null) { gmail.pushToken = config.sops.placeholder.${hooksGmailPushTokenSecret}; };
-      discordTokenSecret = profile.discordTokenSecret or null;
+        // lib.optionalAttrs (isNonEmptyString hooksTokenSecret) { token = envRef hooksTokenEnvVar; }
+        // lib.optionalAttrs (isNonEmptyString hooksGmailPushTokenSecret) { gmail.pushToken = envRef hooksGmailPushTokenEnvVar; };
       gatewayPort =
         if (profile.gatewayPort or null) != null
         then profile.gatewayPort
         else botGatewayPort b;
       userCfg = profile.passthrough or { };
-      userDiscordToken =
-        let
-          channels = (userCfg.channels or {});
-          discord = (channels.discord or {});
-        in discord.token or null;
-      secretCfg =
-        if discordTokenSecret != null && discordTokenSecret != ""
-        then (
-          if userDiscordToken != null && userDiscordToken != ""
-          then throw "clawdbot config sets channels.discord.token while profile.discordTokenSecret is set; remove the inline token"
-          else { channels = { discord = { token = config.sops.placeholder.${discordTokenSecret}; }; }; }
-        )
-        else { };
       baseCfg = (
         {
           agents = {
@@ -103,7 +99,7 @@ let
       };
     in
       lib.recursiveUpdate
-        (lib.recursiveUpdate (lib.recursiveUpdate baseCfg userCfg) secretCfg)
+        (lib.recursiveUpdate baseCfg userCfg)
         invariants;
 in
 {

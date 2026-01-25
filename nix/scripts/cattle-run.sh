@@ -75,9 +75,11 @@ fetch_secrets_env() {
     fail "bootstrap file missing: ${bootstrap_file}"
   fi
 
-  local base_url token
+  local base_url token expires_at one_time
   base_url="$(jq -r '.baseUrl // ""' "${bootstrap_file}" 2>/dev/null || true)"
   token="$(jq -r '.token // ""' "${bootstrap_file}" 2>/dev/null || true)"
+  expires_at="$(jq -r '.expiresAt // ""' "${bootstrap_file}" 2>/dev/null || true)"
+  one_time="$(jq -r '.oneTime // ""' "${bootstrap_file}" 2>/dev/null || true)"
 
   if [[ -z "${base_url}" || "${base_url}" == "null" ]]; then
     fail "invalid bootstrap.json (missing baseUrl)"
@@ -85,8 +87,26 @@ fetch_secrets_env() {
   if [[ -z "${token}" || "${token}" == "null" ]]; then
     fail "invalid bootstrap.json (missing token)"
   fi
+  if [[ -n "${expires_at}" && "${expires_at}" != "null" ]]; then
+    if [[ "${one_time}" != "true" ]]; then
+      fail "invalid bootstrap.json (token must be one-time)"
+    fi
+  elif [[ -n "${one_time}" && "${one_time}" != "null" ]]; then
+    fail "invalid bootstrap.json (expiresAt missing)"
+  fi
   if [[ "${base_url}" != http://* && "${base_url}" != https://* ]]; then
     fail "invalid bootstrap.json baseUrl (expected http(s)): ${base_url}"
+  fi
+
+  if [[ -n "${expires_at}" && "${expires_at}" != "null" ]]; then
+    local expires_epoch now_epoch
+    if ! expires_epoch="$(date -u -d "${expires_at}" +%s 2>/dev/null)"; then
+      fail "invalid bootstrap.json expiresAt (expected ISO-8601): ${expires_at}"
+    fi
+    now_epoch="$(date -u +%s)"
+    if (( expires_epoch <= now_epoch )); then
+      fail "bootstrap token expired (expiresAt=${expires_at})"
+    fi
   fi
 
   local url

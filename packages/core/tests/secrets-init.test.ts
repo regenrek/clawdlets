@@ -4,23 +4,30 @@ describe("secrets-init JSON + non-interactive validation", () => {
   it("detects placeholders in buildSecretsInitTemplate (enforcement regression)", async () => {
     const { buildSecretsInitTemplate, listSecretsInitPlaceholders } = await import("../src/lib/secrets-init");
 
-    const t1 = buildSecretsInitTemplate({ bots: ["maren", "sonja"], requiresTailscaleAuthKey: true });
+    const t1 = buildSecretsInitTemplate({
+      requiresTailscaleAuthKey: true,
+      secrets: {
+        discord_token_maren: "<REPLACE_WITH_SECRET>",
+        discord_token_sonja: "<REPLACE_WITH_SECRET>",
+      },
+    });
     expect(
       listSecretsInitPlaceholders({
         input: t1,
-        bots: ["maren", "sonja"],
         requiresTailscaleAuthKey: true,
       }),
-    ).toEqual(["adminPasswordHash", "discordTokens.maren", "discordTokens.sonja", "tailscaleAuthKey"]);
+    ).toEqual(["adminPasswordHash", "secrets.discord_token_maren", "secrets.discord_token_sonja", "tailscaleAuthKey"]);
 
-    const t2 = buildSecretsInitTemplate({ bots: ["maren"], requiresTailscaleAuthKey: false });
+    const t2 = buildSecretsInitTemplate({
+      requiresTailscaleAuthKey: false,
+      secrets: { discord_token_maren: "<REPLACE_WITH_SECRET>" },
+    });
     expect(
       listSecretsInitPlaceholders({
         input: { ...t2, tailscaleAuthKey: "<REPLACE_WITH_TSKEY_AUTH>" },
-        bots: ["maren"],
         requiresTailscaleAuthKey: false,
       }),
-    ).toEqual(["adminPasswordHash", "discordTokens.maren"]);
+    ).toEqual(["adminPasswordHash", "secrets.discord_token_maren"]);
   });
 
   it("isPlaceholderSecretValue only matches full <...> tokens", async () => {
@@ -36,15 +43,13 @@ describe("secrets-init JSON + non-interactive validation", () => {
       adminPasswordHash: "<REPLACE_WITH_YESCRYPT_HASH>",
       tailscaleAuthKey: "<REPLACE_WITH_TSKEY_AUTH>",
       secrets: { z_ai_api_key: "<OPTIONAL>", openai_api_key: "<REPLACE_WITH_OPENAI_KEY>" },
-      discordTokens: { maren: "<REPLACE_WITH_DISCORD_TOKEN>", sonja: "tok<ok>" },
     };
     expect(
       listSecretsInitPlaceholders({
         input,
-        bots: ["maren", "sonja"],
         requiresTailscaleAuthKey: true,
       }),
-    ).toEqual(["adminPasswordHash", "discordTokens.maren", "secrets.openai_api_key", "tailscaleAuthKey"]);
+    ).toEqual(["adminPasswordHash", "secrets.openai_api_key", "tailscaleAuthKey"]);
   });
 
   it("parseSecretsInitJson rejects invalid JSON without leaking content", async () => {
@@ -55,7 +60,7 @@ describe("secrets-init JSON + non-interactive validation", () => {
   it("parseSecretsInitJson rejects missing adminPasswordHash without leaking tokens", async () => {
     const { parseSecretsInitJson } = await import("../src/lib/secrets-init");
     const secret = "SUPER_SECRET_TOKEN_123";
-    const raw = JSON.stringify({ discordTokens: { maren: secret } });
+    const raw = JSON.stringify({ secrets: { discord_token_maren: secret } });
     try {
       parseSecretsInitJson(raw);
       throw new Error("expected parseSecretsInitJson to throw");
@@ -73,13 +78,11 @@ describe("secrets-init JSON + non-interactive validation", () => {
         adminPasswordHash: "  hash  ",
         tailscaleAuthKey: "  ts  ",
         secrets: { z_ai_api_key: "  zai  ", empty: " " },
-        discordTokens: { maren: "  tok  ", sonja: " " },
       }),
     );
     expect(out.adminPasswordHash).toBe("hash");
     expect(out.tailscaleAuthKey).toBe("ts");
     expect(out.secrets).toEqual({ z_ai_api_key: "zai" });
-    expect(out.discordTokens).toEqual({ maren: "tok" });
   });
 
   it("validateSecretsInitNonInteractive requires --from-json", async () => {

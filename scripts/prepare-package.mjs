@@ -32,11 +32,6 @@ function cpDir(src, dest) {
   fs.cpSync(src, dest, { recursive: true });
 }
 
-function cpDirDereference(src, dest) {
-  rmForce(dest);
-  fs.cpSync(src, dest, { recursive: true, dereference: true });
-}
-
 function cpFile(src, dest) {
   ensureDir(path.dirname(dest));
   fs.copyFileSync(src, dest);
@@ -71,15 +66,36 @@ function isWorkspaceProtocol(v) {
   return String(v || "").startsWith("workspace:");
 }
 
-function rewriteWorkspaceDeps(pkg, versionsByName, fallbackVersion) {
+function toPosixPath(p) {
+  return p.replaceAll("\\", "/");
+}
+
+function vendorPathForPackageName(name) {
+  return path.join("vendor", ...String(name).split("/"));
+}
+
+function fileSpecRelative(fromDir, toDir) {
+  const rel = path.relative(fromDir, toDir);
+  return `file:${toPosixPath(rel)}`;
+}
+
+function rewriteWorkspaceDepsToVendorFile(pkg, fromVendorDir, vendorDirsByName) {
   const next = { ...pkg };
-  const deps = { ...(next.dependencies || {}) };
-  for (const [k, v] of Object.entries(deps)) {
-    if (!isWorkspaceProtocol(v)) continue;
-    const resolved = versionsByName.get(k) || fallbackVersion;
-    deps[k] = resolved;
+  const sections = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"];
+
+  for (const section of sections) {
+    const deps = { ...(next[section] || {}) };
+    let changed = false;
+    for (const [depName, depVersion] of Object.entries(deps)) {
+      if (!isWorkspaceProtocol(depVersion)) continue;
+      const destVendorDir = vendorDirsByName.get(depName);
+      if (!destVendorDir) die(`workspace dependency not vendored: ${String(pkg.name)} -> ${depName}`);
+      deps[depName] = fileSpecRelative(fromVendorDir, destVendorDir);
+      changed = true;
+    }
+    if (changed) next[section] = deps;
   }
-  next.dependencies = deps;
+
   return next;
 }
 
@@ -172,12 +188,8 @@ function main() {
   if (!fs.existsSync(distDir)) die(`missing dist/ (run build): ${distDir}`);
 
   const workspacePkgs = collectWorkspacePackages(repoRoot);
-  const versionsByName = new Map();
-  for (const [name, info] of workspacePkgs.entries()) {
-    versionsByName.set(String(name), String(info.pkg.version || pkgVersion));
-  }
 
-  const bundledDeps = Object.entries(pkg.dependencies || {})
+  const workspaceDeps = Object.entries(pkg.dependencies || {})
     .filter(([, v]) => isWorkspaceProtocol(v))
     .map(([name]) => String(name));
 
@@ -202,41 +214,41 @@ function main() {
   const licenseSrc = path.join(repoRoot, "LICENSE");
   if (fs.existsSync(licenseSrc)) cpFile(licenseSrc, path.join(outPkgDir, "LICENSE"));
 
-  // Bundle internal workspace deps into node_modules.
-  const nmRoot = path.join(outPkgDir, "node_modules");
-  const bundled = [];
-  for (const depName of bundledDeps) {
+  // Vendor internal workspace deps into vendor/ and use file: deps.
+  const vendoredSet = new Set();
+  const toVisit = [...workspaceDeps];
+  while (toVisit.length > 0) {
+    const depName = toVisit.pop();
+    if (!depName) continue;
+    if (vendoredSet.has(depName)) continue;
+
     const info = workspacePkgs.get(depName);
     if (!info) die(`workspace dependency not found: ${depName}`);
+    vendoredSet.add(depName);
+
+    for (const [name, version] of Object.entries(info.pkg.dependencies || {})) {
+      if (!isWorkspaceProtocol(version)) continue;
+      toVisit.push(String(name));
+    }
+  }
+
+  const vendored = Array.from(vendoredSet).sort();
+  const vendorDirsByName = new Map(vendored.map((name) => [name, vendorPathForPackageName(name)]));
+
+  for (const depName of vendored) {
+    const info = workspacePkgs.get(depName);
+    if (!info) continue;
     const depPkg = info.pkg;
     const depDir = info.dir;
     const depDistDir = path.join(depDir, "dist");
     if (!fs.existsSync(depDistDir)) die(`missing dist/ for ${depName} (run build): ${depDistDir}`);
 
-    const depOutDir = path.join(nmRoot, ...String(depPkg.name).split("/"));
-    ensureDir(depOutDir);
-    writeJson(path.join(depOutDir, "package.json"), rewriteWorkspaceDeps(depPkg, versionsByName, pkgVersion));
-    cpDir(depDistDir, path.join(depOutDir, "dist"));
-    removeTsBuildInfoFiles(path.join(depOutDir, "dist"));
-
-    bundled.push(String(depPkg.name));
-  }
-
-  // Bundle runtime deps of bundled workspace packages.
-  const bundleRuntimeDeps = (pkgDir, pkgObj) => {
-    for (const [depName, depVersion] of Object.entries(pkgObj.dependencies || {})) {
-      if (isWorkspaceProtocol(depVersion)) continue;
-      const srcDepDir = path.join(pkgDir, "node_modules", ...String(depName).split("/"));
-      if (!fs.existsSync(srcDepDir)) die(`missing installed dependency (run install): ${srcDepDir}`);
-      const destDepDir = path.join(nmRoot, ...String(depName).split("/"));
-      ensureDir(path.dirname(destDepDir));
-      cpDirDereference(srcDepDir, destDepDir);
-    }
-  };
-  for (const depName of bundledDeps) {
-    const info = workspacePkgs.get(depName);
-    if (!info) continue;
-    bundleRuntimeDeps(info.dir, info.pkg);
+    const depVendorDir = path.join(outPkgDir, vendorDirsByName.get(depName));
+    ensureDir(depVendorDir);
+    const rewritten = rewriteWorkspaceDepsToVendorFile(depPkg, vendorDirsByName.get(depName), vendorDirsByName);
+    writeJson(path.join(depVendorDir, "package.json"), rewritten);
+    cpDir(depDistDir, path.join(depVendorDir, "dist"));
+    removeTsBuildInfoFiles(path.join(depVendorDir, "dist"));
   }
 
   // Publishable package.json (no workspace: protocol).
@@ -244,15 +256,16 @@ function main() {
   nextPkg.private = false;
   nextPkg.publishConfig = { ...(nextPkg.publishConfig || {}), access: "public" };
   nextPkg.files = Array.from(
-    new Set(["dist", "README.md", "LICENSE", ...(Array.isArray(nextPkg.files) ? nextPkg.files : [])]),
+    new Set(["dist", "vendor", "README.md", "LICENSE", ...(Array.isArray(nextPkg.files) ? nextPkg.files : [])]),
   ).filter((x) => x !== "node_modules");
 
-  nextPkg.bundledDependencies = Array.from(new Set([...(nextPkg.bundledDependencies || []), ...bundled]));
+  delete nextPkg.bundledDependencies;
 
   const deps = { ...(nextPkg.dependencies || {}) };
 
-  // Ensure runtime deps of bundled workspace packages are installed by npm.
-  for (const depName of bundledDeps) {
+  // file: vendor deps do not automatically install their own dependencies.
+  // Ensure runtime deps of vendored workspace packages are installed by npm at the root.
+  for (const depName of vendored) {
     const info = workspacePkgs.get(depName);
     if (!info) continue;
     for (const [name, version] of Object.entries(info.pkg.dependencies || {})) {
@@ -261,8 +274,8 @@ function main() {
     }
   }
 
-  for (const name of bundled) {
-    deps[name] = versionsByName.get(name) || pkgVersion;
+  for (const name of vendored) {
+    deps[name] = `file:${toPosixPath(vendorDirsByName.get(name))}`;
   }
   nextPkg.dependencies = deps;
 

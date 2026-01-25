@@ -109,7 +109,7 @@ function main() {
     console.log(`template-smoke: tmp=${tmpBase}`);
 
     run("pnpm", ["-r", "build"]);
-    run("node", ["scripts/prepare-package.mjs", "--out", tmpPkgDir]);
+    run("node", ["scripts/prepare-package.mjs", "--out", tmpPkgDir, "--allow-unsafe-out"]);
 
     const packed = runJson("npm", ["pack", "--json"], { cwd: tmpPkgDir });
     if (!Array.isArray(packed) || packed.length !== 1) die(`unexpected npm pack output: ${JSON.stringify(packed)}`);
@@ -174,4 +174,3 @@ function main() {
 }
 
 main();
-

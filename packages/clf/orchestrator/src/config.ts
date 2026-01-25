@@ -1,3 +1,5 @@
+import { MAX_BOOTSTRAP_TOKEN_TTL_SECONDS } from "@clawdlets/cattle-core/lib/cattle-cloudinit";
+
 function parseIntEnv(value: string | undefined, fallback: number): number {
   const v = String(value ?? "").trim();
   if (!v) return fallback;
@@ -49,6 +51,8 @@ export type ClfOrchestratorConfig = {
   adminAuthorizedKeysFile: string;
   adminAuthorizedKeysInline: string;
   tailscaleAuthKey: string;
+  tailscaleAuthKeyExpiresAt: string;
+  tailscaleAuthKeyOneTime: boolean;
 };
 
 export function loadClfOrchestratorConfigFromEnv(env: NodeJS.ProcessEnv): ClfOrchestratorConfig {
@@ -65,6 +69,8 @@ export function loadClfOrchestratorConfigFromEnv(env: NodeJS.ProcessEnv): ClfOrc
 
   const tailscaleAuthKey = String(env.TAILSCALE_AUTH_KEY || env.CLF_TAILSCALE_AUTH_KEY || "").trim();
   if (!tailscaleAuthKey) throw new Error("missing TAILSCALE_AUTH_KEY");
+  const tailscaleAuthKeyExpiresAt = String(env.CLF_TAILSCALE_AUTH_KEY_EXPIRES_AT || env.TAILSCALE_AUTH_KEY_EXPIRES_AT || "").trim();
+  const tailscaleAuthKeyOneTime = parseBoolEnv(env.CLF_TAILSCALE_AUTH_KEY_ONE_TIME ?? env.TAILSCALE_AUTH_KEY_ONE_TIME, true);
 
   const image = String(env.CLF_CATTLE_IMAGE || "").trim();
   if (!image) throw new Error("missing CLF_CATTLE_IMAGE");
@@ -77,6 +83,8 @@ export function loadClfOrchestratorConfigFromEnv(env: NodeJS.ProcessEnv): ClfOrc
   if (secretsBaseUrl && !/^https?:\/\//.test(secretsBaseUrl)) {
     throw new Error(`invalid CLF_CATTLE_SECRETS_BASE_URL (expected http(s)): ${secretsBaseUrl}`);
   }
+
+  const bootstrapTtlMaxMs = MAX_BOOTSTRAP_TOKEN_TTL_SECONDS * 1000;
 
   return {
     dbPath,
@@ -100,12 +108,14 @@ export function loadClfOrchestratorConfigFromEnv(env: NodeJS.ProcessEnv): ClfOrc
       secretsListenHost: parseStringEnv(env.CLF_CATTLE_SECRETS_LISTEN_HOST, "auto"),
       secretsListenPort: Math.max(1, Math.min(65535, parseIntEnv(env.CLF_CATTLE_SECRETS_LISTEN_PORT, 18337))),
       secretsBaseUrl,
-      bootstrapTtlMs: Math.max(30_000, Math.min(60 * 60_000, parseIntEnv(env.CLF_CATTLE_BOOTSTRAP_TTL_MS, 5 * 60_000))),
+      bootstrapTtlMs: Math.max(30_000, Math.min(bootstrapTtlMaxMs, parseIntEnv(env.CLF_CATTLE_BOOTSTRAP_TTL_MS, 5 * 60_000))),
     },
 
     personasRoot,
     adminAuthorizedKeysFile,
     adminAuthorizedKeysInline,
     tailscaleAuthKey,
+    tailscaleAuthKeyExpiresAt,
+    tailscaleAuthKeyOneTime,
   };
 }
