@@ -7,4 +7,5 @@ export default defineConfig({
   platform: "node",
   clean: true,
   skipNodeModulesBundle: true,
+  sourcemap: false,
 });
