@@ -5,6 +5,18 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 
 ## Unreleased
 
+## [0.4.3] - 2026-01-26
+### Fixed
+- Publish only `clawdlets` + `@clawdlets/plugin-cattle` to npm; bundle internal workspace packages into dist to avoid broken installs.
+- Keep CLF nix build workspace-scoped to avoid offline pnpm fetches outside the CLF workspace.
+
+### Changed
+- Simplify npm publish guardrails: block only local-protocol deps (`workspace:`/`file:`/`link:`) in prepared package.
+- Simplify CLI asset copy step (no forced delete; overwrite in place).
+
+### Docs
+- Relax packaging sanity check to focus on local-protocol deps.
+
 ## [0.4.2] - 2026-01-26
 ### Fixed
 - Fix `pnpm -g add clawdlets` installs by removing `file:vendor/...` deps from published packages (rewrite `workspace:*` to real versions and publish required `@clawdlets/*` packages to npm).
