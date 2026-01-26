@@ -7,6 +7,8 @@ import {
   parseServerChannelsExecuteInput,
   parseServerChannelsStartInput,
   parseServerLogsExecuteInput,
+  parseServerRestartExecuteInput,
+  parseServerRestartStartInput,
   parseSecretsInitExecuteInput,
   parseWriteHostSecretsInput,
 } from "../src/sdk/serverfn-validators"
@@ -115,6 +117,21 @@ describe("serverfn validators", () => {
     ).toThrow(/invalid input/i)
   })
 
+  it("defaults non-string optional args to empty", () => {
+    expect(
+      parseServerChannelsExecuteInput({
+        projectId: "p1",
+        runId: "r1",
+        host: "alpha",
+        botId: "maren",
+        op: "status",
+        channel: 123,
+        account: null,
+        target: false,
+      } as any),
+    ).toMatchObject({ channel: "", account: "", target: "" })
+  })
+
   it("parses project+host inputs", () => {
     expect(parseProjectHostInput({ projectId: "p1", host: "alpha" })).toEqual({ projectId: "p1", host: "alpha" })
     expect(parseProjectHostInput({ projectId: "p1", host: "" })).toEqual({ projectId: "p1", host: "" })
@@ -180,5 +197,32 @@ describe("serverfn validators", () => {
 
   it("rejects invalid writeHostSecrets input", () => {
     expect(() => parseWriteHostSecretsInput({ projectId: "p1", host: "alpha", secrets: [] })).toThrow()
+  })
+
+  it("parses writeHostSecrets with safe secret names", () => {
+    expect(parseWriteHostSecretsInput({ projectId: "p1", host: "alpha", secrets: { discord_token: "abc" } })).toEqual({
+      projectId: "p1",
+      host: "alpha",
+      secrets: { discord_token: "abc" },
+    })
+  })
+
+  it("parses server restart inputs", () => {
+    expect(parseServerRestartStartInput({ projectId: "p1", host: "alpha", unit: "clawdbot-*.service" })).toEqual({
+      projectId: "p1",
+      host: "alpha",
+      unit: "clawdbot-*.service",
+    })
+
+    expect(
+      parseServerRestartExecuteInput({
+        projectId: "p1",
+        runId: "r1",
+        host: "alpha",
+        unit: "clawdbot-agent.service",
+        targetHost: "",
+        confirm: "restart clawdbot-agent.service",
+      }),
+    ).toMatchObject({ unit: "clawdbot-agent.service", confirm: "restart clawdbot-agent.service" })
   })
 })

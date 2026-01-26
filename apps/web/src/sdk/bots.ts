@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start"
 import { BotIdSchema } from "@clawdlets/shared/lib/identifiers"
-import { CHANNEL_PRESETS, applyChannelPreset } from "@clawdlets/core/lib/config-patch"
+import { CHANNEL_PRESETS, applyChannelPreset, applySecurityDefaults } from "@clawdlets/core/lib/config-patch"
 import { validateClawdbotConfig } from "@clawdlets/core/lib/clawdbot-schema-validate"
 import {
   ClawdletsConfigSchema,
@@ -135,7 +135,11 @@ export const applyBotChannelPreset = createServerFn({ method: "POST" })
     if (!existingBot || typeof existingBot !== "object") throw new Error("bot not found")
 
     const { clawdbot, warnings } = applyChannelPreset({ clawdbot: existingBot.clawdbot, preset: preset as any })
-    existingBot.clawdbot = clawdbot
+    {
+      const hardened = applySecurityDefaults({ clawdbot })
+      existingBot.clawdbot = hardened.clawdbot
+      for (const w of hardened.warnings) warnings.push(w)
+    }
 
     existingBot.profile = existingBot.profile && typeof existingBot.profile === "object" && !Array.isArray(existingBot.profile)
       ? existingBot.profile
@@ -197,6 +201,70 @@ export const applyBotChannelPreset = createServerFn({ method: "POST" })
       })
       await client.mutation(api.runs.setStatus, { runId, status: "succeeded" })
       return { ok: true as const, runId, warnings }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      await client.mutation(api.runs.setStatus, { runId, status: "failed", errorMessage: message })
+      return { ok: false as const, issues: [{ code: "error", path: [], message }] satisfies ValidationIssue[] }
+    }
+  })
+
+export const hardenBotClawdbotConfig = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => {
+    if (!data || typeof data !== "object") throw new Error("invalid input")
+    const d = data as Record<string, unknown>
+    return {
+      projectId: d["projectId"] as Id<"projects">,
+      botId: String(d["botId"] || ""),
+    }
+  })
+  .handler(async ({ data }) => {
+    const botId = data.botId.trim()
+    const parsedBot = BotIdSchema.safeParse(botId)
+    if (!parsedBot.success) throw new Error("invalid bot id")
+
+    const client = createConvexClient()
+    const repoRoot = await getRepoRoot(client, data.projectId)
+    const redactTokens = await readClawdletsEnvTokens(repoRoot)
+    const { configPath, config: raw } = loadClawdletsConfigRaw({ repoRoot })
+
+    const next = structuredClone(raw) as any
+    const existingBot = next?.fleet?.bots?.[botId]
+    if (!existingBot || typeof existingBot !== "object") throw new Error("bot not found")
+
+    const hardened = applySecurityDefaults({ clawdbot: existingBot.clawdbot })
+    if (hardened.changes.length === 0) return { ok: true as const, changes: [], warnings: [] }
+
+    existingBot.clawdbot = hardened.clawdbot
+    const validated = ClawdletsConfigSchema.safeParse(next)
+    if (!validated.success) return { ok: false as const, issues: toIssues(validated.error.issues as unknown[]) }
+
+    const { runId } = await client.mutation(api.runs.create, {
+      projectId: data.projectId,
+      kind: "config_write",
+      title: `bot ${botId} clawdbot harden`,
+    })
+
+    await client.mutation(api.auditLogs.append, {
+      projectId: data.projectId,
+      action: "bot.clawdbot.harden",
+      target: { botId },
+      data: { runId, changes: hardened.changes, warnings: hardened.warnings },
+    })
+
+    try {
+      await runWithEvents({
+        client,
+        runId,
+        redactTokens,
+        fn: async (emit) => {
+          await emit({ level: "info", message: `Hardening fleet.bots.${botId}.clawdbot` })
+          for (const w of hardened.warnings) await emit({ level: "warn", message: w })
+          await writeClawdletsConfig({ configPath, config: validated.data })
+          await emit({ level: "info", message: "Done." })
+        },
+      })
+      await client.mutation(api.runs.setStatus, { runId, status: "succeeded" })
+      return { ok: true as const, runId, changes: hardened.changes, warnings: hardened.warnings }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       await client.mutation(api.runs.setStatus, { runId, status: "failed", errorMessage: message })

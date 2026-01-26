@@ -12,9 +12,12 @@ function makeCtx(existing: RateLimitRow | null) {
   const ctx = {
     db: {
       query: () => ({
-        withIndex: (_name: string, _fn: any) => ({
+        withIndex: (_name: string, fn: any) => {
+          fn({ eq: (_field: string, _value: any) => ({}) })
+          return {
           unique: async () => existing,
-        }),
+          }
+        },
       }),
       insert: async (table: string, doc: any) => {
         inserts.push({ table, doc })

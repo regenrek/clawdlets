@@ -12,6 +12,25 @@ Clawdlets invariants always win:
 - `gateway.auth` (always enabled)
 - `agents.defaults.workspace`
 
+## Security audit + hardening
+
+Clawdlets treats Clawdbot security as deploy-critical by default: insecure “open” policies should not ship accidentally.
+
+- `clawdlets doctor` runs a static Clawdbot security lint per bot (config-only; no gateway needed).
+- `clawdlets server audit` runs `clawdbot security audit --json` per bot over SSH (fails on critical findings).
+- `clawdlets clawdbot harden` applies safe defaults to `fleet/clawdlets.json` (dry-run unless `--write`).
+- Web UI: Bot Clawdbot editor includes a “Harden” button; applying a channel preset also applies hardening defaults.
+
+Hardening defaults (opt-in):
+- `logging.redactSensitive="tools"` (if unset or `"off"`)
+- `session.dmScope="per-channel-peer"` (if unset or `"main"`)
+- `dmPolicy`/`dm.policy`: `"pairing"` (if unset or `"open"`)
+- `groupPolicy`: `"allowlist"` (if unset or `"open"`)
+
+Notes:
+- Hardening does **not** add allowlists (`allowFrom`, `groupAllowFrom`, `groups`) because it cannot know your intended users/groups.
+- “Open” DM/group policies are treated as critical findings.
+
 ## Schema sources (pinned vs live)
 
 - pinned schema is bundled with clawdlets and used by CLI validation + default UI editor

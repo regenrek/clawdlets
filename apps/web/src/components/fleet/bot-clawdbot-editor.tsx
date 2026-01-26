@@ -8,7 +8,7 @@ import { getPinnedClawdbotSchema } from "@clawdlets/core/lib/clawdbot-schema"
 import { Button } from "~/components/ui/button"
 import { Switch } from "~/components/ui/switch"
 import { Textarea } from "~/components/ui/textarea"
-import { setBotClawdbotConfig } from "~/sdk/bots"
+import { hardenBotClawdbotConfig, setBotClawdbotConfig } from "~/sdk/bots"
 import { getClawdbotSchemaLive, type ClawdbotSchemaLiveResult } from "~/sdk/clawdbot-schema"
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -78,6 +78,34 @@ export function BotClawdbotEditor(props: {
     },
   })
 
+  const harden = useMutation({
+    mutationFn: async () => {
+      setIssues(null)
+      return await hardenBotClawdbotConfig({
+        data: {
+          projectId: props.projectId as Id<"projects">,
+          botId: props.botId,
+        },
+      })
+    },
+    onSuccess: (res) => {
+      if (res.ok) {
+        const changes = Array.isArray((res as any).changes) ? (res as any).changes : []
+        toast.success(changes.length > 0 ? "Applied security defaults" : "Already hardened")
+        void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", props.projectId] })
+        return
+      }
+      setIssues(
+        (res.issues || []).map((i: any) => ({
+          path: (i.path || []).map(String).join(".") || "(root)",
+          message: i.message,
+        })),
+      )
+      toast.error("Hardening failed")
+    },
+    onError: (err) => toast.error(String(err)),
+  })
+
   const liveSchemaFetch = useMutation<ClawdbotSchemaLiveResult>({
     mutationFn: async () =>
       (await getClawdbotSchemaLive({
@@ -129,6 +157,9 @@ export function BotClawdbotEditor(props: {
         <div className="flex items-center gap-2">
           <Button type="button" variant="outline" onClick={format}>
             Format
+          </Button>
+          <Button type="button" variant="outline" disabled={!props.canEdit || harden.isPending} onClick={() => harden.mutate()}>
+            Harden
           </Button>
           <Button type="button" disabled={!props.canEdit || save.isPending || !parsed.ok} onClick={() => save.mutate()}>
             Save

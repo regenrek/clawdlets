@@ -9,6 +9,8 @@ import { validateFleetPolicy, type FleetConfig } from "../lib/fleet-policy.js";
 import { evalFleetConfig } from "../lib/fleet-nix-eval.js";
 import { withFlakesEnv } from "../lib/nix-flakes.js";
 import { ClawdletsConfigSchema } from "../lib/clawdlets-config.js";
+import { buildClawdbotBotConfig } from "../lib/clawdbot-config-invariants.js";
+import { lintClawdbotSecurityConfig } from "../lib/clawdbot-security-lint.js";
 import type { DoctorPush } from "./types.js";
 import { dirHasAnyFile, loadKnownBundledSkills, resolveTemplateRoot } from "./util.js";
 
@@ -182,6 +184,7 @@ export async function addRepoChecks(params: {
 
   let fleet: FleetConfig | null = null;
   let fleetBots: string[] | null = null;
+  let clawdletsConfig: any | null = null;
 
   params.push({
     scope: "repo",
@@ -441,7 +444,7 @@ export async function addRepoChecks(params: {
       try {
         const raw = fs.readFileSync(configPath, "utf8");
         const parsed = JSON.parse(raw);
-        ClawdletsConfigSchema.parse(parsed);
+        clawdletsConfig = ClawdletsConfigSchema.parse(parsed);
         params.push({ scope: "repo", status: "ok", label: "clawdlets config", detail: path.relative(repoRoot, configPath) });
       } catch (e) {
         params.push({ scope: "repo", status: "missing", label: "clawdlets config", detail: String((e as Error)?.message || e) });
@@ -474,6 +477,38 @@ export async function addRepoChecks(params: {
       }
     }
 
+  }
+
+  if (clawdletsConfig) {
+    const bots = Array.isArray(clawdletsConfig?.fleet?.botOrder) ? clawdletsConfig.fleet.botOrder : [];
+    for (const botRaw of bots) {
+      const bot = String(botRaw || "").trim();
+      if (!bot) continue;
+      try {
+        const merged = buildClawdbotBotConfig({ config: clawdletsConfig, bot }).merged;
+        const report = lintClawdbotSecurityConfig({ clawdbot: merged, botId: bot });
+        const status = report.summary.critical > 0 ? "missing" : report.summary.warn > 0 ? "warn" : "ok";
+        const top = report.findings
+          .filter((f) => f.severity === "critical" || f.severity === "warn")
+          .slice(0, 2)
+          .map((f) => f.id)
+          .join(", ");
+        const hint = top ? ` (${top}${report.findings.length > 2 ? ` +${report.findings.length - 2}` : ""})` : "";
+        params.push({
+          scope: "repo",
+          status,
+          label: `clawdbot security (${bot})`,
+          detail: `critical=${report.summary.critical} warn=${report.summary.warn} info=${report.summary.info}${hint}`,
+        });
+      } catch (e) {
+        params.push({
+          scope: "repo",
+          status: "warn",
+          label: `clawdbot security (${bot})`,
+          detail: `unable to lint: ${String((e as Error)?.message || e)}`,
+        });
+      }
+    }
   }
 
   try {
