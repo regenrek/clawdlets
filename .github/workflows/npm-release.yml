@@ -79,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           test -f vendor/@clawdlets/core/package.json
-          node -e 'const {spawnSync}=require("node:child_process");const r=spawnSync("npm",["pack","--dry-run","--json"],{encoding:"utf8"});if(r.status!==0){process.stderr.write(r.stderr||r.stdout||"");process.exit(r.status??1);}const info=JSON.parse(r.stdout)[0];const files=new Set(info.files.map((f)=>f.path));if(!files.has("vendor/@clawdlets/core/package.json")){throw new Error("vendored core package missing from npm pack file list");}console.log("ok: vendored core package present");'
+          node -e 'const {spawnSync}=require("node:child_process");const pkg=require("./package.json");const r=spawnSync("npm",["pack","--dry-run","--json"],{encoding:"utf8"});if(r.status!==0){process.stderr.write(r.stderr||r.stdout||"");process.exit(r.status??1);}const info=JSON.parse(r.stdout)[0];const files=new Set(info.files.map((f)=>f.path));const deps=pkg.dependencies||{};const vendored=Object.entries(deps).filter(([,v])=>String(v).startsWith("file:vendor/")).map(([n])=>n);if(!vendored.length){throw new Error("no vendored workspace deps detected (expected file:vendor/...)");}for(const n of vendored){const p="vendor/"+n+"/package.json";if(!files.has(p)){throw new Error("vendored dep missing from npm pack file list: "+p);}}console.log("ok: vendored deps present in npm pack: "+vendored.join(", "));'
 
       - name: Publish to npm (OIDC)
         working-directory: dist/npm/clawdlets
@@ -103,7 +103,7 @@ jobs:
         run: |
           set -euo pipefail
           test -f vendor/@clawdlets/core/package.json
-          node -e 'const {spawnSync}=require("node:child_process");const r=spawnSync("npm",["pack","--dry-run","--json"],{encoding:"utf8"});if(r.status!==0){process.stderr.write(r.stderr||r.stdout||"");process.exit(r.status??1);}const info=JSON.parse(r.stdout)[0];const files=new Set(info.files.map((f)=>f.path));if(!files.has("vendor/@clawdlets/core/package.json")){throw new Error("vendored core package missing from npm pack file list");}console.log("ok: vendored core package present");'
+          node -e 'const {spawnSync}=require("node:child_process");const pkg=require("./package.json");const r=spawnSync("npm",["pack","--dry-run","--json"],{encoding:"utf8"});if(r.status!==0){process.stderr.write(r.stderr||r.stdout||"");process.exit(r.status??1);}const info=JSON.parse(r.stdout)[0];const files=new Set(info.files.map((f)=>f.path));const deps=pkg.dependencies||{};const vendored=Object.entries(deps).filter(([,v])=>String(v).startsWith("file:vendor/")).map(([n])=>n);if(!vendored.length){throw new Error("no vendored workspace deps detected (expected file:vendor/...)");}for(const n of vendored){const p="vendor/"+n+"/package.json";if(!files.has(p)){throw new Error("vendored dep missing from npm pack file list: "+p);}}console.log("ok: vendored deps present in npm pack: "+vendored.join(", "));'
 
       - name: Publish plugin to npm (OIDC)
         working-directory: dist/npm/clawdlets-plugin-cattle
