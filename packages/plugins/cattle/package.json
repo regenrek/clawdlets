@@ -1,6 +1,6 @@
 {
   "name": "@clawdlets/plugin-cattle",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": false,
   "type": "module",
   "description": "Clawdlets cattle plugin",
