@@ -2,13 +2,20 @@
 
 This repo publishes `clawdlets` to npm via GitHub Actions using npm Trusted Publishing (OIDC).
 
-## About `@clawdlets/*` packages (important)
+## About internal workspace packages (important)
 
-`clawdlets` depends on internal workspace packages like `@clawdlets/core`, `@clawdlets/shared`, and `@clawdlets/cattle-core`.
+This repo uses workspace packages for code boundaries (`packages/core`, `packages/shared`, `packages/cattle-core`, `packages/clf/queue`), but we intentionally **do not publish them to npm**.
 
-These are **not required to exist on npm**. The publish workflow vendors them into the published tarball under `vendor/@clawdlets/*` and rewrites dependencies to `file:vendor/...` via `scripts/prepare-package.mjs`.
+Instead:
+- `clawdlets` and `@clawdlets/plugin-cattle` are bundled (tsdown bundles workspace deps into `dist/`)
+- `scripts/prepare-package.mjs` drops all `workspace:*` deps and fails if any local protocol deps remain
 
-If `vendor/` is missing from the published package, installs will fail (common symptom: `ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND ... vendor/@clawdlets/core`).
+This keeps npm surface area small (only 2 packages) and avoids broken installs across package managers.
+
+The publish workflow uses `scripts/prepare-package.mjs` to:
+- drop `workspace:*` deps (workspace code is bundled into `dist/`)
+- strip `.map` + `.tsbuildinfo` from `dist/`
+- copy `README.md` + `LICENSE`
 
 ## Preconditions
 
@@ -51,17 +58,17 @@ pnpm dlx tsx scripts/release.ts patch --dry-run
 
 ## Packaging sanity check (do this for hotfixes like 0.4.1)
 
-Before tagging/publishing (or when fixing a broken npm release), verify the prepared package actually contains `vendor/`:
+Before tagging/publishing (or when fixing a broken npm release), verify the prepared package has **no local protocol deps**:
 
 ```bash
 pnpm -r build
 node scripts/prepare-package.mjs --out dist/npm/clawdlets
-test -f dist/npm/clawdlets/vendor/@clawdlets/core/package.json
-cd dist/npm/clawdlets && npm pack --silent >/dev/null
-tar -tf clawdlets-*.tgz | rg "package/vendor/@clawdlets/core/package.json"
+cd dist/npm/clawdlets
+node -e 'const pkg=require("./package.json");for(const s of ["dependencies","devDependencies","optionalDependencies","peerDependencies"]){for(const [k,v] of Object.entries(pkg[s]||{})){const spec=String(v||"");if(spec.startsWith("workspace:")||spec.startsWith("file:")||spec.startsWith("link:")){throw new Error(`bad dep: ${s}.${k}=${spec}`);}}}console.log("ok")'
+node dist/main.mjs --version
 ```
 
-If any of these checks fail, **do not publish** (you will ship another broken `file:vendor/...` package).
+If any of these checks fail, **do not publish** (you will ship a package that cannot be installed by `pnpm`/`yarn`).
 
 ## What happens on GitHub
 
@@ -70,7 +77,7 @@ If any of these checks fail, **do not publish** (you will ship another broken `f
   - creates a GitHub Release using notes extracted from `CHANGELOG.md`
 - Publishing the GitHub Release triggers workflow `npm Release`:
   - builds
-  - stages a publishable package dir via `scripts/prepare-package.mjs`
+  - stages publishable package dirs via `scripts/prepare-package.mjs`
   - publishes with OIDC: `npm publish --provenance`
 
 ## After publish

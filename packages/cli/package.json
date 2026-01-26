@@ -1,6 +1,6 @@
 {
   "name": "clawdlets",
-  "version": "0.4.1",
+  "version": "0.4.3",
   "private": false,
   "type": "module",
   "description": "CLI for clawdlets (NixOS fleet + bot operations)",
@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "dev": "tsdown --watch",
-    "build": "tsdown && node ../../scripts/copy-cli-config.mjs",
+    "build": "tsdown && node ../../scripts/copy-cli-config.mjs && node ../../scripts/copy-cli-assets.mjs",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
@@ -30,6 +30,7 @@
     "@clack/prompts": "^0.11.0",
     "@clawdlets/core": "workspace:*",
     "@clawdlets/shared": "workspace:*",
+    "ajv": "^8.17.1",
     "citty": "^0.1.6",
     "giget": "^2.0.0",
     "yaml": "^2.8.0",
@@ -53,9 +54,5 @@
     "url": "git+https://github.com/regenrek/clawdlets.git"
   },
   "license": "MIT",
-  "packageManager": "pnpm@10.25.0",
-  "bundledDependencies": [
-    "@clawdlets/core",
-    "@clawdlets/shared"
-  ]
+  "packageManager": "pnpm@10.25.0"
 }

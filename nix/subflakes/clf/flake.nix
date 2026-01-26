@@ -36,7 +36,7 @@
             fetcherVersion = 3;
             pnpmWorkspaces = pnpmWorkspacesClf;
             # CLF-specific hash - update this when pnpm-lock.yaml changes
-            hash = "sha256-XkTy04HXmlmQ/KKFlvW+f9HJytLW8J+3FJaNoWiW1jE=";
+            hash = "sha256-i3l3S6d0CWObzxG2ithf3zWH7WTng3XimqAnCLQyBsg=";
           };
         in
         pkgs.buildNpmPackage {
@@ -61,8 +61,7 @@
           buildPhase = ''
             runHook preBuild
 
-            pnpm install --frozen-lockfile --offline --ignore-scripts
-
+            # Dependencies are installed by pnpmConfigHook (offline, workspace-scoped via pnpmWorkspacesClf).
             pnpm --filter=@clawdlets/shared build
             pnpm --filter=@clawdlets/cattle-core build
             pnpm --filter=@clawdlets/clf-queue build

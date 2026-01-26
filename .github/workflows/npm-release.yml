@@ -71,15 +71,14 @@ jobs:
       - name: Build
         run: pnpm -r build
 
-      - name: Prepare publish dir
+      - name: Prepare publish dir (clawdlets)
         run: node scripts/prepare-package.mjs --out dist/npm/clawdlets
 
-      - name: Verify prepared package contains vendored workspace deps
+      - name: Verify prepared clawdlets package has no local protocol deps
         working-directory: dist/npm/clawdlets
         run: |
           set -euo pipefail
-          test -f vendor/@clawdlets/core/package.json
-          node -e 'const {spawnSync}=require("node:child_process");const pkg=require("./package.json");const r=spawnSync("npm",["pack","--dry-run","--json"],{encoding:"utf8"});if(r.status!==0){process.stderr.write(r.stderr||r.stdout||"");process.exit(r.status??1);}const info=JSON.parse(r.stdout)[0];const files=new Set(info.files.map((f)=>f.path));const deps=pkg.dependencies||{};const vendored=Object.entries(deps).filter(([,v])=>String(v).startsWith("file:vendor/")).map(([n])=>n);if(!vendored.length){throw new Error("no vendored workspace deps detected (expected file:vendor/...)");}for(const n of vendored){const p="vendor/"+n+"/package.json";if(!files.has(p)){throw new Error("vendored dep missing from npm pack file list: "+p);}}console.log("ok: vendored deps present in npm pack: "+vendored.join(", "));'
+          node -e 'const pkg=require("./package.json");const sections=["dependencies","devDependencies","optionalDependencies","peerDependencies"];for(const s of sections){const deps=pkg[s]||{};for(const [name,raw] of Object.entries(deps)){const spec=String(raw||"");if(spec.startsWith("workspace:")||spec.startsWith("file:")||spec.startsWith("link:")){throw new Error("unsupported dependency protocol: "+s+"."+name+"="+spec);}}}console.log("ok: no local-protocol deps");'
 
       - name: Publish to npm (OIDC)
         working-directory: dist/npm/clawdlets
@@ -98,12 +97,11 @@ jobs:
       - name: Prepare plugin publish dir (cattle)
         run: node scripts/prepare-package.mjs --pkg packages/plugins/cattle --out dist/npm/clawdlets-plugin-cattle
 
-      - name: Verify prepared plugin package contains vendored workspace deps
+      - name: Verify prepared plugin package has no local protocol deps
         working-directory: dist/npm/clawdlets-plugin-cattle
         run: |
           set -euo pipefail
-          test -f vendor/@clawdlets/core/package.json
-          node -e 'const {spawnSync}=require("node:child_process");const pkg=require("./package.json");const r=spawnSync("npm",["pack","--dry-run","--json"],{encoding:"utf8"});if(r.status!==0){process.stderr.write(r.stderr||r.stdout||"");process.exit(r.status??1);}const info=JSON.parse(r.stdout)[0];const files=new Set(info.files.map((f)=>f.path));const deps=pkg.dependencies||{};const vendored=Object.entries(deps).filter(([,v])=>String(v).startsWith("file:vendor/")).map(([n])=>n);if(!vendored.length){throw new Error("no vendored workspace deps detected (expected file:vendor/...)");}for(const n of vendored){const p="vendor/"+n+"/package.json";if(!files.has(p)){throw new Error("vendored dep missing from npm pack file list: "+p);}}console.log("ok: vendored deps present in npm pack: "+vendored.join(", "));'
+          node -e 'const pkg=require("./package.json");const sections=["dependencies","devDependencies","optionalDependencies","peerDependencies"];for(const s of sections){const deps=pkg[s]||{};for(const [name,raw] of Object.entries(deps)){const spec=String(raw||"");if(spec.startsWith("workspace:")||spec.startsWith("file:")||spec.startsWith("link:")){throw new Error("unsupported dependency protocol: "+s+"."+name+"="+spec);}}}console.log("ok: no local-protocol deps");'
 
       - name: Publish plugin to npm (OIDC)
         working-directory: dist/npm/clawdlets-plugin-cattle

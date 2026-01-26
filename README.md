@@ -1,40 +1,27 @@
 # Clawdlets
 
-Clawdlets is the hetzner infrastructure companion for [clawdbot](https://github.com/clawdbot/clawdbot) and [nix-clawdbot](https://github.com/clawdbot/nix-clawdbot). It provides the tooling to deploy and manage secure, reproducible bot fleets on Hetzner Cloud using NixOS. The infra template lives in `regenrek/clawdlets-template`; this repo is the CLI + docs.
+Clawdlets is an unofficial clawdbot server provisioner for made for hetzner.
 
-🚧 Under construction: Don't use this as it is. Its currently WIP and only for advanced users.
+## Official Templates
+- Looking for official AWS Deploy? [clawdbot/clawdinators](https://github.com/clawdbot/clawdinators)
+- Clawdbot [nix-clawdbot](https://github.com/clawdbot/nix-clawdbot)
 
-Looking for official AWS Deploy? [clawdbot/clawdinators](https://github.com/clawdbot/clawdinators)
-
-![Clawdlets Banner](public/clawdlets-banner.webp)
+> 🚨🚨
+> **Use at your own risk!** This project is under active development and not production-ready. You absolutely need to know what you're doing before deploying this. Misconfiguration can expose credentials, open security holes, or cause data loss.
+>
 
 ## Features
 
 - **Discord bot fleet** – deploy multiple bots from one repo.
-- **Secure by default** – WireGuard/Tailscale, lockdown, sops/age secrets.
+- **Options for Security** – Tailscale, lockdown, sops/age secrets.
 - **Hetzner + NixOS** – immutable infra + reproducible deploys.
 - **CLI-first** – bootstrap, deploy, ops, troubleshooting.
 - **Atomic updates** – rollbacks via NixOS generations.
 
+
 ## Quickstart
 
-Ready to ship? Check out the [Quickstart Guide](docs/quickstart.md) to get your fleet running in minutes.
-
-## Local hooks (recommended)
-
-- Install git hooks: `nix run nixpkgs#lefthook -- install -f`
-- Policy is in `.forbidden-paths.regex` (blocks committing local runtime + credential files).
-- Manual gate before PR/release: `pnpm gate`
-
-## Ask an agent (copy/paste prompt)
-
-```text
-clawdlets project init --dir ~/projects/clawdlets-project
-cd ~/projects/clawdlets-project
-
-Now start Codex/Claude and tell it
-read @AGENT-BOOTSTRAP-SERVER.md and help me setup my own clawdlets hetzner server
-```
+Read [Quickstart Guide](docs/quickstart.md) to get started.
 
 ## Documentation
 

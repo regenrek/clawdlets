@@ -79,20 +79,7 @@ function isWorkspaceProtocol(v) {
   return String(v || "").startsWith("workspace:");
 }
 
-function toPosixPath(p) {
-  return p.replaceAll("\\", "/");
-}
-
-function vendorPathForPackageName(name) {
-  return path.join("vendor", ...String(name).split("/"));
-}
-
-function fileSpecRelative(fromDir, toDir) {
-  const rel = path.relative(fromDir, toDir);
-  return `file:${toPosixPath(rel)}`;
-}
-
-function rewriteWorkspaceDepsToVendorFile(pkg, fromVendorDir, vendorDirsByName) {
+function dropWorkspaceDeps(pkg) {
   const next = { ...pkg };
   const sections = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"];
 
@@ -101,41 +88,13 @@ function rewriteWorkspaceDepsToVendorFile(pkg, fromVendorDir, vendorDirsByName) 
     let changed = false;
     for (const [depName, depVersion] of Object.entries(deps)) {
       if (!isWorkspaceProtocol(depVersion)) continue;
-      const destVendorDir = vendorDirsByName.get(depName);
-      if (!destVendorDir) die(`workspace dependency not vendored: ${String(pkg.name)} -> ${depName}`);
-      deps[depName] = fileSpecRelative(fromVendorDir, destVendorDir);
+      delete deps[depName];
       changed = true;
     }
     if (changed) next[section] = deps;
   }
 
   return next;
-}
-
-function collectWorkspacePackages(root) {
-  const out = new Map();
-  const ignore = new Set(["node_modules", "dist", "coverage", ".git", ".turbo"]);
-  const rootDir = path.join(root, "packages");
-  if (!fs.existsSync(rootDir)) return out;
-
-  const walk = (dir) => {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const ent of entries) {
-      if (!ent.isDirectory()) continue;
-      if (ignore.has(ent.name)) continue;
-      const next = path.join(dir, ent.name);
-      const pkgPath = path.join(next, "package.json");
-      if (fs.existsSync(pkgPath)) {
-        const pkg = readJson(pkgPath);
-        const name = String(pkg.name || "").trim();
-        if (name) out.set(name, { dir: next, pkg });
-      }
-      walk(next);
-    }
-  };
-
-  walk(rootDir);
-  return out;
 }
 
 function resolveDefaultOutDir(pkgDir, pkg) {
@@ -200,12 +159,6 @@ function main() {
   const distDir = path.join(pkgDir, "dist");
   if (!fs.existsSync(distDir)) die(`missing dist/ (run build): ${distDir}`);
 
-  const workspacePkgs = collectWorkspacePackages(repoRoot);
-
-  const workspaceDeps = Object.entries(pkg.dependencies || {})
-    .filter(([, v]) => isWorkspaceProtocol(v))
-    .map(([name]) => String(name));
-
   const outPkgDir = outDir;
   rmForce(outPkgDir);
   ensureDir(outPkgDir);
@@ -228,75 +181,28 @@ function main() {
   const licenseSrc = path.join(repoRoot, "LICENSE");
   if (fs.existsSync(licenseSrc)) cpFile(licenseSrc, path.join(outPkgDir, "LICENSE"));
 
-  // Vendor internal workspace deps into vendor/ and use file: deps.
-  const vendoredSet = new Set();
-  const toVisit = [...workspaceDeps];
-  while (toVisit.length > 0) {
-    const depName = toVisit.pop();
-    if (!depName) continue;
-    if (vendoredSet.has(depName)) continue;
-
-    const info = workspacePkgs.get(depName);
-    if (!info) die(`workspace dependency not found: ${depName}`);
-    vendoredSet.add(depName);
-
-    for (const [name, version] of Object.entries(info.pkg.dependencies || {})) {
-      if (!isWorkspaceProtocol(version)) continue;
-      toVisit.push(String(name));
-    }
-  }
-
-  const vendored = Array.from(vendoredSet).sort();
-  const vendorDirsByName = new Map(vendored.map((name) => [name, vendorPathForPackageName(name)]));
-
-  for (const depName of vendored) {
-    const info = workspacePkgs.get(depName);
-    if (!info) continue;
-    const depPkg = info.pkg;
-    const depDir = info.dir;
-    const depDistDir = path.join(depDir, "dist");
-    if (!fs.existsSync(depDistDir)) die(`missing dist/ for ${depName} (run build): ${depDistDir}`);
-
-    const depVendorDir = path.join(outPkgDir, vendorDirsByName.get(depName));
-    ensureDir(depVendorDir);
-    const rewritten = rewriteWorkspaceDepsToVendorFile(depPkg, vendorDirsByName.get(depName), vendorDirsByName);
-    writeJson(path.join(depVendorDir, "package.json"), rewritten);
-    cpDir(depDistDir, path.join(depVendorDir, "dist"));
-    removeTsBuildInfoFiles(path.join(depVendorDir, "dist"));
-    removeSourceMaps(path.join(depVendorDir, "dist"));
-  }
-
-  // Publishable package.json (no workspace: protocol).
-  const nextPkg = { ...pkg };
+  // Publishable package.json: published artifacts must be installable without workspace-local deps.
+  // Internal workspace packages are bundled into the build output and removed from the manifest.
+  const nextPkg = dropWorkspaceDeps(pkg);
   nextPkg.private = false;
   nextPkg.publishConfig = { ...(nextPkg.publishConfig || {}), access: "public" };
   nextPkg.files = Array.from(
-    new Set(["dist", "vendor", "README.md", "LICENSE", ...(Array.isArray(nextPkg.files) ? nextPkg.files : [])]),
+    new Set(["dist", "README.md", "LICENSE", ...(Array.isArray(nextPkg.files) ? nextPkg.files : [])]),
   ).filter((x) => x !== "node_modules");
 
   delete nextPkg.bundledDependencies;
+  delete nextPkg.bundleDependencies;
 
-  const deps = { ...(nextPkg.dependencies || {}) };
-
-  // file: vendor deps do not automatically install their own dependencies.
-  // Ensure runtime deps of vendored workspace packages are installed by npm at the root.
-  for (const depName of vendored) {
-    const info = workspacePkgs.get(depName);
-    if (!info) continue;
-    for (const [name, version] of Object.entries(info.pkg.dependencies || {})) {
-      if (isWorkspaceProtocol(version)) continue;
-      if (!deps[name]) deps[name] = version;
+  // Guard: output manifest must be installable from npm across package managers (npm/pnpm/yarn).
+  for (const section of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
+    const deps = nextPkg[section] || {};
+    for (const [k, v] of Object.entries(deps)) {
+      const spec = String(v || "");
+      if (spec.startsWith("workspace:")) die(`output package.json still contains workspace protocol: ${section}.${k}=${v}`);
+      if (spec.startsWith("file:") || spec.startsWith("link:")) {
+        die(`output package.json contains unsupported local protocol: ${section}.${k}=${v}`);
+      }
     }
-  }
-
-  for (const name of vendored) {
-    deps[name] = `file:${toPosixPath(vendorDirsByName.get(name))}`;
-  }
-  nextPkg.dependencies = deps;
-
-  // Guard: no workspace: protocol in output manifest.
-  for (const [k, v] of Object.entries(nextPkg.dependencies || {})) {
-    if (String(v).startsWith("workspace:")) die(`output package.json still contains workspace protocol: ${k}=${v}`);
   }
 
   writeJson(path.join(outPkgDir, "package.json"), nextPkg);

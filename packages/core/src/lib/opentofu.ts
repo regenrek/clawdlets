@@ -8,7 +8,16 @@ import { withFlakesEnv } from "./nix-flakes.js";
 
 function resolveBundledOpenTofuDir(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
-  return path.resolve(here, "..", "assets", "opentofu");
+  // Core is used both as a standalone workspace package (dist/lib -> dist/assets),
+  // and bundled into the CLI/plugin build output (dist -> dist/assets).
+  const candidates = [
+    path.resolve(here, "..", "assets", "opentofu"),
+    path.resolve(here, "assets", "opentofu"),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return candidates[0]!;
 }
 
 function ensureOpenTofuWorkDir(opentofuDir: string): void {

@@ -1,5 +1,10 @@
 # Quickstart (CLI-first)
 
+> 🚨🚨
+> **Use at your own risk!** This project is under active development and not production-ready. You absolutely need to know what you're doing before deploying this. Misconfiguration can expose credentials, open security holes, or cause data loss.
+>
+> **Important:** clawdlets infrastructure does not automatically mean your clawdbot setup is secure. A misconfigured clawdbot config can still expose your VPS. Read the [Security Guide](https://docs.clawd.bot/cli/security#security) carefully before proceeding.
+
 Goal: provision a Hetzner VM + install NixOS + bring up Discord bots, with secrets in `secrets/` (sops-encrypted) and runtime state in `.clawdlets/` (gitignored).
 
 ## Prereqs (local)
@@ -12,14 +17,14 @@ Goal: provision a Hetzner VM + install NixOS + bring up Discord bots, with secre
 
 Run `clawdlets --help` for full flags.
 
-Install (recommended):
+Install from local monorepo:
 
 ```bash
-npm install -g clawdlets
-clawdlets --help
+pnpm install
+pnpm run clawdlets -- --help
 ```
 
-If you’re developing inside this monorepo, use the pnpm wrappers (example): `pnpm run clawdlets:secrets -- init` == `clawdlets secrets init`.
+Use the pnpm wrapper for all commands (example): `pnpm run clawdlets -- secrets init` == `clawdlets secrets init`.
 
 - `clawdlets doctor --scope bootstrap`: bootstrap preflight (fails on missing).
 - `clawdlets doctor --scope server-deploy --strict`: deploy gate (fails on warn/missing).
