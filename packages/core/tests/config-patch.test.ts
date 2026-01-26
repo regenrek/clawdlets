@@ -47,3 +47,40 @@ describe("config patch channel presets", () => {
   });
 });
 
+describe("config patch security defaults", () => {
+  it("sets logging.redactSensitive and session.dmScope", async () => {
+    const { applySecurityDefaults } = await import("../src/lib/config-patch");
+
+    const res = applySecurityDefaults({ clawdbot: {} });
+    expect(res.clawdbot).toMatchObject({
+      logging: { redactSensitive: "tools" },
+      session: { dmScope: "per-channel-peer" },
+    });
+    expect(res.changes.map((c) => c.path).sort()).toEqual(["logging.redactSensitive", "session.dmScope"]);
+  });
+
+  it("hardens open WhatsApp DMs and group policy", async () => {
+    const { applySecurityDefaults } = await import("../src/lib/config-patch");
+
+    const res = applySecurityDefaults({
+      clawdbot: {
+        channels: {
+          whatsapp: {
+            enabled: true,
+            dmPolicy: "open",
+            allowFrom: ["*"],
+          },
+        },
+      },
+    });
+    expect(res.clawdbot).toMatchObject({
+      channels: {
+        whatsapp: {
+          dmPolicy: "pairing",
+          groupPolicy: "allowlist",
+        },
+      },
+    });
+    expect(res.warnings.join("\n")).toMatch(/changed dmPolicy from "open" to "pairing"/i);
+  });
+});

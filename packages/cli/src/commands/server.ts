@@ -78,6 +78,7 @@ const serverAudit = defineCommand({
 
     const checks: AuditCheck[] = [];
     const add = (c: AuditCheck) => checks.push(c);
+    const clawdbotSecurityAudit: Record<string, unknown> = {};
 
     const must = async (label: string, cmd: string): Promise<string | null> => {
       const out = await trySshCapture(targetHost, cmd, { tty: sudo && args.sshTty });
@@ -172,6 +173,52 @@ const serverAudit = defineCommand({
         );
         if (channelsStatus) out.push({ status: "ok", label: `channels status (${botId})` });
 
+        {
+          const stateDir = `/srv/clawdbot/${botId}`;
+          const configPath = `/run/secrets/rendered/clawdbot-${botId}.json`;
+          const user = `bot-${botId}`;
+          const cmd = [
+            "sudo",
+            "-u",
+            shellQuote(user),
+            "env",
+            `CLAWDBOT_NIX_MODE=1`,
+            `CLAWDBOT_STATE_DIR=${shellQuote(stateDir)}`,
+            `CLAWDBOT_CONFIG_PATH=${shellQuote(configPath)}`,
+            "clawdbot",
+            "security",
+            "audit",
+            "--json",
+          ].join(" ");
+
+          const captured = await trySshCapture(targetHost, cmd, { tty: sudo && args.sshTty });
+          if (!captured.ok) {
+            clawdbotSecurityAudit[botId] = { error: captured.out };
+            out.push({ status: "warn", label: `clawdbot security audit (${botId})`, detail: captured.out });
+          } else {
+            const raw = captured.out;
+            try {
+              const parsed = JSON.parse(raw);
+              clawdbotSecurityAudit[botId] = parsed;
+
+              const summary = parsed?.summary;
+              const critical = Number(summary?.critical ?? 0);
+              const warn = Number(summary?.warn ?? 0);
+              const info = Number(summary?.info ?? 0);
+              const status: AuditCheck["status"] = critical > 0 ? "missing" : warn > 0 ? "warn" : "ok";
+              out.push({
+                status,
+                label: `clawdbot security audit (${botId})`,
+                detail: `critical=${Number.isFinite(critical) ? critical : "?"} warn=${Number.isFinite(warn) ? warn : "?"} info=${Number.isFinite(info) ? info : "?"}`,
+              });
+            } catch (e) {
+              const message = e instanceof Error ? e.message : String(e);
+              clawdbotSecurityAudit[botId] = { error: "invalid_json", message, raw };
+              out.push({ status: "warn", label: `clawdbot security audit (${botId})`, detail: `invalid json: ${message}` });
+            }
+          }
+        }
+
         return out;
       },
     });
@@ -180,7 +227,7 @@ const serverAudit = defineCommand({
       for (const c of list) add(c);
     }
 
-    if (args.json) console.log(JSON.stringify({ host: hostName, targetHost, checks }, null, 2));
+    if (args.json) console.log(JSON.stringify({ host: hostName, targetHost, checks, clawdbotSecurityAudit }, null, 2));
     else for (const c of checks) console.log(`${c.status}: ${c.label}${c.detail ? ` (${c.detail})` : ""}`);
 
     if (checks.some((c) => c.status === "missing")) process.exitCode = 1;
