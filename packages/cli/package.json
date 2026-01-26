@@ -1,6 +1,6 @@
 {
   "name": "clawdlets",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": false,
   "type": "module",
   "description": "CLI for clawdlets (NixOS fleet + bot operations)",
@@ -12,12 +12,12 @@
     "README.md",
     "LICENSE"
   ],
-    "scripts": {
-      "dev": "tsdown --watch",
-      "build": "tsdown && node ../../scripts/copy-cli-config.mjs && node ../../scripts/copy-cli-assets.mjs",
-      "typecheck": "tsc -b --pretty false",
-      "test": "vitest run",
-      "coverage": "vitest run --coverage",
+  "scripts": {
+    "dev": "tsdown --watch",
+    "build": "tsdown && node ../../scripts/copy-cli-config.mjs && node ../../scripts/copy-cli-assets.mjs",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "help": "node dist/main.mjs --help",
     "bootstrap": "node dist/main.mjs bootstrap",
     "doctor": "node dist/main.mjs doctor",
