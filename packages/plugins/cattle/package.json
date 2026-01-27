@@ -26,7 +26,7 @@
     "@clawdlets/core": "workspace:*",
     "@clawdlets/shared": "workspace:*",
     "better-sqlite3": "^12.6.2",
-    "citty": "^0.1.6"
+    "citty": "^0.2.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

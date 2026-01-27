@@ -19,7 +19,7 @@
   "dependencies": {
     "@clawdlets/shared": "workspace:*",
     "yaml": "^2.8.0",
-    "zod": "^4.3.5"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.0.9",
