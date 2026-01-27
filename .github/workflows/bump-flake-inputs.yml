@@ -57,7 +57,7 @@ jobs:
 
       - name: Create PR
         id: cpr
-        uses: peter-evans/create-pull-request@98357b18bf14b5342f975ff684046ec3b2a07725 # v4
+        uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0 # v4
         if: ${{ steps.update.outputs.changed == 'true' }}
         with:
           token: ${{ secrets.BUMP_TEMPLATE_REF_TOKEN }}
