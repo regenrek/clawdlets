@@ -305,11 +305,8 @@
           "enabled": {
             "type": "boolean"
           },
-          "controlUrl": {
-            "type": "string"
-          },
-          "controlToken": {
-            "type": "string"
+          "evaluateEnabled": {
+            "type": "boolean"
           },
           "cdpUrl": {
             "type": "string"
@@ -1117,6 +1114,12 @@
                       ]
                     }
                   },
+                  "extraPaths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "experimental": {
                     "type": "object",
                     "properties": {
@@ -1475,6 +1478,11 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9007199254740991
+                  },
+                  "maxHistoryShare": {
+                    "type": "number",
+                    "minimum": 0.1,
+                    "maximum": 0.9
                   },
                   "memoryFlush": {
                     "type": "object",
@@ -2034,26 +2042,6 @@
                       "allowHostControl": {
                         "type": "boolean"
                       },
-                      "allowedControlUrls": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      "allowedControlHosts": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      "allowedControlPorts": {
-                        "type": "array",
-                        "items": {
-                          "type": "integer",
-                          "exclusiveMinimum": 0,
-                          "maximum": 9007199254740991
-                        }
-                      },
                       "autoStart": {
                         "type": "boolean"
                       },
@@ -2148,6 +2136,12 @@
                             "const": "sessions"
                           }
                         ]
+                      }
+                    },
+                    "extraPaths": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
                       }
                     },
                     "experimental": {
@@ -2783,26 +2777,6 @@
                         "allowHostControl": {
                           "type": "boolean"
                         },
-                        "allowedControlUrls": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        "allowedControlHosts": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        },
-                        "allowedControlPorts": {
-                          "type": "array",
-                          "items": {
-                            "type": "integer",
-                            "exclusiveMinimum": 0,
-                            "maximum": 9007199254740991
-                          }
-                        },
                         "autoStart": {
                           "type": "boolean"
                         },
@@ -2862,6 +2836,12 @@
                         "type": "string"
                       }
                     },
+                    "alsoAllow": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "deny": {
                       "type": "array",
                       "items": {
@@ -2877,6 +2857,12 @@
                         "type": "object",
                         "properties": {
                           "allow": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "alsoAllow": {
                             "type": "array",
                             "items": {
                               "type": "string"
@@ -3035,6 +3021,12 @@
                                 "type": "string"
                               }
                             },
+                            "alsoAllow": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "deny": {
                               "type": "array",
                               "items": {
@@ -3089,6 +3081,12 @@
               "type": "string"
             }
           },
+          "alsoAllow": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "deny": {
             "type": "array",
             "items": {
@@ -3104,6 +3102,12 @@
               "type": "object",
               "properties": {
                 "allow": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "alsoAllow": {
                   "type": "array",
                   "items": {
                     "type": "string"
@@ -4659,6 +4663,12 @@
                       "type": "string"
                     }
                   },
+                  "alsoAllow": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "deny": {
                     "type": "array",
                     "items": {
@@ -4678,6 +4688,12 @@
                 "type": "object",
                 "properties": {
                   "allow": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "alsoAllow": {
                     "type": "array",
                     "items": {
                       "type": "string"
@@ -5613,6 +5629,10 @@
               {
                 "type": "string",
                 "const": "per-channel-peer"
+              },
+              {
+                "type": "string",
+                "const": "per-account-channel-peer"
               }
             ]
           },
@@ -6008,6 +6028,9 @@
                 "deliver": {
                   "type": "boolean"
                 },
+                "allowUnsafeExternalContent": {
+                  "type": "boolean"
+                },
                 "channel": {
                   "anyOf": [
                     {
@@ -6110,6 +6133,9 @@
                 "type": "integer",
                 "exclusiveMinimum": 0,
                 "maximum": 9007199254740991
+              },
+              "allowUnsafeExternalContent": {
+                "type": "boolean"
               },
               "serve": {
                 "type": "object",
@@ -6367,6 +6393,20 @@
               }
             },
             "additionalProperties": false
+          },
+          "mdns": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "off",
+                  "minimal",
+                  "full"
+                ]
+              }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -6475,6 +6515,9 @@
                 "type": "string"
               },
               "allowInsecureAuth": {
+                "type": "boolean"
+              },
+              "dangerouslyDisableDeviceAuth": {
                 "type": "boolean"
               }
             },
@@ -7003,7 +7046,7 @@
       "commands"
     ],
     "additionalProperties": false,
-    "title": "ClawdbotConfig"
+    "title": "MoltbotConfig"
   },
   "uiHints": {
     "wizard": {
@@ -7133,7 +7176,7 @@
     },
     "meta.lastTouchedVersion": {
       "label": "Config Last Touched Version",
-      "help": "Auto-set when Clawdbot writes the config."
+      "help": "Auto-set when Moltbot writes the config."
     },
     "meta.lastTouchedAt": {
       "label": "Config Last Touched At",
@@ -7237,7 +7280,7 @@
     },
     "gateway.auth.token": {
       "label": "Gateway Token",
-      "help": "Recommended for all gateways; required for non-loopback binds.",
+      "help": "Required by default for gateway access (unless using Tailscale Serve identity); required for non-loopback binds.",
       "sensitive": true
     },
     "gateway.auth.password": {
@@ -7344,8 +7387,14 @@
     "tools.profile": {
       "label": "Tool Profile"
     },
+    "tools.alsoAllow": {
+      "label": "Tool Allowlist Additions"
+    },
     "agents.list[].tools.profile": {
       "label": "Agent Tool Profile"
+    },
+    "agents.list[].tools.alsoAllow": {
+      "label": "Agent Tool Allowlist Additions"
     },
     "tools.byProvider": {
       "label": "Tool Policy by Provider"
@@ -7467,12 +7516,16 @@
     },
     "gateway.controlUi.basePath": {
       "label": "Control UI Base Path",
-      "help": "Optional URL prefix where the Control UI is served (e.g. /clawdbot).",
-      "placeholder": "/clawdbot"
+      "help": "Optional URL prefix where the Control UI is served (e.g. /moltbot).",
+      "placeholder": "/moltbot"
     },
     "gateway.controlUi.allowInsecureAuth": {
       "label": "Allow Insecure Control UI Auth",
       "help": "Allow Control UI auth over insecure HTTP (token-only; not recommended)."
+    },
+    "gateway.controlUi.dangerouslyDisableDeviceAuth": {
+      "label": "Dangerously Disable Control UI Device Auth",
+      "help": "DANGEROUS. Disable Control UI device identity checks (token/password only)."
     },
     "gateway.http.endpoints.chatCompletions.enabled": {
       "label": "OpenAI Chat Completions Endpoint",
@@ -7549,6 +7602,10 @@
     "agents.defaults.memorySearch.sources": {
       "label": "Memory Search Sources",
       "help": "Sources to index for memory search (default: [\"memory\"]; add \"sessions\" to include session transcripts)."
+    },
+    "agents.defaults.memorySearch.extraPaths": {
+      "label": "Extra Memory Paths",
+      "help": "Extra paths to include in memory search (directories or .md files; relative paths resolved from workspace)."
     },
     "agents.defaults.memorySearch.experimental.sessionMemory": {
       "label": "Memory Search Session Index (Experimental)",
@@ -7762,8 +7819,8 @@
     "ui.assistant.avatar": {
       "label": "Assistant Avatar"
     },
-    "browser.controlUrl": {
-      "label": "Browser Control URL"
+    "browser.evaluateEnabled": {
+      "label": "Browser Evaluate Enabled"
     },
     "browser.snapshotDefaults": {
       "label": "Browser Snapshot Defaults"
@@ -7779,7 +7836,7 @@
     },
     "session.dmScope": {
       "label": "DM Session Scope",
-      "help": "DM session scoping: \"main\" keeps continuity; \"per-peer\" or \"per-channel-peer\" isolates DM history (recommended for shared inboxes)."
+      "help": "DM session scoping: \"main\" keeps continuity; \"per-peer\", \"per-channel-peer\", or \"per-account-channel-peer\" isolates DM history (recommended for shared inboxes/multi-account)."
     },
     "session.agentToAgent.maxPingPongTurns": {
       "label": "Agent-to-Agent Ping-Pong Turns",
@@ -7872,6 +7929,10 @@
       "label": "Telegram Retry Jitter",
       "help": "Jitter factor (0-1) applied to Telegram retry delays."
     },
+    "channels.telegram.network.autoSelectFamily": {
+      "label": "Telegram autoSelectFamily",
+      "help": "Override Node autoSelectFamily for Telegram (true=enable, false=disable)."
+    },
     "channels.telegram.timeoutSeconds": {
       "label": "Telegram API Timeout (seconds)",
       "help": "Max seconds before Telegram API requests are aborted (default: 500 per grammY)."
@@ -7926,6 +7987,14 @@
     "channels.discord.maxLinesPerMessage": {
       "label": "Discord Max Lines Per Message",
       "help": "Soft max line count per Discord message (default: 17)."
+    },
+    "channels.discord.intents.presence": {
+      "label": "Discord Presence Intent",
+      "help": "Enable the Guild Presences privileged intent. Must also be enabled in the Discord Developer Portal. Allows tracking user activities (e.g. Spotify). Default: false."
+    },
+    "channels.discord.intents.guildMembers": {
+      "label": "Discord Guild Members Intent",
+      "help": "Enable the Guild Members privileged intent. Must also be enabled in the Discord Developer Portal. Default: false."
     },
     "channels.slack.dm.policy": {
       "label": "Slack DM Policy",
@@ -7996,6 +8065,10 @@
       "help": "Avatar image path (relative to the agent workspace only) or a remote URL/data URL.",
       "placeholder": "avatars/clawd.png"
     },
+    "discovery.mdns.mode": {
+      "label": "mDNS Discovery Mode",
+      "help": "mDNS broadcast mode (\"minimal\" default, \"full\" includes cliPath/sshPort, \"off\" disables mDNS)."
+    },
     "plugins.enabled": {
       "label": "Enable Plugins",
       "help": "Enable plugin/extension loading (default: true)."
@@ -8034,7 +8107,7 @@
     },
     "plugins.installs": {
       "label": "Plugin Install Records",
-      "help": "CLI-managed install metadata (used by `clawdbot plugins update` to locate install sources)."
+      "help": "CLI-managed install metadata (used by `moltbot plugins update` to locate install sources)."
     },
     "plugins.installs.*.source": {
       "label": "Plugin Install Source",
@@ -8150,7 +8223,7 @@
       "help": "Override native skill commands for Slack (bool or \"auto\")."
     }
   },
-  "version": "2026.1.24-3",
-  "generatedAt": "2026-01-25T15:27:03Z",
-  "clawdbotRev": "c8063bdcd83c14177aeff09dec329e3a8534f186"
+  "version": "2026.1.29",
+  "generatedAt": "2026-01-29T17:31:39Z",
+  "clawdbotRev": "c9fe062824cabdf919cfbedc1b915375b5e684d1"
 }

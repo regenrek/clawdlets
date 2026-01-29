@@ -247,6 +247,17 @@
       }
     ]
   },
+  "xiaomi": {
+    "auth": "apiKey",
+    "credentials": [
+      {
+        "id": "api_key",
+        "anyOfEnv": [
+          "XIAOMI_API_KEY"
+        ]
+      }
+    ]
+  },
   "zai": {
     "auth": "apiKey",
     "credentials": [
