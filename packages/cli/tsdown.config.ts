@@ -8,6 +8,7 @@ export default defineConfig({
   // Bundle internal workspace packages into the CLI build output.
   // External deps stay external and are installed via npm.
   noExternal: [/^@clawdlets\//],
+  inlineOnly: false,
   clean: true,
   sourcemap: false,
 });
