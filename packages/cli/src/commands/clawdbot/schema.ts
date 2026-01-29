@@ -16,10 +16,14 @@ function requireBotId(value: string): string {
 function buildGatewaySchemaCommand(params: { botId: string; port: number; sudo: boolean }): string {
   const envFile = `/srv/clawdbot/${params.botId}/credentials/gateway.env`;
   const url = `ws://127.0.0.1:${params.port}`;
+  const envFileQuoted = shellQuote(envFile);
+  const tokenName = "CLAWDBOT_GATEWAY_TOKEN";
   const script = [
     "set -euo pipefail",
-    `source ${envFile}`,
-    `clawdbot gateway call config.schema --url ${url} --token \"$CLAWDBOT_GATEWAY_TOKEN\" --json`,
+    `token=\"$(awk -F= '$1==\"${tokenName}\"{print substr($0,length($1)+2); exit}' ${envFileQuoted})\"`,
+    'token="${token%$"\\r"}"',
+    `if [ -z \"$token\" ]; then echo "missing ${tokenName}" >&2; exit 2; fi`,
+    `env ${tokenName}=\"$token\" clawdbot gateway call config.schema --url ${url} --json`,
   ].join(" && ");
   const args = [
     ...(params.sudo ? ["sudo", "-u", `bot-${params.botId}`] : []),

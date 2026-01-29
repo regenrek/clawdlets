@@ -1,14 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
-import process from "node:process";
 import type { RepoLayout } from "../repo-layout.js";
 import { capture } from "../lib/run.js";
 import { findInlineScriptingViolations } from "../lib/inline-script-ban.js";
 import { validateDocsIndexIntegrity } from "../lib/docs-index.js";
 import { validateFleetPolicy, type FleetConfig } from "../lib/fleet-policy.js";
 import { evalFleetConfig } from "../lib/fleet-nix-eval.js";
-import { withFlakesEnv } from "../lib/nix-flakes.js";
-import { ClawdletsConfigSchema } from "../lib/clawdlets-config.js";
+import { ClawdletsConfigSchema, type ClawdletsConfig } from "../lib/clawdlets-config.js";
+import { buildClawdbotBotConfig } from "../lib/clawdbot-config-invariants.js";
+import { lintClawdbotSecurityConfig } from "../lib/clawdbot-security-lint.js";
+import { checkSchemaVsNixClawdbot } from "./schema-checks.js";
+import { findClawdbotSecretViolations, findFleetSecretViolations } from "./repo-checks-secrets.js";
+import { evalWheelAccess, getClawdletsRevFromFlakeLock } from "./repo-checks-nix.js";
 import type { DoctorPush } from "./types.js";
 import { dirHasAnyFile, loadKnownBundledSkills, resolveTemplateRoot } from "./util.js";
 
@@ -23,154 +26,6 @@ function allExist(paths: string[]): { ok: boolean; missing: string[] } {
   return { ok: missing.length === 0, missing };
 }
 
-const CLAWDBOT_SECRET_PATTERNS: { label: string; regex: RegExp }[] = [
-  { label: "openai sk- token", regex: /\bsk-[A-Za-z0-9]{16,}\b/ },
-  { label: "github token", regex: /\bghp_[A-Za-z0-9]{20,}\b/ },
-  { label: "github fine-grained token", regex: /\bgithub_pat_[A-Za-z0-9_]{20,}\b/ },
-  { label: "slack token", regex: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/ },
-  { label: "google api key", regex: /\bAIza[0-9A-Za-z_-]{20,}\b/ },
-  { label: "literal token assignment", regex: /"token"\s*:\s*"(?!\$\{)(?!CHANGE_ME)(?!REDACTED)[^"]{16,}"/ },
-];
-
-const INCLUDE_PATTERN = /["']?\$include["']?\s*:\s*(['"])([^'"]+)\1/g;
-const MAX_SCAN_BYTES = 128 * 1024;
-
-function listClawdbotConfigFiles(root: string): string[] {
-  const botsDir = path.join(root, "fleet", "workspaces", "bots");
-  if (!fs.existsSync(botsDir)) return [];
-  const entries = fs.readdirSync(botsDir, { withFileTypes: true });
-  const files: string[] = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const cfgPath = path.join(botsDir, entry.name, "clawdbot.json5");
-    if (fs.existsSync(cfgPath)) files.push(cfgPath);
-  }
-  return files;
-}
-
-function readFilePrefix(filePath: string): string {
-  const fd = fs.openSync(filePath, "r");
-  try {
-    const buf = Buffer.alloc(MAX_SCAN_BYTES);
-    const bytes = fs.readSync(fd, buf, 0, MAX_SCAN_BYTES, 0);
-    return buf.subarray(0, bytes).toString("utf8");
-  } finally {
-    fs.closeSync(fd);
-  }
-}
-
-function extractIncludePaths(raw: string): string[] {
-  const matches: string[] = [];
-  for (const match of raw.matchAll(INCLUDE_PATTERN)) {
-    const value = String(match[2] || "").trim();
-    if (value) matches.push(value);
-  }
-  return matches;
-}
-
-function resolveIncludePath(params: { root: string; baseDir: string; includePath: string }): string | null {
-  const raw = params.includePath.trim();
-  if (!raw || raw.includes("${")) return null;
-  if (path.isAbsolute(raw)) {
-    const full = path.resolve(raw);
-    if (!full.startsWith(params.root + path.sep)) return null;
-    return fs.existsSync(full) ? full : null;
-  }
-  const full = path.resolve(params.baseDir, raw);
-  if (!full.startsWith(params.root + path.sep)) return null;
-  return fs.existsSync(full) ? full : null;
-}
-
-function findClawdbotSecretViolations(root: string): { files: string[]; violations: { file: string; label: string }[] } {
-  const initial = listClawdbotConfigFiles(root);
-  const files: string[] = [];
-  const violations: { file: string; label: string }[] = [];
-  const visited = new Set<string>();
-
-  const scanFile = (filePath: string) => {
-    const fullPath = path.resolve(filePath);
-    if (visited.has(fullPath)) return;
-    visited.add(fullPath);
-    files.push(fullPath);
-
-    const raw = readFilePrefix(fullPath);
-    for (const pattern of CLAWDBOT_SECRET_PATTERNS) {
-      if (pattern.regex.test(raw)) {
-        violations.push({ file: fullPath, label: pattern.label });
-        return;
-      }
-    }
-
-    const includes = extractIncludePaths(raw);
-    if (includes.length === 0) return;
-    const baseDir = path.dirname(fullPath);
-    for (const includePath of includes) {
-      const resolved = resolveIncludePath({ root, baseDir, includePath });
-      if (!resolved) continue;
-      scanFile(resolved);
-    }
-  };
-
-  for (const filePath of initial) scanFile(filePath);
-  return { files, violations };
-}
-
-function findFleetSecretViolations(root: string): { files: string[]; violations: { file: string; label: string }[] } {
-  const configPath = path.join(root, "fleet", "clawdlets.json");
-  if (!fs.existsSync(configPath)) return { files: [], violations: [] };
-  const raw = readFilePrefix(configPath);
-  for (const pattern of CLAWDBOT_SECRET_PATTERNS) {
-    if (pattern.regex.test(raw)) {
-      return { files: [configPath], violations: [{ file: configPath, label: pattern.label }] };
-    }
-  }
-  return { files: [configPath], violations: [] };
-}
-
-async function evalWheelAccess(params: { repoRoot: string; nixBin: string; host: string }): Promise<{
-  adminHasWheel: boolean;
-  breakglassHasWheel: boolean;
-} | null> {
-  const expr = [
-    "let",
-    "  flake = builtins.getFlake (toString ./.);",
-    `  cfg = flake.nixosConfigurations.${JSON.stringify(params.host)}.config;`,
-    "  admin = cfg.users.users.admin or {};",
-    "  breakglass = cfg.users.users.breakglass or {};",
-    "  adminGroups = admin.extraGroups or [];",
-    "  breakglassGroups = breakglass.extraGroups or [];",
-    "in {",
-    "  adminHasWheel = builtins.elem \"wheel\" adminGroups;",
-    "  breakglassHasWheel = builtins.elem \"wheel\" breakglassGroups;",
-    "}",
-  ].join("\n");
-  try {
-    const out = await capture(params.nixBin, ["eval", "--impure", "--json", "--expr", expr], {
-      cwd: params.repoRoot,
-      env: withFlakesEnv(process.env),
-    });
-    const parsed = JSON.parse(out);
-    return {
-      adminHasWheel: Boolean(parsed?.adminHasWheel),
-      breakglassHasWheel: Boolean(parsed?.breakglassHasWheel),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function getClawdletsRevFromFlakeLock(repoRoot: string): string | null {
-  const flakeLockPath = path.join(repoRoot, "flake.lock");
-  if (!fs.existsSync(flakeLockPath)) return null;
-  try {
-    const lock = JSON.parse(fs.readFileSync(flakeLockPath, "utf8"));
-    const rev = lock?.nodes?.clawdlets?.locked?.rev;
-    return typeof rev === "string" && rev.trim() ? rev.trim() : null;
-  } catch {
-    return null;
-  }
-}
-
 export async function addRepoChecks(params: {
   repoRoot: string;
   layout: RepoLayout;
@@ -182,6 +37,7 @@ export async function addRepoChecks(params: {
 
   let fleet: FleetConfig | null = null;
   let fleetBots: string[] | null = null;
+  let clawdletsConfig: ClawdletsConfig | null = null;
 
   params.push({
     scope: "repo",
@@ -213,6 +69,11 @@ export async function addRepoChecks(params: {
       }
       // If flake.lock doesn't exist, skip this check silently (test environments, etc.)
     }
+  }
+
+  {
+    const checks = await checkSchemaVsNixClawdbot({ repoRoot });
+    for (const check of checks) params.push(check);
   }
 
   params.push({
@@ -252,7 +113,7 @@ export async function addRepoChecks(params: {
       });
     } else {
       try {
-        const out = await capture("git", ["ls-files", "-z"], { cwd: repoRoot });
+        const out = await capture("git", ["ls-files", "-z", "--", ".clawdlets", "infra/secrets", "secrets"], { cwd: repoRoot });
         const tracked = out.split("\0").filter(Boolean);
         const trackedClawdlets = tracked.filter((p) => p === ".clawdlets" || p.startsWith(".clawdlets/"));
         const trackedLegacySecrets = tracked.filter((p) => p === "infra/secrets" || p.startsWith("infra/secrets/"));
@@ -441,7 +302,7 @@ export async function addRepoChecks(params: {
       try {
         const raw = fs.readFileSync(configPath, "utf8");
         const parsed = JSON.parse(raw);
-        ClawdletsConfigSchema.parse(parsed);
+        clawdletsConfig = ClawdletsConfigSchema.parse(parsed);
         params.push({ scope: "repo", status: "ok", label: "clawdlets config", detail: path.relative(repoRoot, configPath) });
       } catch (e) {
         params.push({ scope: "repo", status: "missing", label: "clawdlets config", detail: String((e as Error)?.message || e) });
@@ -474,6 +335,38 @@ export async function addRepoChecks(params: {
       }
     }
 
+  }
+
+  if (clawdletsConfig) {
+    const bots = Array.isArray(clawdletsConfig?.fleet?.botOrder) ? clawdletsConfig.fleet.botOrder : [];
+    for (const botRaw of bots) {
+      const bot = String(botRaw || "").trim();
+      if (!bot) continue;
+      try {
+        const merged = buildClawdbotBotConfig({ config: clawdletsConfig, bot }).merged;
+        const report = lintClawdbotSecurityConfig({ clawdbot: merged, botId: bot });
+        const status = report.summary.critical > 0 ? "missing" : report.summary.warn > 0 ? "warn" : "ok";
+        const top = report.findings
+          .filter((f) => f.severity === "critical" || f.severity === "warn")
+          .slice(0, 2)
+          .map((f) => f.id)
+          .join(", ");
+        const hint = top ? ` (${top}${report.findings.length > 2 ? ` +${report.findings.length - 2}` : ""})` : "";
+        params.push({
+          scope: "repo",
+          status,
+          label: `clawdbot security (${bot})`,
+          detail: `critical=${report.summary.critical} warn=${report.summary.warn} info=${report.summary.info}${hint}`,
+        });
+      } catch (e) {
+        params.push({
+          scope: "repo",
+          status: "warn",
+          label: `clawdbot security (${bot})`,
+          detail: `unable to lint: ${String((e as Error)?.message || e)}`,
+        });
+      }
+    }
   }
 
   try {

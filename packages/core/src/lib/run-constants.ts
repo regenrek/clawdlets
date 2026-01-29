@@ -13,6 +13,7 @@ export const RUN_KINDS = [
   "server_status",
   "server_logs",
   "server_audit",
+  "server_channels",
   "server_restart",
   "custom",
 ] as const;

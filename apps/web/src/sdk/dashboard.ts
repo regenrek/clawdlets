@@ -4,6 +4,7 @@ import { loadClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import { createConvexClient } from "~/server/convex"
+import { assertRepoRootPath } from "~/server/paths"
 
 type DashboardProjectConfigSummary = {
   configPath: string | null
@@ -50,7 +51,8 @@ export const getDashboardOverview = createServerFn({ method: "POST" })
         }
 
         try {
-          const { configPath, config } = loadClawdletsConfig({ repoRoot: p.localPath })
+          const repoRoot = assertRepoRootPath(p.localPath, { allowMissing: false })
+          const { configPath, config } = loadClawdletsConfig({ repoRoot })
 
           const botIds = (Array.isArray(config.fleet?.botOrder) ? config.fleet.botOrder : []).filter(
             (b): b is string => typeof b === "string" && b.trim().length > 0,

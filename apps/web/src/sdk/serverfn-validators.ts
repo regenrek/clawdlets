@@ -8,7 +8,7 @@ export const SERVER_CHANNEL_OPS = ["status", "capabilities", "login", "logout"] 
 export type ServerChannelOp = (typeof SERVER_CHANNEL_OPS)[number]
 
 function requireObject(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object") throw new Error("invalid input")
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid input")
   return value as Record<string, unknown>
 }
 
@@ -35,7 +35,9 @@ function parseHostNameRequired(value: unknown): string {
 
 function parseBotIdRequired(value: unknown): string {
   if (typeof value !== "string") throw new Error("invalid botId")
-  return BotIdSchema.parse(value)
+  const trimmed = value.trim()
+  if (!trimmed) throw new Error("invalid botId")
+  return BotIdSchema.parse(trimmed)
 }
 
 function parseServerChannelOp(value: unknown): ServerChannelOp {
@@ -44,14 +46,6 @@ function parseServerChannelOp(value: unknown): ServerChannelOp {
   if (!trimmed) throw new Error("invalid op")
   if (!SERVER_CHANNEL_OPS.includes(trimmed as ServerChannelOp)) throw new Error("invalid op")
   return trimmed as ServerChannelOp
-}
-
-function parseOptionalShortArg(value: unknown, maxLen: number): string {
-  if (typeof value !== "string") return ""
-  const trimmed = value.trim()
-  if (!trimmed) return ""
-  if (trimmed.length > maxLen) throw new Error("invalid input")
-  return trimmed
 }
 
 function parseOptionalString(value: unknown, maxLen: number): string {
@@ -132,9 +126,9 @@ export function parseServerChannelsExecuteInput(data: unknown): {
     host: parseOptionalHostName(d["host"]),
     botId: parseBotIdRequired(d["botId"]),
     op: parseServerChannelOp(d["op"]),
-    channel: parseOptionalShortArg(d["channel"], 64),
-    account: parseOptionalShortArg(d["account"], 64),
-    target: parseOptionalShortArg(d["target"], 128),
+    channel: parseOptionalString(d["channel"], 64),
+    account: parseOptionalString(d["account"], 64),
+    target: parseOptionalString(d["target"], 128),
     timeoutMs: parseTimeoutMs(d["timeout"]),
     json: Boolean(d["json"]),
     probe: Boolean(d["probe"]),
@@ -147,9 +141,34 @@ export function parseProjectHostInput(data: unknown): { projectId: Id<"projects"
   return { projectId: parseConvexId(d["projectId"], "projectId"), host: parseOptionalHostName(d["host"]) }
 }
 
+export function parseProjectIdInput(data: unknown): { projectId: Id<"projects"> } {
+  const d = requireObject(data)
+  return { projectId: parseConvexId(d["projectId"], "projectId") }
+}
+
 export function parseProjectHostRequiredInput(data: unknown): { projectId: Id<"projects">; host: string } {
   const d = requireObject(data)
   return { projectId: parseConvexId(d["projectId"], "projectId"), host: parseHostNameRequired(d["host"]) }
+}
+
+export function parseHostSshKeysInput(data: unknown): {
+  projectId: Id<"projects">
+  host: string
+  keyText: string
+  knownHostsText: string
+} {
+  const d = requireObject(data)
+  const keyFilePath = typeof d["keyFilePath"] === "string" ? d["keyFilePath"].trim() : ""
+  const knownHostsFilePath = typeof d["knownHostsFilePath"] === "string" ? d["knownHostsFilePath"].trim() : ""
+  if (keyFilePath || knownHostsFilePath) {
+    throw new Error("file path imports are disabled; paste or upload keys instead")
+  }
+  return {
+    projectId: parseConvexId(d["projectId"], "projectId"),
+    host: parseHostNameRequired(d["host"]),
+    keyText: parseOptionalString(d["keyText"], 64 * 1024),
+    knownHostsText: parseOptionalString(d["knownHostsText"], 256 * 1024),
+  }
 }
 
 export function parseProjectHostBotInput(data: unknown): { projectId: Id<"projects">; host: string; botId: string } {
@@ -158,6 +177,39 @@ export function parseProjectHostBotInput(data: unknown): { projectId: Id<"projec
     projectId: parseConvexId(d["projectId"], "projectId"),
     host: parseOptionalHostName(d["host"]),
     botId: parseBotIdRequired(d["botId"]),
+  }
+}
+
+export function parseProjectBotInput(data: unknown): { projectId: Id<"projects">; botId: string } {
+  const d = requireObject(data)
+  return {
+    projectId: parseConvexId(d["projectId"], "projectId"),
+    botId: parseBotIdRequired(d["botId"]),
+  }
+}
+
+export function parseBotClawdbotConfigInput(data: unknown): {
+  projectId: Id<"projects">
+  botId: string
+  host: string
+  schemaMode: "live" | "pinned"
+  clawdbot: unknown
+} {
+  const d = requireObject(data)
+  let schemaMode: "live" | "pinned" = "pinned"
+  if (typeof d["schemaMode"] === "string") {
+    const trimmed = d["schemaMode"].trim()
+    if (trimmed) {
+      if (trimmed !== "live" && trimmed !== "pinned") throw new Error("invalid schemaMode")
+      schemaMode = trimmed as "live" | "pinned"
+    }
+  }
+  return {
+    projectId: parseConvexId(d["projectId"], "projectId"),
+    botId: parseBotIdRequired(d["botId"]),
+    host: parseOptionalHostName(d["host"]),
+    schemaMode,
+    clawdbot: d["clawdbot"],
   }
 }
 

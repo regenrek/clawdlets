@@ -14,6 +14,7 @@ import { sanitizeOperatorId } from "@clawdlets/shared/lib/identifiers";
 import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets-plan";
 import { applySecretsAutowire, planSecretsAutowire } from "@clawdlets/core/lib/secrets-autowire";
 import { buildSecretsInitTemplate, isPlaceholderSecretValue, listSecretsInitPlaceholders, parseSecretsInitJson, resolveSecretsInitFromJsonArg, validateSecretsInitNonInteractive, type SecretsInitJson } from "@clawdlets/core/lib/secrets-init";
+import { buildSecretsInitTemplateSets } from "@clawdlets/core/lib/secrets-init-template";
 import { readYamlScalarFromMapping } from "@clawdlets/core/lib/yaml-scalar";
 import { getHostEncryptedAgeKeyFile, getHostExtraFilesKeyPath, getHostExtraFilesSecretsDir, getHostSecretsDir, getLocalOperatorAgeKeyPath } from "@clawdlets/core/repo-layout";
 import { expandPath } from "@clawdlets/core/lib/path-expand";
@@ -100,19 +101,17 @@ export const secretsInit = defineCommand({
 
     const localSecretsDir = getHostSecretsDir(layout, hostName);
 
-    const bots = clawdletsConfig.fleet.botOrder;
-    if (bots.length === 0) throw new Error("fleet.botOrder is empty (set bots in fleet/clawdlets.json)");
+	    const bots = clawdletsConfig.fleet.botOrder;
+	    if (bots.length === 0) throw new Error("fleet.botOrder is empty (set bots in fleet/clawdlets.json)");
 
-    const garnixPrivate = hostCfg.cache?.garnix?.private;
-    const garnixPrivateEnabled = Boolean(garnixPrivate?.enable);
-    const garnixNetrcSecretName = garnixPrivateEnabled ? String(garnixPrivate?.netrcSecret || "garnix_netrc").trim() : "";
-    const garnixNetrcPath = garnixPrivateEnabled ? String(garnixPrivate?.netrcPath || "/etc/nix/netrc").trim() : "";
-    if (garnixPrivateEnabled && !garnixNetrcSecretName) throw new Error("cache.garnix.private.netrcSecret must be set when private cache is enabled");
+	    const garnixPrivate = hostCfg.cache?.garnix?.private;
+	    const garnixPrivateEnabled = Boolean(garnixPrivate?.enable);
+	    const garnixNetrcPath = garnixPrivateEnabled ? String(garnixPrivate?.netrcPath || "/etc/nix/netrc").trim() : "";
 
-    let secretsPlan = buildFleetSecretsPlan({ config: clawdletsConfig, hostName });
-    if (secretsPlan.missingSecretConfig.length > 0) {
-      if (a.autowire) {
-        const plan = planSecretsAutowire({ config: clawdletsConfig, hostName });
+	    let secretsPlan = buildFleetSecretsPlan({ config: clawdletsConfig, hostName });
+	    if (secretsPlan.missingSecretConfig.length > 0) {
+	      if (a.autowire) {
+	        const plan = planSecretsAutowire({ config: clawdletsConfig, hostName });
         if (plan.updates.length === 0) {
           const first = secretsPlan.missingSecretConfig[0]!;
           throw new Error(
@@ -122,50 +121,26 @@ export const secretsInit = defineCommand({
           );
         }
         const nextConfig = applySecretsAutowire({ config: clawdletsConfig, plan });
-        await writeClawdletsConfig({ configPath: layout.clawdletsConfigPath, config: nextConfig });
-        clawdletsConfig = nextConfig;
-        secretsPlan = buildFleetSecretsPlan({ config: clawdletsConfig, hostName });
-      } else {
+	        await writeClawdletsConfig({ configPath: layout.clawdletsConfigPath, config: nextConfig });
+	        clawdletsConfig = nextConfig;
+	        secretsPlan = buildFleetSecretsPlan({ config: clawdletsConfig, hostName });
+	      } else {
         const first = secretsPlan.missingSecretConfig[0]!;
         if (first.kind === "envVar") {
           throw new Error(
             `missing secretEnv mapping for envVar=${first.envVar} (bot=${first.bot}); set fleet.secretEnv.${first.envVar} or fleet.bots.${first.bot}.profile.secretEnv.${first.envVar} (or run: clawdlets config wire-secrets --write)`,
           );
         }
-        throw new Error(`invalid secret file config: scope=${first.scope} id=${first.fileId} targetPath=${first.targetPath} (${first.message})`);
-      }
-    }
+	        throw new Error(`invalid secret file config: scope=${first.scope} id=${first.fileId} targetPath=${first.targetPath} (${first.message})`);
+	      }
+	    }
 
-    const hostRequiredSecretNames = new Set<string>(secretsPlan.hostSecretNamesRequired);
-    const requiresTailscaleAuthKey = hostRequiredSecretNames.has("tailscale_auth_key");
+	    hostCfg = (clawdletsConfig.hosts as any)?.[hostName] || hostCfg;
+	    const sets = buildSecretsInitTemplateSets({ secretsPlan, hostCfg });
+	    const garnixNetrcSecretName = sets.garnixNetrcSecretName;
 
-    const skipHostNames = new Set(["admin_password_hash", "tailscale_auth_key"]);
-    const requiredSecrets = new Set<string>(
-      (secretsPlan.required || [])
-        .map((spec) => spec.name)
-        .filter((name) => !skipHostNames.has(name)),
-    );
-    const optionalSecrets = new Set<string>(
-      (secretsPlan.optional || [])
-        .map((spec) => spec.name)
-        .filter((name) => !skipHostNames.has(name)),
-    );
-    const templateSecretNames = Array.from(new Set<string>([
-      ...Array.from(requiredSecrets),
-      ...Array.from(optionalSecrets),
-    ])).sort();
-
-    const templateSecrets: Record<string, string> = {};
-    for (const secretName of templateSecretNames) {
-      if (garnixPrivateEnabled && secretName === garnixNetrcSecretName) {
-        templateSecrets[secretName] = "<REPLACE_WITH_NETRC>";
-      } else {
-        templateSecrets[secretName] = requiredSecrets.has(secretName) ? "<REPLACE_WITH_SECRET>" : "<OPTIONAL>";
-      }
-    }
-
-    const defaultSecretsJsonPath = path.join(layout.runtimeDir, "secrets.json");
-    const defaultSecretsJsonDisplay = path.relative(process.cwd(), defaultSecretsJsonPath) || defaultSecretsJsonPath;
+	    const defaultSecretsJsonPath = path.join(layout.runtimeDir, "secrets.json");
+	    const defaultSecretsJsonDisplay = path.relative(process.cwd(), defaultSecretsJsonPath) || defaultSecretsJsonPath;
 
     let fromJson = resolveSecretsInitFromJsonArg({
       fromJsonRaw: a.fromJson,
@@ -176,22 +151,22 @@ export const secretsInit = defineCommand({
       if (fs.existsSync(defaultSecretsJsonPath)) {
         fromJson = defaultSecretsJsonPath;
         if (!a.allowPlaceholders) {
-          const raw = fs.readFileSync(defaultSecretsJsonPath, "utf8");
-          const parsed = parseSecretsInitJson(raw);
-          const placeholders = listSecretsInitPlaceholders({ input: parsed, requiresTailscaleAuthKey });
-          if (placeholders.length > 0) {
-            console.error(`error: placeholders found in ${defaultSecretsJsonDisplay} (fill it or pass --allow-placeholders)`);
-            for (const p0 of placeholders) console.error(`- ${p0}`);
-            process.exitCode = 1;
+	          const raw = fs.readFileSync(defaultSecretsJsonPath, "utf8");
+	          const parsed = parseSecretsInitJson(raw);
+	          const placeholders = listSecretsInitPlaceholders({ input: parsed, requiresTailscaleAuthKey: sets.requiresTailscaleAuthKey });
+	          if (placeholders.length > 0) {
+	            console.error(`error: placeholders found in ${defaultSecretsJsonDisplay} (fill it or pass --allow-placeholders)`);
+	            for (const p0 of placeholders) console.error(`- ${p0}`);
+	            process.exitCode = 1;
             return;
           }
-        }
-      } else {
-        const template = buildSecretsInitTemplate({ requiresTailscaleAuthKey, secrets: templateSecrets });
+	        }
+	      } else {
+	        const template = buildSecretsInitTemplate({ requiresTailscaleAuthKey: sets.requiresTailscaleAuthKey, secrets: sets.templateSecrets });
 
-        if (!a.dryRun) {
-          await ensureDir(path.dirname(defaultSecretsJsonPath));
-          await writeFileAtomic(defaultSecretsJsonPath, `${JSON.stringify(template, null, 2)}\n`, { mode: 0o600 });
+	        if (!a.dryRun) {
+	          await ensureDir(path.dirname(defaultSecretsJsonPath));
+	          await writeFileAtomic(defaultSecretsJsonPath, `${JSON.stringify(template, null, 2)}\n`, { mode: 0o600 });
         }
 
         console.error(`${a.dryRun ? "would write" : "wrote"} secrets template: ${defaultSecretsJsonDisplay}`);
@@ -354,29 +329,29 @@ export const secretsInit = defineCommand({
     };
 
     const flowSecrets = "secrets init";
-    const values: {
-      adminPassword: string;
-      adminPasswordHash: string;
-      tailscaleAuthKey: string;
-      secrets: Record<string, string>;
-    } = { adminPassword: "", adminPasswordHash: "", tailscaleAuthKey: "", secrets: {} };
+	    const values: {
+	      adminPassword: string;
+	      adminPasswordHash: string;
+	      tailscaleAuthKey: string;
+	      secrets: Record<string, string>;
+	    } = { adminPassword: "", adminPasswordHash: "", tailscaleAuthKey: "", secrets: {} };
 
-    if (interactive) {
+	    if (interactive) {
       type Step =
         | { kind: "adminPassword" }
         | { kind: "tailscaleAuthKey" }
-        | { kind: "garnixNetrcFile"; secretName: string; netrcPath: string }
-        | { kind: "secret"; secretName: string };
+	        | { kind: "garnixNetrcFile"; secretName: string; netrcPath: string }
+	        | { kind: "secret"; secretName: string };
 
-      const requiredSecretsToPrompt = Array.from(requiredSecrets).sort();
+	      const requiredSecretsToPrompt = sets.requiredSecrets;
 
-      const allSteps: Step[] = [
-        { kind: "adminPassword" },
-        ...(requiresTailscaleAuthKey ? ([{ kind: "tailscaleAuthKey" }] as const) : []),
-        ...requiredSecretsToPrompt.map((secretName) =>
-          garnixPrivateEnabled && secretName === garnixNetrcSecretName
-            ? ({ kind: "garnixNetrcFile", secretName, netrcPath: garnixNetrcPath || "/etc/nix/netrc" } as const)
-            : ({ kind: "secret", secretName } as const),
+	      const allSteps: Step[] = [
+	        { kind: "adminPassword" },
+	        ...(sets.requiresTailscaleAuthKey ? ([{ kind: "tailscaleAuthKey" }] as const) : []),
+	        ...requiredSecretsToPrompt.map((secretName) =>
+	          garnixPrivateEnabled && secretName === garnixNetrcSecretName
+	            ? ({ kind: "garnixNetrcFile", secretName, netrcPath: garnixNetrcPath || "/etc/nix/netrc" } as const)
+	            : ({ kind: "secret", secretName } as const),
         ),
       ];
 

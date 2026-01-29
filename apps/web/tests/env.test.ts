@@ -53,6 +53,12 @@ describe("server env", () => {
 
 describe("convex env", () => {
   it("detects disabled auth", () => {
+    process.env["CLAWDLETS_AUTH_DISABLED"] = "1"
+    expect(isConvexAuthDisabled()).toBe(true)
+
+    process.env["CLAWDLETS_AUTH_DISABLED"] = "true"
+    expect(isConvexAuthDisabled()).toBe(true)
+
     process.env["CLAWDLETS_AUTH_DISABLED"] = "yes"
     expect(isConvexAuthDisabled()).toBe(true)
 
@@ -66,6 +72,9 @@ describe("convex env", () => {
     expect(() => assertConvexAuthNotDisabledInProd()).toThrow(/not allowed/i)
 
     process.env["CONVEX_DEPLOYMENT"] = "dev:abc"
+    expect(() => assertConvexAuthNotDisabledInProd()).not.toThrow()
+
+    delete process.env["CONVEX_DEPLOYMENT"]
     expect(() => assertConvexAuthNotDisabledInProd()).not.toThrow()
   })
 })

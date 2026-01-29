@@ -34,13 +34,31 @@ export async function readClawdletsEnvTokens(repoRoot: string): Promise<string[]
   }
 }
 
-export function redactLine(line: string, tokens: string[]): string {
-  if (tokens.length === 0) return line;
+function scrubUrlCredentials(line: string): string {
+  return line.replace(/(https?:\/\/)([^/\s@]+@)/g, "$1<redacted>@");
+}
+
+function scrubCommonSecrets(line: string): string {
   let out = line;
+  out = out.replace(/(Authorization:\s*Bearer\s+)([^\s]+)/gi, "$1<redacted>");
+  out = out.replace(/(Authorization:\s*Basic\s+)([^\s]+)/gi, "$1<redacted>");
+  out = out.replace(
+    /([?&](?:access_token|token|auth|api_key|apikey|apiKey)=)([^&\s]+)/gi,
+    "$1<redacted>",
+  );
+  out = out.replace(
+    /\b((?:access|refresh|id)?_?token|token|api_key|apikey|apiKey|secret|password)\s*[:=]\s*([^\s]+)/gi,
+    "$1=<redacted>",
+  );
+  return out;
+}
+
+export function redactLine(line: string, tokens: string[]): string {
+  let out = scrubCommonSecrets(scrubUrlCredentials(line));
+  if (tokens.length === 0) return out;
   for (const token of tokens) {
     if (token.length < 4) continue;
     out = out.split(token).join("<redacted>");
   }
   return out;
 }
-

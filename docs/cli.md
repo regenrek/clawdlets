@@ -12,6 +12,7 @@ Related
 - template source defaults to `config/template-source.json` (repo + path + 40-hex ref); override with `--template`, `--template-path`, `--template-ref`
 - set fleet guild id: `clawdlets fleet set --guild-id <id>`
 - add bots: `clawdlets bot add --bot <id>`
+- harden Clawdbot config (optional): `clawdlets clawdbot harden` (dry-run) / `clawdlets clawdbot harden --write`
 - set host basics: `clawdlets host set --add-ssh-key-file ~/.ssh/id_ed25519.pub --disk-device /dev/sda --enable true`
 - set SSH exposure for bootstrap: `clawdlets host set --ssh-exposure bootstrap`
 - init secrets: `clawdlets secrets init` (TTY defaults to interactive; non-interactive uses `--from-json .clawdlets/secrets.json`)
@@ -28,6 +29,7 @@ Related
 ## Server ops
 
 - status: `clawdlets server status --target-host <host>`
+- audit (includes `clawdbot security audit`): `clawdlets server audit --host <host>` (or `--target-host <ssh-alias>`)
 - logs: `clawdlets server logs --target-host <host> --unit clawdbot-melinda.service --since 10m --follow`
 - restart: `clawdlets server restart --target-host <host> --unit clawdbot-melinda.service`
 - manifest: `clawdlets server manifest --host <host> --out deploy-manifest.<host>.json`

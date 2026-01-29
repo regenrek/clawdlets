@@ -49,6 +49,11 @@ Therefore:
 - Confirm `clf-orchestrator` socket + state dir perms are tight (`/run/clf`, `/var/lib/clf/orchestrator`).
 - Keep `.clawdlets/` gitignored (required).
 - If `tailnet.mode=tailscale`, the Hetzner firewall allows inbound UDP/41641 for direct Tailscale connectivity. This is expected; disable Tailscale (tailnet.mode=none) or remove the rule if you need DERP-only.
+- Clawdbot config security:
+  - `clawdlets doctor` includes per-bot Clawdbot security lint (fails on critical “open” DM/group policies and public Gateway exposure via Tailscale Funnel).
+  - `clawdlets doctor` also reports schema drift vs project’s pinned `nix-clawdbot` and upstream `nix-clawdbot` main.
+  - After deploy, run `clawdlets server audit` to run `clawdbot security audit` on the host (filesystem perms + exposure footguns).
+  - Use `clawdlets clawdbot harden` (or the web UI “Harden” button) to apply safe defaults to `fleet/clawdlets.json` (dry-run unless `--write`).
 
 ## Egress policy (current)
 

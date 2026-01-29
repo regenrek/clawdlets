@@ -7,8 +7,10 @@ import type { Id } from "../../convex/_generated/dataModel"
 import { createConvexClient } from "~/server/convex"
 import { resolveClawdletsCliEntry } from "~/server/clawdlets-cli"
 import { readClawdletsEnvTokens } from "~/server/redaction"
+import { getClawdletsCliEnv } from "~/server/run-env"
 import { runWithEvents, spawnCommand } from "~/server/run-manager"
-import { getRepoRoot } from "~/sdk/repo-root"
+import { getAdminProjectContext } from "~/sdk/repo-root"
+import { requireAdminAndBoundRun } from "~/sdk/run-guards"
 
 function checkLevel(status: DoctorCheck["status"]): "info" | "warn" | "error" {
   if (status === "ok") return "info"
@@ -33,7 +35,7 @@ export const runDoctor = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const client = createConvexClient()
-    const repoRoot = await getRepoRoot(client, data.projectId)
+    const { repoRoot } = await getAdminProjectContext(client, data.projectId)
     const redactTokens = await readClawdletsEnvTokens(repoRoot)
 
     const { runId } = await client.mutation(api.runs.create, {
@@ -115,9 +117,15 @@ export const bootstrapExecute = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const client = createConvexClient()
-    const repoRoot = await getRepoRoot(client, data.projectId)
+    const { repoRoot } = await requireAdminAndBoundRun({
+      client,
+      projectId: data.projectId,
+      runId: data.runId,
+      expectedKind: "bootstrap",
+    })
     const redactTokens = await readClawdletsEnvTokens(repoRoot)
     const cliEntry = resolveClawdletsCliEntry()
+    const cliEnv = getClawdletsCliEnv()
 
     try {
       await spawnCommand({
@@ -135,6 +143,8 @@ export const bootstrapExecute = createServerFn({ method: "POST" })
           ...(data.force ? ["--force"] : []),
           ...(data.dryRun ? ["--dry-run"] : []),
         ],
+        env: cliEnv.env,
+        envAllowlist: cliEnv.envAllowlist,
         redactTokens,
       })
       await client.mutation(api.runs.setStatus, { runId: data.runId, status: "succeeded" })

@@ -138,8 +138,12 @@ function HostsSetup() {
   })
 
   const [keyText, setKeyText] = useState("")
-  const [keyFilePath, setKeyFilePath] = useState("")
-  const [knownHostsFilePath, setKnownHostsFilePath] = useState("")
+  const [knownHostsText, setKnownHostsText] = useState("")
+
+  async function importTextFile(file: File, opts: { maxBytes: number }): Promise<string> {
+    if (file.size > opts.maxBytes) throw new Error(`file too large (> ${Math.ceil(opts.maxBytes / 1024)}KB)`)
+    return await file.text()
+  }
 
   const addSsh = useMutation({
     mutationFn: async () => {
@@ -149,8 +153,7 @@ function HostsSetup() {
           projectId: projectId as Id<"projects">,
           host: selectedHost,
           keyText,
-          keyFilePath,
-          knownHostsFilePath,
+          knownHostsText,
         },
       })
     },
@@ -158,8 +161,7 @@ function HostsSetup() {
       if (res.ok) {
         toast.success("Updated SSH settings")
         setKeyText("")
-        setKeyFilePath("")
-        setKnownHostsFilePath("")
+        setKnownHostsText("")
         void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", projectId] })
       } else toast.error("Failed")
     },
@@ -358,17 +360,68 @@ function HostsSetup() {
                         placeholder="ssh-ed25519 AAAA... user@host"
                       />
                     </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <LabelWithHelp htmlFor="knownHostsText" help={setupFieldHelp.hosts.knownHostsFile}>
+                        Paste known_hosts entries (optional)
+                      </LabelWithHelp>
+                      <Textarea
+                        id="knownHostsText"
+                        value={knownHostsText}
+                        onChange={(e) => setKnownHostsText(e.target.value)}
+                        className="font-mono min-h-[80px]"
+                        placeholder="github.com ssh-ed25519 AAAA..."
+                      />
+                    </div>
                     <div className="space-y-2">
                       <LabelWithHelp htmlFor="keyFile" help={setupFieldHelp.hosts.sshKeyFile}>
-                        Key file path (.pub)
+                        Upload public key file (.pub)
                       </LabelWithHelp>
-                      <Input id="keyFile" value={keyFilePath} onChange={(e) => setKeyFilePath(e.target.value)} placeholder="~/.ssh/id_ed25519.pub" />
+                      <Input
+                        id="keyFile"
+                        type="file"
+                        accept=".pub,text/plain"
+                        onChange={(e) => {
+                          const file = e.currentTarget.files?.[0]
+                          if (!file) return
+                          void (async () => {
+                            try {
+                              const text = await importTextFile(file, { maxBytes: 64 * 1024 })
+                              setKeyText((prev) => (prev.trim() ? `${prev.trimEnd()}\n${text}\n` : `${text}\n`))
+                              toast.success(`Imported ${file.name}`)
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : String(err))
+                            } finally {
+                              e.currentTarget.value = ""
+                            }
+                          })()
+                        }}
+                      />
+                      <div className="text-xs text-muted-foreground">Reads locally in your browser; server never reads `~/.ssh`.</div>
                     </div>
                     <div className="space-y-2">
                       <LabelWithHelp htmlFor="knownHosts" help={setupFieldHelp.hosts.knownHostsFile}>
-                        known_hosts file path
+                        Upload known_hosts file
                       </LabelWithHelp>
-                      <Input id="knownHosts" value={knownHostsFilePath} onChange={(e) => setKnownHostsFilePath(e.target.value)} placeholder="~/.ssh/known_hosts" />
+                      <Input
+                        id="knownHosts"
+                        type="file"
+                        accept="text/plain"
+                        onChange={(e) => {
+                          const file = e.currentTarget.files?.[0]
+                          if (!file) return
+                          void (async () => {
+                            try {
+                              const text = await importTextFile(file, { maxBytes: 256 * 1024 })
+                              setKnownHostsText((prev) => (prev.trim() ? `${prev.trimEnd()}\n${text}\n` : `${text}\n`))
+                              toast.success(`Imported ${file.name}`)
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : String(err))
+                            } finally {
+                              e.currentTarget.value = ""
+                            }
+                          })()
+                        }}
+                      />
                     </div>
                   </div>
                   <Button type="button" disabled={addSsh.isPending} onClick={() => addSsh.mutate()}>

@@ -77,7 +77,7 @@ function BootstrapSetup() {
         toast.info("Pushed to origin")
         void repoStatus.refetch()
       } else {
-        toast.error(res.stderr || "git push failed")
+        toast.error("git push failed (see Runs for logs)")
       }
     },
     onError: (err) => {

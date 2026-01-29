@@ -2,6 +2,7 @@
   "name": "clawdlets-workspace",
   "private": true,
   "scripts": {
+    "dev": "pnpm -C apps/web dev",
     "postinstall": "pnpm -r build",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
@@ -22,6 +23,9 @@
     "tsx": "^4.7.0"
   },
   "pnpm": {
+    "overrides": {
+      "lodash": "^4.17.23"
+    },
     "onlyBuiltDependencies": [
       "better-sqlite3",
       "esbuild"

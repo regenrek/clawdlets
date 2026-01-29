@@ -7,6 +7,7 @@ import { requireProjectAccessMutation, requireProjectAccessQuery, requireAdmin }
 import { rateLimit } from "./lib/rateLimit";
 import { ProjectDoc, RunDoc } from "./lib/validators";
 import { Role } from "./schema";
+import { sanitizeErrorMessage } from "@clawdlets/core/lib/safe-error";
 
 function literals<const T extends readonly string[]>(values: T) {
   return values.map((value) => v.literal(value));
@@ -83,7 +84,7 @@ export const setStatus = mutation({
       patch["finishedAt"] = now;
     }
     if (typeof errorMessage === "string" && errorMessage.trim()) {
-      patch["errorMessage"] = errorMessage.trim();
+      patch["errorMessage"] = sanitizeErrorMessage(errorMessage, "run failed");
     } else if (status !== "failed") {
       patch["errorMessage"] = undefined;
     }
