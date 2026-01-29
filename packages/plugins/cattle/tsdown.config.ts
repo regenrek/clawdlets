@@ -8,6 +8,7 @@ export default defineConfig({
   // Bundle internal workspace packages into the plugin build output.
   // Keep external deps (including native modules) external and installed via npm.
   noExternal: [/^@clawdlets\//],
+  inlineOnly: false,
   clean: true,
   // Keep native module external; npm will install it for the user.
   external: ["better-sqlite3"],
