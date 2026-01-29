@@ -4,6 +4,7 @@ import { api } from "../../convex/_generated/api";
 import { createConvexClient } from "~/server/convex";
 import { cancelActiveRun, runWithEvents } from "~/server/run-manager";
 import { readClawdletsEnvTokens } from "~/server/redaction";
+import { assertRepoRootPath } from "~/server/paths";
 
 export const cancelRun = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
@@ -15,7 +16,8 @@ export const cancelRun = createServerFn({ method: "POST" })
     const canceled = cancelActiveRun(data.runId);
     const client = createConvexClient();
     const { run, project } = await client.query(api.runs.get, { runId: data.runId });
-    const redactTokens = await readClawdletsEnvTokens(project.localPath);
+    const repoRoot = assertRepoRootPath(project.localPath, { allowMissing: false, requireRepoLayout: true });
+    const redactTokens = await readClawdletsEnvTokens(repoRoot);
 
     await runWithEvents({
       client,

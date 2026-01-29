@@ -2,20 +2,20 @@ import { createServerFn } from "@tanstack/react-start"
 import { loadClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config"
 
 import { api } from "../../convex/_generated/api"
-import type { Id } from "../../convex/_generated/dataModel"
 import { createConvexClient } from "~/server/convex"
 import { resolveClawdletsCliEntry } from "~/server/clawdlets-cli"
 import { readClawdletsEnvTokens } from "~/server/redaction"
+import { getClawdletsCliEnv } from "~/server/run-env"
 import { spawnCommand } from "~/server/run-manager"
-import { assertRunBoundToProject } from "~/sdk/run-binding"
-import { getRepoRoot } from "~/sdk/repo-root"
+import { getAdminProjectContext } from "~/sdk/repo-root"
 import { parseServerChannelsExecuteInput, parseServerChannelsStartInput } from "~/sdk/serverfn-validators"
+import { requireAdminAndBoundRun } from "~/sdk/run-guards"
 
 export const serverChannelsStart = createServerFn({ method: "POST" })
   .inputValidator(parseServerChannelsStartInput)
   .handler(async ({ data }) => {
     const client = createConvexClient()
-    const repoRoot = await getRepoRoot(client, data.projectId)
+    const { repoRoot } = await getAdminProjectContext(client, data.projectId)
     const { config } = loadClawdletsConfig({ repoRoot })
 
     const host = data.host || config.defaultHost || ""
@@ -43,7 +43,12 @@ export const serverChannelsExecute = createServerFn({ method: "POST" })
   .inputValidator(parseServerChannelsExecuteInput)
   .handler(async ({ data }) => {
     const client = createConvexClient()
-    const repoRoot = await getRepoRoot(client, data.projectId)
+    const { repoRoot } = await requireAdminAndBoundRun({
+      client,
+      projectId: data.projectId,
+      runId: data.runId,
+      expectedKind: "server_channels",
+    })
     const { config } = loadClawdletsConfig({ repoRoot })
 
     const host = data.host || config.defaultHost || ""
@@ -53,17 +58,9 @@ export const serverChannelsExecute = createServerFn({ method: "POST" })
     const botId = data.botId
     if (!config.fleet.bots[botId]) throw new Error(`unknown bot: ${botId}`)
 
-    const runGet = await client.query(api.runs.get, { runId: data.runId })
-    assertRunBoundToProject({
-      runId: data.runId,
-      runProjectId: runGet.run.projectId as Id<"projects">,
-      expectedProjectId: data.projectId,
-      runKind: runGet.run.kind,
-      expectedKind: "server_channels",
-    })
-
     const redactTokens = await readClawdletsEnvTokens(repoRoot)
     const cliEntry = resolveClawdletsCliEntry()
+    const cliEnv = getClawdletsCliEnv()
 
     const args = [
       cliEntry,
@@ -108,6 +105,8 @@ export const serverChannelsExecute = createServerFn({ method: "POST" })
         cwd: repoRoot,
         cmd: "node",
         args,
+        env: cliEnv.env,
+        envAllowlist: cliEnv.envAllowlist,
         redactTokens,
       })
       await client.mutation(api.runs.setStatus, { runId: data.runId, status: "succeeded" })

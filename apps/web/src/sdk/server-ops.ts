@@ -5,8 +5,9 @@ import type { Id } from "../../convex/_generated/dataModel"
 import { createConvexClient, type ConvexClient } from "~/server/convex"
 import { resolveClawdletsCliEntry } from "~/server/clawdlets-cli"
 import { readClawdletsEnvTokens } from "~/server/redaction"
+import { getClawdletsCliEnv } from "~/server/run-env"
 import { spawnCommand, spawnCommandCapture } from "~/server/run-manager"
-import { getRepoRoot } from "~/sdk/repo-root"
+import { requireAdminAndBoundRun } from "~/sdk/run-guards"
 import {
   parseServerAuditExecuteInput,
   parseServerAuditStartInput,
@@ -72,9 +73,15 @@ export const serverDeployExecute = createServerFn({ method: "POST" })
     requireTypedConfirmation({ expected, received: data.confirm })
 
     const client = createConvexClient()
-    const repoRoot = await getRepoRoot(client, data.projectId)
+    const { repoRoot } = await requireAdminAndBoundRun({
+      client,
+      projectId: data.projectId,
+      runId: data.runId,
+      expectedKind: "deploy",
+    })
     const redactTokens = await readClawdletsEnvTokens(repoRoot)
     const cliEntry = resolveClawdletsCliEntry()
+    const cliEnv = getClawdletsCliEnv()
 
     try {
       const args = [
@@ -95,6 +102,8 @@ export const serverDeployExecute = createServerFn({ method: "POST" })
         cwd: repoRoot,
         cmd: "node",
         args,
+        env: cliEnv.env,
+        envAllowlist: cliEnv.envAllowlist,
         redactTokens,
       })
       await client.mutation(api.runs.setStatus, { runId: data.runId, status: "succeeded" })
@@ -121,9 +130,15 @@ export const serverStatusExecute = createServerFn({ method: "POST" })
   .inputValidator(parseServerStatusExecuteInput)
   .handler(async ({ data }) => {
     const client = createConvexClient()
-    const repoRoot = await getRepoRoot(client, data.projectId)
+    const { repoRoot } = await requireAdminAndBoundRun({
+      client,
+      projectId: data.projectId,
+      runId: data.runId,
+      expectedKind: "server_status",
+    })
     const redactTokens = await readClawdletsEnvTokens(repoRoot)
     const cliEntry = resolveClawdletsCliEntry()
+    const cliEnv = getClawdletsCliEnv()
 
     try {
       const args = [
@@ -141,6 +156,8 @@ export const serverStatusExecute = createServerFn({ method: "POST" })
         cwd: repoRoot,
         cmd: "node",
         args,
+        env: cliEnv.env,
+        envAllowlist: cliEnv.envAllowlist,
         redactTokens,
       })
       await client.mutation(api.runs.setStatus, { runId: data.runId, status: "succeeded" })
@@ -173,9 +190,15 @@ export const serverAuditExecute = createServerFn({ method: "POST" })
   .inputValidator(parseServerAuditExecuteInput)
   .handler(async ({ data }) => {
     const client = createConvexClient()
-    const repoRoot = await getRepoRoot(client, data.projectId)
+    const { repoRoot } = await requireAdminAndBoundRun({
+      client,
+      projectId: data.projectId,
+      runId: data.runId,
+      expectedKind: "server_audit",
+    })
     const redactTokens = await readClawdletsEnvTokens(repoRoot)
     const cliEntry = resolveClawdletsCliEntry()
+    const cliEnv = getClawdletsCliEnv()
 
     try {
       const args = [
@@ -194,6 +217,8 @@ export const serverAuditExecute = createServerFn({ method: "POST" })
         cwd: repoRoot,
         cmd: "node",
         args,
+        env: cliEnv.env,
+        envAllowlist: cliEnv.envAllowlist,
         redactTokens,
         maxCaptureBytes: 512_000,
         allowNonZeroExit: true,
@@ -252,9 +277,15 @@ export const serverLogsExecute = createServerFn({ method: "POST" })
   .inputValidator(parseServerLogsExecuteInput)
   .handler(async ({ data }) => {
     const client = createConvexClient()
-    const repoRoot = await getRepoRoot(client, data.projectId)
+    const { repoRoot } = await requireAdminAndBoundRun({
+      client,
+      projectId: data.projectId,
+      runId: data.runId,
+      expectedKind: "server_logs",
+    })
     const redactTokens = await readClawdletsEnvTokens(repoRoot)
     const cliEntry = resolveClawdletsCliEntry()
+    const cliEnv = getClawdletsCliEnv()
 
     const unit = data.unit.trim() || "clawdbot-*.service"
     const lines = data.lines.trim() || "200"
@@ -281,6 +312,8 @@ export const serverLogsExecute = createServerFn({ method: "POST" })
         cwd: repoRoot,
         cmd: "node",
         args,
+        env: cliEnv.env,
+        envAllowlist: cliEnv.envAllowlist,
         redactTokens,
       })
       await client.mutation(api.runs.setStatus, { runId: data.runId, status: "succeeded" })
@@ -318,9 +351,15 @@ export const serverRestartExecute = createServerFn({ method: "POST" })
     requireTypedConfirmation({ expected, received: data.confirm })
 
     const client = createConvexClient()
-    const repoRoot = await getRepoRoot(client, data.projectId)
+    const { repoRoot } = await requireAdminAndBoundRun({
+      client,
+      projectId: data.projectId,
+      runId: data.runId,
+      expectedKind: "server_restart",
+    })
     const redactTokens = await readClawdletsEnvTokens(repoRoot)
     const cliEntry = resolveClawdletsCliEntry()
+    const cliEnv = getClawdletsCliEnv()
 
     try {
       const args = [
@@ -340,6 +379,8 @@ export const serverRestartExecute = createServerFn({ method: "POST" })
         cwd: repoRoot,
         cmd: "node",
         args,
+        env: cliEnv.env,
+        envAllowlist: cliEnv.envAllowlist,
         redactTokens,
       })
       await client.mutation(api.runs.setStatus, { runId: data.runId, status: "succeeded" })

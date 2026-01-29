@@ -1,14 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { planProjectInit, initProject } from "@clawdlets/core/lib/project-init";
-import { getRepoLayout } from "@clawdlets/core/repo-layout";
 import type { Id } from "../../convex/_generated/dataModel";
 import { api } from "../../convex/_generated/api";
 import { createConvexClient } from "~/server/convex";
-import { resolveUserPath } from "~/server/paths";
+import { resolveWorkspacePath } from "~/server/paths";
 import { readClawdletsEnvTokens } from "~/server/redaction";
 import { runWithEvents } from "~/server/run-manager";
 import { resolveTemplateSpec } from "~/server/template-spec";
-import fs from "node:fs";
+import { getAdminProjectContext } from "~/sdk/repo-root";
 
 function getHost(input?: unknown): string {
   const raw = typeof input === "string" ? input.trim() : "";
@@ -26,7 +25,7 @@ export const projectInitPlan = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ data }) => {
-    const destDir = resolveUserPath(data.localPath);
+    const destDir = resolveWorkspacePath(data.localPath, { allowMissing: true });
     return await planProjectInit({
       destDir,
       host: data.host,
@@ -48,7 +47,7 @@ export const projectCreateStart = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const client = createConvexClient();
-    const localPath = resolveUserPath(data.localPath);
+    const localPath = resolveWorkspacePath(data.localPath, { allowMissing: true });
 
     const { projectId } = await client.mutation(api.projects.create, {
       name: data.name,
@@ -88,9 +87,11 @@ export const projectCreateExecute = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const client = createConvexClient();
-    const { project } = await client.query(api.projects.get, { projectId: data.projectId });
-
-    const redactTokens = await readClawdletsEnvTokens(project.localPath);
+    const context = await getAdminProjectContext(client, data.projectId, { allowMissing: true });
+    const run = await client.query(api.runs.get, { runId: data.runId });
+    if (run.run.projectId !== data.projectId) throw new Error("runId does not match project");
+    const repoRoot = context.repoRoot;
+    const redactTokens = await readClawdletsEnvTokens(repoRoot);
 
     try {
       await runWithEvents({
@@ -98,9 +99,9 @@ export const projectCreateExecute = createServerFn({ method: "POST" })
         runId: data.runId,
         redactTokens,
         fn: async (emit) => {
-          await emit({ level: "info", message: `Creating project in ${project.localPath}` });
+          await emit({ level: "info", message: `Creating project in ${repoRoot}` });
           const result = await initProject({
-            destDir: project.localPath,
+            destDir: repoRoot,
             host: data.host,
             templateSpec: data.templateSpec,
             gitInit: data.gitInit,
@@ -134,11 +135,7 @@ export const projectImport = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const client = createConvexClient();
-    const localPath = resolveUserPath(data.localPath);
-    const layout = getRepoLayout(localPath);
-    if (!fs.existsSync(layout.clawdletsConfigPath)) {
-      throw new Error(`missing fleet/clawdlets.json in ${localPath}`);
-    }
+    const localPath = resolveWorkspacePath(data.localPath, { requireRepoLayout: true });
 
     const { projectId } = await client.mutation(api.projects.create, {
       name: data.name,

@@ -11,7 +11,29 @@ import {
   requireProjectAccessQuery,
   requireAdmin,
 } from "./lib/auth";
+import { fail } from "./lib/errors";
 import { rateLimit } from "./lib/rateLimit";
+import { BotIdSchema, HostNameSchema } from "@clawdlets/shared/lib/identifiers";
+
+const LIVE_SCHEMA_TARGET_MAX_LEN = 128;
+
+function parseLiveSchemaTarget(args: { host: string; botId: string }): { host: string; botId: string } {
+  const host = args.host.trim();
+  const botId = args.botId.trim();
+  if (!host) fail("conflict", "host required");
+  if (!botId) fail("conflict", "botId required");
+  if (host.length > LIVE_SCHEMA_TARGET_MAX_LEN) fail("conflict", "host too long");
+  if (botId.length > LIVE_SCHEMA_TARGET_MAX_LEN) fail("conflict", "botId too long");
+  const hostParsed = HostNameSchema.safeParse(host);
+  if (!hostParsed.success) fail("conflict", hostParsed.error.issues[0]?.message ?? "invalid host");
+  const botParsed = BotIdSchema.safeParse(botId);
+  if (!botParsed.success) fail("conflict", botParsed.error.issues[0]?.message ?? "invalid bot id");
+  return { host, botId };
+}
+
+export function __test_parseLiveSchemaTarget(args: { host: string; botId: string }): { host: string; botId: string } {
+  return parseLiveSchemaTarget(args);
+}
 
 export const list = query({
   args: {},
@@ -62,20 +84,20 @@ export const create = mutation({
     const now = Date.now();
     const name = args.name.trim();
     const localPath = args.localPath.trim();
-    if (!name) throw new Error("name required");
-    if (!localPath) throw new Error("localPath required");
+    if (!name) fail("conflict", "name required");
+    if (!localPath) fail("conflict", "localPath required");
 
     const existingByName = await ctx.db
       .query("projects")
       .withIndex("by_owner_name", (q) => q.eq("ownerUserId", user._id).eq("name", name))
       .unique();
-    if (existingByName) throw new Error("project name already exists");
+    if (existingByName) fail("conflict", "project name already exists");
 
     const existingByPath = await ctx.db
       .query("projects")
       .withIndex("by_owner_localPath", (q) => q.eq("ownerUserId", user._id).eq("localPath", localPath))
       .unique();
-    if (existingByPath) throw new Error("project path already exists");
+    if (existingByPath) fail("conflict", "project path already exists");
 
     const projectId = await ctx.db.insert("projects", {
       ownerUserId: user._id,
@@ -111,7 +133,32 @@ export const update = mutation({
 
     await ctx.db.patch(projectId, next);
     const updated = await ctx.db.get(projectId);
-    if (!updated) throw new Error("project not found");
+    if (!updated) fail("not_found", "project not found");
     return updated;
+  },
+});
+
+export const guardLiveSchemaFetch = mutation({
+  args: {
+    projectId: v.id("projects"),
+    host: v.string(),
+    botId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const access = await requireProjectAccessMutation(ctx, args.projectId);
+    requireAdmin(access.role);
+
+    const { host, botId } = parseLiveSchemaTarget(args);
+
+    await rateLimit({ ctx, key: `schemaLive.fetch:${args.projectId}`, limit: 20, windowMs: 60_000 });
+    await ctx.db.insert("auditLogs", {
+      ts: Date.now(),
+      userId: access.authed.user._id,
+      projectId: args.projectId,
+      action: "clawdbot.schema.live.fetch",
+      target: { host, botId },
+    });
+    return null;
   },
 });

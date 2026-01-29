@@ -11,7 +11,7 @@ import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import { createConvexClient } from "~/server/convex"
 import { readClawdletsEnvTokens } from "~/server/redaction"
-import { runWithEvents } from "~/server/run-manager"
+import { runWithEventsAndStatus } from "~/sdk/run-with-events"
 import { getRepoRoot } from "~/sdk/repo-root"
 
 type WorkspaceDocScope = "common" | "bot" | "effective"
@@ -203,14 +203,7 @@ export const writeWorkspaceDoc = createServerFn({ method: "POST" })
       title: data.scope === "common" ? `workspace write common/${data.name}` : `workspace write bots/${data.botId}/${data.name}`,
     })
 
-    await client.mutation(api.auditLogs.append, {
-      projectId: data.projectId,
-      action: data.scope === "common" ? "workspace.common.write" : "workspace.bot.write",
-      target: data.scope === "common" ? { doc: data.name } : { botId: data.botId, doc: data.name },
-      data: { runId },
-    })
-
-    await runWithEvents({
+    return await runWithEventsAndStatus({
       client,
       runId,
       redactTokens,
@@ -220,10 +213,16 @@ export const writeWorkspaceDoc = createServerFn({ method: "POST" })
         await writeFileAtomic(targetPath, normalized.text)
         await emit({ level: "info", message: "Done." })
       },
+      onAfterEvents: async () => {
+        await client.mutation(api.auditLogs.append, {
+          projectId: data.projectId,
+          action: data.scope === "common" ? "workspace.common.write" : "workspace.bot.write",
+          target: data.scope === "common" ? { doc: data.name } : { botId: data.botId, doc: data.name },
+          data: { runId },
+        })
+      },
+      onSuccess: () => ({ ok: true as const, runId }),
     })
-
-    await client.mutation(api.runs.setStatus, { runId, status: "succeeded" })
-    return { ok: true, runId }
   })
 
 export const resetWorkspaceDocOverride = createServerFn({ method: "POST" })
@@ -271,14 +270,7 @@ export const resetWorkspaceDocOverride = createServerFn({ method: "POST" })
       title: `workspace reset bots/${data.botId}/${data.name}`,
     })
 
-    await client.mutation(api.auditLogs.append, {
-      projectId: data.projectId,
-      action: "workspace.bot.reset",
-      target: { botId: data.botId, doc: data.name },
-      data: { runId },
-    })
-
-    await runWithEvents({
+    return await runWithEventsAndStatus({
       client,
       runId,
       redactTokens,
@@ -288,8 +280,14 @@ export const resetWorkspaceDocOverride = createServerFn({ method: "POST" })
         await trash([botPath])
         await emit({ level: "info", message: "Moved to trash." })
       },
+      onAfterEvents: async () => {
+        await client.mutation(api.auditLogs.append, {
+          projectId: data.projectId,
+          action: "workspace.bot.reset",
+          target: { botId: data.botId, doc: data.name },
+          data: { runId },
+        })
+      },
+      onSuccess: () => ({ ok: true as const, runId }),
     })
-
-    await client.mutation(api.runs.setStatus, { runId, status: "succeeded" })
-    return { ok: true, runId }
   })

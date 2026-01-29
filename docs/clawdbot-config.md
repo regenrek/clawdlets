@@ -38,6 +38,15 @@ Notes:
   - requires `hosts.<host>.targetHost` (SSH) and an active bot gateway
   - uses the bot’s `/srv/clawdbot/<bot>/credentials/gateway.env` token via SSH
   - CLI: `clawdlets clawdbot schema fetch --host <host> --bot <bot>`
+- UI shows schema drift:
+  - pinned schema vs project’s pinned `nix-clawdbot` rev
+  - pinned schema vs upstream `nix-clawdbot` main
+
+## Web editor validation
+
+- Monaco editor with JSON schema diagnostics (unknown keys + type errors highlighted inline).
+- Security audit panel lists critical/warn/info findings + recommendations.
+- “Save validation issues” are server-side (pinned/live schema) and block writes.
 
 ## Secrets
 

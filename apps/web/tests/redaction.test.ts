@@ -33,5 +33,9 @@ describe("redactLine", () => {
     expect(redactLine("abc", ["abc"])).toBe("abc")
     expect(redactLine("abc12345 abc12345", ["abc12345"])).toBe("<redacted> <redacted>")
   })
-})
 
+  it("scrubs url credentials", () => {
+    const input = "fetch https://user:pass123@github.com/org/repo.git"
+    expect(redactLine(input, [])).toBe("fetch https://<redacted>@github.com/org/repo.git")
+  })
+})
