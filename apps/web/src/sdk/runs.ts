@@ -13,12 +13,16 @@ export const cancelRun = createServerFn({ method: "POST" })
     return { runId: d["runId"] as Id<"runs"> };
   })
   .handler(async ({ data }) => {
-    const canceled = cancelActiveRun(data.runId);
     const client = createConvexClient();
-    const { run, project } = await client.query(api.runs.get, { runId: data.runId });
+    const { run, project, role } = await client.query(api.runs.get, { runId: data.runId });
+    if (role !== "admin") throw new Error("admin required");
+    if (run.status === "succeeded" || run.status === "failed" || run.status === "canceled") {
+      return { canceled: false };
+    }
     const repoRoot = assertRepoRootPath(project.localPath, { allowMissing: false, requireRepoLayout: true });
     const redactTokens = await readClawdletsEnvTokens(repoRoot);
 
+    const canceled = cancelActiveRun(data.runId);
     await runWithEvents({
       client,
       runId: data.runId,
