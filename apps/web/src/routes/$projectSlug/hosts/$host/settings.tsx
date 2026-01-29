@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip
 import { singleHostCidrFromIp } from "~/lib/ip-utils"
 import { useProjectBySlug } from "~/lib/project-data"
 import { setupFieldHelp } from "~/lib/setup-field-help"
+import { ConnectivityPanel } from "~/components/hosts/connectivity-panel"
 import { addHostSshKeys, getClawdletsConfig, removeHostSshAuthorizedKey, removeHostSshKnownHost, writeClawdletsConfigFile } from "~/sdk/config"
 
 export const Route = createFileRoute("/$projectSlug/hosts/$host/settings")({
@@ -211,6 +212,11 @@ function HostsSetup() {
         <div className="rounded-lg border bg-card p-6 space-y-6">
           {hostCfg ? (
             <>
+              <ConnectivityPanel
+                projectId={projectId as Id<"projects">}
+                host={selectedHost}
+                targetHost={targetHost}
+              />
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-lg font-semibold truncate">{selectedHost}</div>

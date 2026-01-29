@@ -82,6 +82,12 @@
           "enabled": {
             "type": "boolean"
           },
+          "flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "otel": {
             "type": "object",
             "properties": {
@@ -662,12 +668,6 @@
                             "type": "number"
                           }
                         },
-                        "required": [
-                          "input",
-                          "output",
-                          "cacheRead",
-                          "cacheWrite"
-                        ],
                         "additionalProperties": false
                       },
                       "contextWindow": {
@@ -717,12 +717,7 @@
                     },
                     "required": [
                       "id",
-                      "name",
-                      "reasoning",
-                      "input",
-                      "cost",
-                      "contextWindow",
-                      "maxTokens"
+                      "name"
                     ],
                     "additionalProperties": false
                   }
@@ -1742,44 +1737,7 @@
                     "type": "boolean"
                   },
                   "target": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "const": "last"
-                      },
-                      {
-                        "type": "string",
-                        "const": "whatsapp"
-                      },
-                      {
-                        "type": "string",
-                        "const": "telegram"
-                      },
-                      {
-                        "type": "string",
-                        "const": "discord"
-                      },
-                      {
-                        "type": "string",
-                        "const": "slack"
-                      },
-                      {
-                        "type": "string",
-                        "const": "msteams"
-                      },
-                      {
-                        "type": "string",
-                        "const": "signal"
-                      },
-                      {
-                        "type": "string",
-                        "const": "imessage"
-                      },
-                      {
-                        "type": "string",
-                        "const": "none"
-                      }
-                    ]
+                    "type": "string"
                   },
                   "to": {
                     "type": "string"
@@ -2502,44 +2460,7 @@
                       "type": "boolean"
                     },
                     "target": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "const": "last"
-                        },
-                        {
-                          "type": "string",
-                          "const": "whatsapp"
-                        },
-                        {
-                          "type": "string",
-                          "const": "telegram"
-                        },
-                        {
-                          "type": "string",
-                          "const": "discord"
-                        },
-                        {
-                          "type": "string",
-                          "const": "slack"
-                        },
-                        {
-                          "type": "string",
-                          "const": "msteams"
-                        },
-                        {
-                          "type": "string",
-                          "const": "signal"
-                        },
-                        {
-                          "type": "string",
-                          "const": "imessage"
-                        },
-                        {
-                          "type": "string",
-                          "const": "none"
-                        }
-                      ]
+                      "type": "string"
                     },
                     "to": {
                       "type": "string"
@@ -4440,6 +4361,126 @@
             },
             "additionalProperties": false
           },
+          "links": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "scope": {
+                "type": "object",
+                "properties": {
+                  "default": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "allow"
+                      },
+                      {
+                        "type": "string",
+                        "const": "deny"
+                      }
+                    ]
+                  },
+                  "rules": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "const": "allow"
+                            },
+                            {
+                              "type": "string",
+                              "const": "deny"
+                            }
+                          ]
+                        },
+                        "match": {
+                          "type": "object",
+                          "properties": {
+                            "channel": {
+                              "type": "string"
+                            },
+                            "chatType": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "const": "direct"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "group"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "channel"
+                                }
+                              ]
+                            },
+                            "keyPrefix": {
+                              "type": "string"
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "action"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "maxLinks": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "timeoutSeconds": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "models": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "cli"
+                    },
+                    "command": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "args": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "timeoutSeconds": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "command"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          },
           "message": {
             "type": "object",
             "properties": {
@@ -5211,6 +5252,15 @@
           "tts": {
             "type": "object",
             "properties": {
+              "auto": {
+                "type": "string",
+                "enum": [
+                  "off",
+                  "always",
+                  "inbound",
+                  "tagged"
+                ]
+              },
               "enabled": {
                 "type": "boolean"
               },
@@ -5225,8 +5275,42 @@
                 "type": "string",
                 "enum": [
                   "elevenlabs",
-                  "openai"
+                  "openai",
+                  "edge"
                 ]
+              },
+              "summaryModel": {
+                "type": "string"
+              },
+              "modelOverrides": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "allowText": {
+                    "type": "boolean"
+                  },
+                  "allowProvider": {
+                    "type": "boolean"
+                  },
+                  "allowVoice": {
+                    "type": "boolean"
+                  },
+                  "allowModelId": {
+                    "type": "boolean"
+                  },
+                  "allowVoiceSettings": {
+                    "type": "boolean"
+                  },
+                  "allowNormalization": {
+                    "type": "boolean"
+                  },
+                  "allowSeed": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
               },
               "elevenlabs": {
                 "type": "object",
@@ -5234,11 +5318,59 @@
                   "apiKey": {
                     "type": "string"
                   },
+                  "baseUrl": {
+                    "type": "string"
+                  },
                   "voiceId": {
                     "type": "string"
                   },
                   "modelId": {
                     "type": "string"
+                  },
+                  "seed": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "applyTextNormalization": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "on",
+                      "off"
+                    ]
+                  },
+                  "languageCode": {
+                    "type": "string"
+                  },
+                  "voiceSettings": {
+                    "type": "object",
+                    "properties": {
+                      "stability": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "similarityBoost": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "style": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "useSpeakerBoost": {
+                        "type": "boolean"
+                      },
+                      "speed": {
+                        "type": "number",
+                        "minimum": 0.5,
+                        "maximum": 2
+                      }
+                    },
+                    "additionalProperties": false
                   }
                 },
                 "additionalProperties": false
@@ -5254,6 +5386,44 @@
                   },
                   "voice": {
                     "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "edge": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "voice": {
+                    "type": "string"
+                  },
+                  "lang": {
+                    "type": "string"
+                  },
+                  "outputFormat": {
+                    "type": "string"
+                  },
+                  "pitch": {
+                    "type": "string"
+                  },
+                  "rate": {
+                    "type": "string"
+                  },
+                  "volume": {
+                    "type": "string"
+                  },
+                  "saveSubtitles": {
+                    "type": "boolean"
+                  },
+                  "proxy": {
+                    "type": "string"
+                  },
+                  "timeoutMs": {
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 120000
                   }
                 },
                 "additionalProperties": false
@@ -5336,6 +5506,83 @@
           "native",
           "nativeSkills"
         ],
+        "additionalProperties": false
+      },
+      "approvals": {
+        "type": "object",
+        "properties": {
+          "exec": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "mode": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "session"
+                  },
+                  {
+                    "type": "string",
+                    "const": "targets"
+                  },
+                  {
+                    "type": "string",
+                    "const": "both"
+                  }
+                ]
+              },
+              "agentFilter": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "sessionFilter": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "channel": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "to": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "accountId": {
+                      "type": "string"
+                    },
+                    "threadId": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "channel",
+                    "to"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
         "additionalProperties": false
       },
       "session": {
@@ -6260,6 +6507,12 @@
             },
             "additionalProperties": false
           },
+          "trustedProxies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "tailscale": {
             "type": "object",
             "properties": {
@@ -6290,6 +6543,18 @@
             "properties": {
               "url": {
                 "type": "string"
+              },
+              "transport": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "ssh"
+                  },
+                  {
+                    "type": "string",
+                    "const": "direct"
+                  }
+                ]
               },
               "token": {
                 "type": "string"
@@ -6885,6 +7150,10 @@
     "diagnostics.enabled": {
       "label": "Diagnostics Enabled"
     },
+    "diagnostics.flags": {
+      "label": "Diagnostics Flags",
+      "help": "Enable targeted diagnostics logs by flag (e.g. [\"telegram.http\"]). Supports wildcards like \"telegram.*\" or \"*\"."
+    },
     "diagnostics.otel.enabled": {
       "label": "OpenTelemetry Enabled"
     },
@@ -7056,6 +7325,21 @@
     },
     "tools.media.video.scope": {
       "label": "Video Understanding Scope"
+    },
+    "tools.links.enabled": {
+      "label": "Enable Link Understanding"
+    },
+    "tools.links.maxLinks": {
+      "label": "Link Understanding Max Links"
+    },
+    "tools.links.timeoutSeconds": {
+      "label": "Link Understanding Timeout (sec)"
+    },
+    "tools.links.models": {
+      "label": "Link Understanding Models"
+    },
+    "tools.links.scope": {
+      "label": "Link Understanding Scope"
     },
     "tools.profile": {
       "label": "Tool Profile"
@@ -7866,7 +8150,7 @@
       "help": "Override native skill commands for Slack (bool or \"auto\")."
     }
   },
-  "version": "2026.1.23",
-  "generatedAt": "2026-01-24T09:29:32Z",
-  "clawdbotRev": "faa90fc206753981a5f323581de1c76112bbfbff"
+  "version": "2026.1.24-3",
+  "generatedAt": "2026-01-25T15:27:03Z",
+  "clawdbotRev": "c8063bdcd83c14177aeff09dec329e3a8534f186"
 }

@@ -82,7 +82,6 @@ function isWorkspaceProtocol(v) {
 function dropWorkspaceDeps(pkg) {
   const next = { ...pkg };
   const sections = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"];
-
   for (const section of sections) {
     const deps = { ...(next[section] || {}) };
     let changed = false;
@@ -93,7 +92,6 @@ function dropWorkspaceDeps(pkg) {
     }
     if (changed) next[section] = deps;
   }
-
   return next;
 }
 

@@ -222,6 +222,29 @@ export function parseProjectRunHostInput(data: unknown): { projectId: Id<"projec
   }
 }
 
+export function parseProjectHostTargetInput(data: unknown): { projectId: Id<"projects">; host: string; targetHost: string } {
+  const base = parseProjectHostRequiredInput(data)
+  const d = requireObject(data)
+  return {
+    ...base,
+    targetHost: parseOptionalString(d["targetHost"], 512),
+  }
+}
+
+export function parseProjectRunHostConfirmInput(data: unknown): {
+  projectId: Id<"projects">
+  runId: Id<"runs">
+  host: string
+  confirm: string
+} {
+  const base = parseProjectRunHostInput(data)
+  const d = requireObject(data)
+  return {
+    ...base,
+    confirm: typeof d["confirm"] === "string" ? d["confirm"] : "",
+  }
+}
+
 export function parseServerDeployStartInput(data: unknown): {
   projectId: Id<"projects">
   host: string

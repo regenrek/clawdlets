@@ -9,10 +9,12 @@ import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { Textarea } from "~/components/ui/textarea"
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert"
 import { useProjectBySlug } from "~/lib/project-data"
-import { getClawdletsConfig } from "~/sdk/config"
+import { configDotSet, getClawdletsConfig } from "~/sdk/config"
 import { runDoctor } from "~/sdk/operations"
 import { serverDeployExecute, serverDeployStart } from "~/sdk/server-ops"
+import { getHostPublicIpv4 } from "~/sdk/host-connectivity"
 
 export const Route = createFileRoute("/$projectSlug/hosts/$host/deploy")({
   component: DeployOperate,
@@ -30,6 +32,7 @@ function DeployOperate() {
   })
 
   const config = cfg.data?.config as any
+  const hostCfg = host && config?.hosts ? config.hosts[host] : null
 
   const [manifestPath, setManifestPath] = useState("")
   useEffect(() => {
@@ -40,6 +43,11 @@ function DeployOperate() {
 
   const [rev, setRev] = useState("HEAD")
   const [targetHost, setTargetHost] = useState("")
+  useEffect(() => {
+    if (!host || !hostCfg) return
+    if (targetHost) return
+    if (hostCfg.targetHost) setTargetHost(String(hostCfg.targetHost))
+  }, [host, hostCfg, targetHost])
 
   const expectedConfirm = host ? `deploy ${host}` : "deploy <host>"
   const [confirm, setConfirm] = useState("")
@@ -79,7 +87,29 @@ function DeployOperate() {
     },
   })
 
-  const canDeploy = Boolean(host && manifestPath.trim() && doctor?.ok && confirm.trim() === expectedConfirm)
+  const missingTargetHost = !targetHost.trim()
+  const canDeploy = Boolean(host && manifestPath.trim() && doctor?.ok && confirm.trim() === expectedConfirm && !missingTargetHost)
+
+  const publicIpv4Query = useQuery({
+    queryKey: ["hostPublicIpv4", projectId, host],
+    queryFn: async () => await getHostPublicIpv4({ data: { projectId: projectId as Id<"projects">, host } }),
+    enabled: Boolean(projectId && host),
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
+
+  const publicIpv4 = publicIpv4Query.data?.ok ? publicIpv4Query.data.ipv4 : ""
+
+  const setTargetHostToPublic = useMutation({
+    mutationFn: async (ipv4: string) =>
+      await configDotSet({
+        data: { projectId: projectId as Id<"projects">, path: `hosts.${host}.targetHost`, value: `admin@${ipv4}` },
+      }),
+    onSuccess: (res) => {
+      if (!res.ok) return
+      void cfg.refetch()
+    },
+  })
 
   const cliCmd = useMemo(() => {
     if (!host || !manifestPath.trim()) return ""
@@ -111,6 +141,27 @@ function DeployOperate() {
       ) : (
         <div className="space-y-6">
           <div className="rounded-lg border bg-card p-6 space-y-4">
+            {missingTargetHost ? (
+              <Alert variant="destructive" className="border-destructive/40 bg-destructive/5">
+                <AlertTitle>targetHost required</AlertTitle>
+                <AlertDescription>
+                  Deploys will fail without <code>hosts.{host}.targetHost</code>.
+                  {publicIpv4 ? (
+                    <span className="ml-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        disabled={setTargetHostToPublic.isPending}
+                        onClick={() => setTargetHostToPublic.mutate(publicIpv4)}
+                      >
+                        Use admin@{publicIpv4}
+                      </Button>
+                    </span>
+                  ) : null}
+                </AlertDescription>
+              </Alert>
+            ) : null}
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Host</Label>

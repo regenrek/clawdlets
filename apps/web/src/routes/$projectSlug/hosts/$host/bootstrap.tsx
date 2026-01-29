@@ -30,6 +30,7 @@ import { getClawdletsConfig } from "~/sdk/config"
 import { getDeployCredsStatus } from "~/sdk/deploy-creds"
 import { gitPushExecute, gitRepoStatus } from "~/sdk/git"
 import { bootstrapExecute, bootstrapStart, runDoctor } from "~/sdk/operations"
+import { BootstrapChecklist } from "~/components/hosts/bootstrap-checklist"
 
 export const Route = createFileRoute("/$projectSlug/hosts/$host/bootstrap")({
   component: BootstrapSetup,
@@ -172,6 +173,11 @@ function BootstrapSetup() {
         <div className="text-muted-foreground">Missing config.</div>
       ) : (
         <div className="space-y-6">
+          {host ? (
+            <div id="lockdown">
+              <BootstrapChecklist projectId={projectId as Id<"projects">} host={host} config={config} />
+            </div>
+          ) : null}
           <div className="rounded-lg border bg-card p-6 space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">

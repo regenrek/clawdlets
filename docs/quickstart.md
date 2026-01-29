@@ -92,6 +92,9 @@ clawdlets bootstrap --mode image
 - Console: `admin` login should work (sudo password exists; SSH stays key-only)
 
 5) Lock down after VPN/tailnet works:
+
+> 🚨 **CRITICAL:** Lockdown is mandatory! Without it, your server remains publicly accessible via SSH. Run `clawdlets lockdown` as soon as your VPN/tailnet connection is confirmed working. Skipping this step leaves your server exposed to the internet.
+
 ```bash
 clawdlets host set --target-host admin@<tailscale-ip>
 clawdlets host set --ssh-exposure tailnet

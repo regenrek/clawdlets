@@ -3,11 +3,11 @@
     "clawdbot-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1769246972,
-        "narHash": "sha256-nFGfEOVsnR0b3pzkGIo1EWz7WQCdhlKxKKOxxQq64q4=",
+        "lastModified": 1769354823,
+        "narHash": "sha256-iW8QDUR+IkOrlh1Dlx0kvu9t2x983bn+bOUROdFVcME=",
         "owner": "clawdbot",
         "repo": "clawdbot",
-        "rev": "faa90fc206753981a5f323581de1c76112bbfbff",
+        "rev": "c8063bdcd83c14177aeff09dec329e3a8534f186",
         "type": "github"
       },
       "original": {
@@ -85,11 +85,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1769247295,
-        "narHash": "sha256-ONjzNCIJMODA5/fhdYYCKEhFwm5E7AyDIl5rAWxyWBE=",
+        "lastModified": 1769359276,
+        "narHash": "sha256-bbjwQTr0yQja1keQI68wOahSH3BHR5hxMKJjuez0Ycg=",
         "owner": "clawdbot",
         "repo": "nix-clawdbot",
-        "rev": "d8940d79afdd21b18748463544946be6d247efc3",
+        "rev": "57e394bd05991fe350510416c564ccf62954868f",
         "type": "github"
       },
       "original": {
@@ -201,11 +201,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1768863606,
-        "narHash": "sha256-1IHAeS8WtBiEo5XiyJBHOXMzECD6aaIOJmpQKzRRl64=",
+        "lastModified": 1769314333,
+        "narHash": "sha256-+Uvq9h2eGsbhacXpuS7irYO7fFlz514nrhPCSTkASlw=",
         "owner": "Mic92",
         "repo": "sops-nix",
-        "rev": "c7067be8db2c09ab1884de67ef6c4f693973f4a2",
+        "rev": "2eb9eed7ef48908e0f02985919f7eb9d33fa758f",
         "type": "github"
       },
       "original": {
