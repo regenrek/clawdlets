@@ -20,7 +20,7 @@
   "dependencies": {
     "@clawdlets/cattle-core": "workspace:*",
     "@clawdlets/clf-queue": "workspace:*",
-    "citty": "^0.1.6"
+    "citty": "^0.2.0"
   },
   "devDependencies": {
     "@types/node": "^25.0.9",
