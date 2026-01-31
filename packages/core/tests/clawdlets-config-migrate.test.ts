@@ -109,4 +109,70 @@ describe("clawdlets config migrate", () => {
     expect(migrated.hosts.alpha.sshAuthorizedKeys).toBeUndefined();
     expect(migrated.hosts.alpha.sshKnownHosts).toBeUndefined();
   });
+
+  it("migrates v10 -> v11 (cache + selfUpdate)", async () => {
+    const { migrateClawdletsConfigToV11 } = await import("../src/lib/clawdlets-config-migrate");
+
+    const raw = {
+      schemaVersion: 10,
+      fleet: {
+        secretEnv: {},
+        secretFiles: {},
+        botOrder: [],
+        bots: {},
+      },
+      hosts: {
+        alpha: {
+          cache: {
+            garnix: {
+              private: {
+                enable: true,
+                netrcSecret: "garnix_netrc",
+                netrcPath: "/etc/nix/netrc",
+                narinfoCachePositiveTtl: 123,
+              },
+            },
+          },
+          selfUpdate: {
+            enable: true,
+            interval: "30min",
+            manifestUrl: "https://example.com/deploy/alpha/prod",
+            publicKey: "key1",
+            signatureUrl: "https://example.com/deploy/alpha/prod/latest.json.minisig",
+          },
+        },
+      },
+    };
+
+    const res = migrateClawdletsConfigToV11(raw);
+    expect(res.ok).toBe(true);
+    expect(res.changed).toBe(true);
+    expect(res.warnings.length).toBeGreaterThan(0);
+
+    const migrated = res.migrated as any;
+    expect(migrated.schemaVersion).toBe(11);
+
+    expect(migrated.hosts.alpha.cache.garnix).toBeUndefined();
+    expect(migrated.hosts.alpha.cache.substituters).toEqual(expect.any(Array));
+    expect(migrated.hosts.alpha.cache.trustedPublicKeys).toEqual(expect.any(Array));
+    expect(migrated.hosts.alpha.cache.netrc).toEqual({
+      enable: true,
+      secretName: "garnix_netrc",
+      path: "/etc/nix/netrc",
+      narinfoCachePositiveTtl: 123,
+    });
+
+    expect(migrated.hosts.alpha.selfUpdate.manifestUrl).toBeUndefined();
+    expect(migrated.hosts.alpha.selfUpdate.publicKey).toBeUndefined();
+    expect(migrated.hosts.alpha.selfUpdate.signatureUrl).toBeUndefined();
+
+    expect(migrated.hosts.alpha.selfUpdate.enable).toBe(true);
+    expect(migrated.hosts.alpha.selfUpdate.interval).toBe("30min");
+    expect(migrated.hosts.alpha.selfUpdate.baseUrl).toBe("https://example.com/deploy/alpha/prod");
+    expect(migrated.hosts.alpha.selfUpdate.channel).toBe("prod");
+    expect(migrated.hosts.alpha.selfUpdate.publicKeys).toEqual(["key1"]);
+    expect(migrated.hosts.alpha.selfUpdate.allowUnsigned).toBe(false);
+    expect(migrated.hosts.alpha.selfUpdate.allowRollback).toBe(false);
+    expect(migrated.hosts.alpha.selfUpdate.healthCheckUnit).toBe("");
+  });
 });

@@ -6,7 +6,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         bots: { maren: {} },
@@ -31,7 +31,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         bots: { maren: {} },
@@ -51,7 +51,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         bots: { maren: {} },
@@ -72,7 +72,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         bots: { maren: {} },
@@ -93,7 +93,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         bots: {
@@ -119,7 +119,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         bots: {
@@ -150,7 +150,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         bots: {
@@ -178,7 +178,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["alpha", "beta"],
         secretEnv: { ZAI_API_KEY: "z_ai_api_key" },
@@ -209,7 +209,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         bots: {
@@ -236,7 +236,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         bots: {
@@ -262,7 +262,7 @@ describe("fleet secrets plan", () => {
 
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 10,
+        schemaVersion: 11,
         fleet: {
           botOrder: ["maren"],
           bots: { maren: {} },
@@ -283,7 +283,7 @@ describe("fleet secrets plan", () => {
 
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 10,
+        schemaVersion: 11,
         fleet: {
           botOrder: ["maren"],
           bots: { maren: {} },
@@ -304,7 +304,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         bots: {
@@ -333,7 +333,7 @@ describe("fleet secrets plan", () => {
 
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 10,
+        schemaVersion: 11,
         fleet: {
           botOrder: ["maren"],
           bots: {
@@ -360,7 +360,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         bots: {
@@ -384,7 +384,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         bots: {
@@ -414,7 +414,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         bots: {
@@ -442,7 +442,7 @@ describe("fleet secrets plan", () => {
     const { buildFleetSecretsPlan } = await import("../src/lib/fleet-secrets-plan");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         bots: {

@@ -16,7 +16,7 @@ Rules of thumb:
 ## Defaults worth knowing
 
 - Template defaults `sshExposure.mode=bootstrap` (public SSH only for day-0).
-- `cache.garnix.private.enable` defaults to `false` (opt-in).
+- `cache.netrc.enable` defaults to `false` (opt-in).
 - `provisioning.adminCidr` must be a CIDR; world-open requires `adminCidrAllowWorldOpen=true`.
 
 ## E2E Lifecycle Diagram
@@ -144,19 +144,19 @@ Rules of thumb:
 │  │         │                                                                                       │ │
 │  │         ▼                                                                                       │ │
 │  │  ┌──────────────────────────────────────────────────────────────────────────────────────────┐   │ │
-│  │  │ deploy-manifest.yml (GitHub Actions)                                                      │   │ │
+│  │  │ updates-publish.yml (GitHub Actions)                                                      │   │ │
 │  │  │ ──────────────────────────────────────                                                    │   │ │
-│  │  │   1. nix build .#hosts.<host>.toplevel  (Build NixOS system)                              │   │ │
-│  │  │   2. clawdlets server manifest --host <host>  (Generate manifest)                         │   │ │
+│  │  │   1. nix eval .#packages.x86_64-linux."<host>-system".outPath  (Store path)              │   │ │
+│  │  │   2. clawdlets release manifest build --host <host> --channel <channel> --release-id <n>  │   │ │
 │  │  │   3. minisign -S  (Sign with MINISIGN_PRIVATE_KEY)                                        │   │ │
-│  │  │   4. Upload to GitHub Pages:                                                              │   │ │
-│  │  │        deploy/<host>/latest.json                                                          │   │ │
-│  │  │        deploy/<host>/<rev>.json                                                           │   │ │
+│  │  │   4. Commit to gh-pages branch (GitHub Pages):                                            │   │ │
+│  │  │        deploy/<host>/<channel>/latest.json                                                │   │ │
+│  │  │        deploy/<host>/<channel>/<releaseId>.json                                           │   │ │
 │  │  └────────────────────────────────────────────────────────────────────────────────────────┬─┘   │ │
 │  │                                                                                           │     │ │
 │  │                                                                                           ▼     │ │
 │  │  ┌──────────────────────────────────────────────────────────────────────────────────────────┐   │ │
-│  │  │ deploy.yml (GitHub Actions)                                                               │   │ │
+│  │  │ push-deploy.yml (optional)                                                                │   │ │
 │  │  │ ───────────────────────────                                                               │   │ │
 │  │  │   1. Join Tailnet (TAILSCALE_AUTHKEY)                                                     │   │ │
 │  │  │   2. Download signed manifest from GitHub Pages                                           │   │ │
@@ -176,7 +176,7 @@ Rules of thumb:
 │  │  └────────────────────────────────┘         └────────────────────────────────────────────────┘  │ │
 │  │                                                          │                                      │ │
 │  │                                                          ▼                                      │ │
-│  │                                              PR merged ──▶ triggers deploy-manifest.yml         │ │
+│  │                                              PR merged ──▶ triggers updates-publish.yml         │ │
 │  └─────────────────────────────────────────────────────────────────────────────────────────────────┘ │
 │                                                                                                      │
 │  ┌─────────────────────────────────────────────────────────────────────────────────────────────────┐ │
@@ -275,12 +275,13 @@ Rules of thumb:
 | **Secrets** | `secrets/.sops.yaml` | SOPS encryption rules |
 | | `secrets/hosts/<host>/*.yaml` | Encrypted secrets per host |
 | | `.clawdlets/extra-files/` | nixos-anywhere injection payload |
-| **Workflows** | `deploy-manifest.yml` | Builds and signs deploy manifests |
+| **Workflows** | `updates-publish.yml` | Builds and signs release manifests + publishes secrets bundles |
 | | `deploy.yml` | Deploys manifests to hosts via Tailnet |
 | | `bump-nix-clawdbot.yml` | Auto-updates nix-clawdbot dependency |
 | | `cattle-image.yml` | Builds and uploads cattle VM image |
-| **Manifests** | `deploy-manifest.<host>.json` | Pinned deployment manifest |
-| | `deploy/<host>/latest.json` | Latest manifest on GitHub Pages |
+| **Manifests** | `deploy/<host>/<channel>/<releaseId>.json` | Pinned desired-state manifest |
+| | `deploy/<host>/<channel>/latest.json` | Pointer on GitHub Pages |
+| | `deploy/<host>/<channel>/secrets/<digest>.tgz` | Encrypted secrets bundle (sops `.yaml`) |
 | | `cattle-image.json` | Cattle image ID artifact |
 | **Playbooks** | `AGENT-BOOTSTRAP-SERVER.md` | Interactive day0 bootstrap guide |
 | | `AGENT-BOOTSTRAP-SERVER-AUTO.md` | Non-interactive day0 bootstrap |

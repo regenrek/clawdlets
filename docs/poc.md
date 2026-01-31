@@ -6,7 +6,7 @@ Goal: prove clawdlets can provision + operate a single Hetzner host end-to-end w
 
 ### Provision + install
 
-- `fleet/clawdlets.json` exists (schemaVersion 8) and is the single source of truth for fleet + hosts.
+- `fleet/clawdlets.json` exists (schemaVersion 11) and is the single source of truth for fleet + hosts.
 - `CLAWDLETS_INTERACTIVE=1 clawdlets secrets init` created/updated:
   - `secrets/.sops.yaml`
   - `secrets/keys/hosts/<host>.agekey.yaml` (encrypted host age key)
@@ -39,7 +39,7 @@ Goal: prove clawdlets can provision + operate a single Hetzner host end-to-end w
 
 ### Day-2 ops
 
-- Deploy pinned: `clawdlets server deploy --manifest deploy-manifest.<host>.json` works.
+- Deploy pinned: `clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json` works.
 - Rotate a Discord token:
   - edit `secrets/hosts/<host>/discord_token_<bot>.yaml` with `sops`
   - `clawdlets secrets sync`

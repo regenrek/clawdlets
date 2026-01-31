@@ -11,9 +11,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "~/components/ui/input"
 import { Label } from "~/components/ui/label"
 import { useProjectBySlug } from "~/lib/project-data"
-import { addHost, getClawdletsConfig } from "~/sdk/config"
+import { addHost } from "~/sdk/config"
+import { clawdletsConfigQueryOptions, projectsListQueryOptions } from "~/lib/query-options"
+import { slugifyProjectName } from "~/lib/project-routing"
 
 export const Route = createFileRoute("/$projectSlug/hosts/")({
+  loader: async ({ context, params }) => {
+    const projects = await context.queryClient.ensureQueryData(projectsListQueryOptions())
+    const project = projects.find((p) => slugifyProjectName(p.name) === params.projectSlug) ?? null
+    const projectId = (project?._id as Id<"projects"> | null) ?? null
+    if (!projectId) return
+    await context.queryClient.ensureQueryData(clawdletsConfigQueryOptions(projectId))
+  },
   component: HostsOverview,
 })
 
@@ -23,9 +32,7 @@ function HostsOverview() {
   const projectId = projectQuery.projectId
   const queryClient = useQueryClient()
   const cfg = useQuery({
-    queryKey: ["clawdletsConfig", projectId],
-    queryFn: async () =>
-      await getClawdletsConfig({ data: { projectId: projectId as Id<"projects"> } }),
+    ...clawdletsConfigQueryOptions(projectId as Id<"projects"> | null),
     enabled: Boolean(projectId),
   })
 

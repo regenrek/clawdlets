@@ -10,8 +10,9 @@ Option:
 Then deploy (pinned):
 
 ```bash
-clawdlets server manifest --host <host> --out deploy-manifest.<host>.json
-clawdlets server deploy --manifest deploy-manifest.<host>.json
+clawdlets release manifest build --host <host> --channel prod --release-id <releaseId> --out deploy/<host>/prod/<releaseId>.json
+clawdlets release manifest sign --in deploy/<host>/prod/<releaseId>.json
+clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json
 ```
 
 `--rev HEAD` resolves to the full SHA locally before the deploy.
@@ -25,7 +26,7 @@ clawdlets server deploy --manifest deploy-manifest.<host>.json
 5) Deploy (pinned):
 
 ```bash
-clawdlets server deploy --manifest deploy-manifest.<host>.json
+clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json
 ```
 
 ## Add a bot
@@ -42,7 +43,7 @@ clawdlets bot add --bot <id>
 Then:
 ```bash
 clawdlets secrets sync
-clawdlets server deploy --manifest deploy-manifest.<host>.json
+clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json
 ```
 
 ## Add/enable a skill
@@ -56,7 +57,7 @@ clawdlets config set --path fleet.bots.maren.profile.skills.allowBundled --value
 4) Sync + deploy:
 ```bash
 clawdlets secrets sync
-clawdlets server deploy --manifest deploy-manifest.<host>.json
+clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json
 ```
 
 ## Verify

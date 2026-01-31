@@ -8,7 +8,7 @@ import { useConvexAuth } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import type { Id } from "../../../convex/_generated/dataModel"
 import { getDashboardOverview } from "~/sdk/dashboard"
-import { migrateClawdletsConfigFileToV10 } from "~/sdk/config-migrate"
+import { migrateClawdletsConfigFileToV11 } from "~/sdk/config-migrate"
 import { Badge } from "~/components/ui/badge"
 import {
   Card,
@@ -87,11 +87,11 @@ export function ProjectDashboard(props: {
   const migrate = useMutation({
     mutationFn: async () => {
       if (!project) throw new Error("project not loaded")
-      return await migrateClawdletsConfigFileToV10({ data: { projectId: project.projectId } })
+      return await migrateClawdletsConfigFileToV11({ data: { projectId: project.projectId } })
     },
     onSuccess: (res) => {
       if (res.ok) {
-        toast.success(res.changed ? "Migrated config" : "Config already schemaVersion 10")
+        toast.success(res.changed ? "Migrated config" : "Config already schemaVersion 11")
         void queryClient.invalidateQueries({ queryKey: ["dashboardOverview"] })
         void queryClient.invalidateQueries({
           queryKey: ["dashboardRecentRuns", project?.projectId ?? null],
@@ -142,6 +142,7 @@ export function ProjectDashboard(props: {
   const defaultHostBase = defaultHostName
     ? `/${props.projectSlug}/hosts/${encodeURIComponent(defaultHostName)}`
     : `/${props.projectSlug}/hosts`
+  const canLinkToDefaultHost = Boolean(defaultHostName && props.projectSlug)
 
   return (
     <div className="space-y-6">
@@ -224,10 +225,10 @@ export function ProjectDashboard(props: {
                       disabled={!canWrite || migrate.isPending}
                       onClick={() => migrate.mutate()}
                     >
-                      Migrate to schemaVersion 10
+                      Migrate to schemaVersion 11
                     </Button>
                     <div className="text-muted-foreground text-xs">
-                      CLI: <code>clawdlets config migrate --to v10</code>
+                      CLI: <code>clawdlets config migrate --to v11</code>
                     </div>
                   </div>
                 ) : null}
@@ -260,77 +261,38 @@ export function ProjectDashboard(props: {
               size="sm"
               variant="outline"
               nativeButton={false}
+              disabled={!canLinkToDefaultHost}
               render={
                 <Link
-                  to="/$projectSlug/setup/doctor"
-                  params={{ projectSlug: props.projectSlug }}
+                  to="/$projectSlug/hosts/$host/logs"
+                  params={{ projectSlug: props.projectSlug, host: defaultHostName }}
                 />
               }
             >
-              Doctor
+              Logs
             </Button>
             <Button
               size="sm"
               variant="outline"
               nativeButton={false}
+              disabled={!canLinkToDefaultHost}
               render={
                 <Link
-                  to="/$projectSlug/hosts"
-                  params={{ projectSlug: props.projectSlug }}
+                  to="/$projectSlug/hosts/$host/audit"
+                  params={{ projectSlug: props.projectSlug, host: defaultHostName }}
                 />
               }
             >
-              Hosts
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              nativeButton={false}
-              render={
-                <Link to={defaultHostBase} />
-              }
-            >
-              Bootstrap
+              Audit
             </Button>
           </CardFooter>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle>Recent runs</CardTitle>
-            <CardDescription>Latest activity for this project.</CardDescription>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            nativeButton={false}
-            render={
-              <Link
-                to="/$projectSlug/runs"
-                params={{ projectSlug: props.projectSlug }}
-              />
-            }
-          >
-            View all
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {recentRuns.isPending ? (
-            <div className="text-muted-foreground text-sm">Loading…</div>
-          ) : recentRuns.error ? (
-            <div className="text-sm text-destructive">{String(recentRuns.error)}</div>
-          ) : runs.length === 0 ? (
-            <div className="text-muted-foreground text-sm">No runs yet.</div>
-          ) : (
-            <RecentRunsTable
-              runs={runs.slice(0, 10)}
-              projectSlug={props.projectSlug}
-            />
-          )}
-        </CardContent>
-      </Card>
+      <RecentRunsTable
+        runs={runs}
+        projectSlug={props.projectSlug}
+      />
     </div>
   )
 }

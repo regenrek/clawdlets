@@ -7,7 +7,7 @@ type SecretsInitTemplateSets = {
   optionalSecrets: string[];
   templateSecrets: Record<string, string>;
   requiredSecretNames: string[];
-  garnixNetrcSecretName: string;
+  cacheNetrcSecretName: string;
 };
 
 const SKIP_HOST_SECRET_NAMES = new Set(["admin_password_hash", "tailscale_auth_key"]);
@@ -26,11 +26,11 @@ export function buildSecretsInitTemplateSets(params: {
   const hostRequiredSecretNames = new Set<string>(secretsPlan.hostSecretNamesRequired);
   const requiresTailscaleAuthKey = hostRequiredSecretNames.has("tailscale_auth_key");
 
-  const garnixPrivate = hostCfg.cache?.garnix?.private;
-  const garnixPrivateEnabled = Boolean(garnixPrivate?.enable);
-  const garnixNetrcSecretName = garnixPrivateEnabled ? String(garnixPrivate?.netrcSecret || "garnix_netrc").trim() : "";
-  if (garnixPrivateEnabled && !garnixNetrcSecretName) {
-    throw new Error("cache.garnix.private.netrcSecret must be set when private cache is enabled");
+  const cacheNetrc = hostCfg.cache?.netrc;
+  const cacheNetrcEnabled = Boolean(cacheNetrc?.enable);
+  const cacheNetrcSecretName = cacheNetrcEnabled ? String(cacheNetrc?.secretName || "garnix_netrc").trim() : "";
+  if (cacheNetrcEnabled && !cacheNetrcSecretName) {
+    throw new Error("cache.netrc.secretName must be set when cache.netrc.enable is true");
   }
 
   const requiredSecrets = uniqSorted(
@@ -44,7 +44,7 @@ export function buildSecretsInitTemplateSets(params: {
   const templateSecretNames = uniqSorted([...requiredSecrets, ...optionalSecrets]);
   const templateSecrets: Record<string, string> = {};
   for (const secretName of templateSecretNames) {
-    if (garnixPrivateEnabled && secretName === garnixNetrcSecretName) {
+    if (cacheNetrcEnabled && secretName === cacheNetrcSecretName) {
       templateSecrets[secretName] = "<REPLACE_WITH_NETRC>";
       continue;
     }
@@ -62,6 +62,6 @@ export function buildSecretsInitTemplateSets(params: {
     optionalSecrets,
     templateSecrets,
     requiredSecretNames,
-    garnixNetrcSecretName,
+    cacheNetrcSecretName,
   };
 }

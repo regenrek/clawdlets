@@ -11,6 +11,7 @@ import { infra } from "./infra.js";
 import { lockdown } from "./lockdown.js";
 import { plugin } from "./plugin.js";
 import { project } from "./project.js";
+import { release } from "./release.js";
 import { secrets } from "./secrets.js";
 import { server } from "./server.js";
 
@@ -28,6 +29,7 @@ export const baseCommands = {
   lockdown,
   plugin,
   project,
+  release,
   secrets,
   server,
 };

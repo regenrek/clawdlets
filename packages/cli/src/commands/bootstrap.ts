@@ -232,7 +232,7 @@ export const bootstrap = defineCommand({
       console.log(`1) Set targetHost for deploys:`);
       console.log(`   clawdlets host set --host ${hostName} --target-host admin@${ipv4}`);
       console.log("2) Deploy secrets + system:");
-      console.log(`   clawdlets server deploy --host ${hostName} --target-host admin@${ipv4} --manifest deploy-manifest.${hostName}.json`);
+      console.log(`   clawdlets server deploy --host ${hostName} --target-host admin@${ipv4} --manifest deploy/${hostName}/prod/<releaseId>.json`);
       console.log("");
       console.log("After tailnet is healthy, lock down SSH:");
       console.log(`  clawdlets host set --host ${hostName} --ssh-exposure tailnet`);
@@ -312,6 +312,9 @@ export const bootstrap = defineCommand({
       }
     }
 
+    const extraSubstituters = hostCfg.cache.substituters.join(" ");
+    const extraTrustedPublicKeys = hostCfg.cache.trustedPublicKeys.join(" ");
+
     const nixosAnywhereArgs = [
       "run",
       "--option",
@@ -336,10 +339,10 @@ export const bootstrap = defineCommand({
       "true",
       "--option",
       "extra-substituters",
-      "https://cache.garnix.io",
+      extraSubstituters,
       "--option",
       "extra-trusted-public-keys",
-      "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=",
+      extraTrustedPublicKeys,
       "--build-on-remote",
       "--extra-files",
       extraFiles,
@@ -355,8 +358,8 @@ export const bootstrap = defineCommand({
       NIX_CONFIG: [
         nixosAnywhereBaseEnv.NIX_CONFIG,
         "accept-flake-config = true",
-        "extra-substituters = https://cache.garnix.io",
-        "extra-trusted-public-keys = cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=",
+        `extra-substituters = ${extraSubstituters}`,
+        `extra-trusted-public-keys = ${extraTrustedPublicKeys}`,
         githubToken ? `access-tokens = github.com=${githubToken}` : "",
       ]
         .filter(Boolean)

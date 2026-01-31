@@ -10,17 +10,24 @@ export const baseHost = {
   sshExposure: { mode: "bootstrap" },
   tailnet: { mode: "tailscale" },
   cache: {
-    garnix: {
-      private: {
-        enable: false,
-        netrcSecret: "garnix_netrc",
-        netrcPath: "/etc/nix/netrc",
-        narinfoCachePositiveTtl: 3600,
-      },
-    },
+    substituters: ["https://cache.nixos.org", "https://cache.garnix.io"],
+    trustedPublicKeys: [
+      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=",
+      "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=",
+    ],
+    netrc: { enable: false, secretName: "garnix_netrc", path: "/etc/nix/netrc", narinfoCachePositiveTtl: 3600 },
   },
   operator: { deploy: { enable: false } },
-  selfUpdate: { enable: false, manifestUrl: "", interval: "30min", publicKey: "", signatureUrl: "" },
+  selfUpdate: {
+    enable: false,
+    interval: "30min",
+    baseUrl: "",
+    channel: "prod",
+    publicKeys: [],
+    allowUnsigned: false,
+    allowRollback: false,
+    healthCheckUnit: "",
+  },
   agentModelPrimary: "zai/glm-4.7",
 } as const;
 
@@ -43,7 +50,7 @@ export function makeConfig(params?: {
     ...(params?.fleetOverrides ?? {}),
   };
   return {
-    schemaVersion: 10,
+    schemaVersion: 11,
     defaultHost: hostName,
     fleet,
     hosts: { [hostName]: host } as Record<string, typeof host>,

@@ -34,7 +34,9 @@ export const addBot = createServerFn({ method: "POST" })
     next.fleet.bots = next.fleet.bots && typeof next.fleet.bots === "object" && !Array.isArray(next.fleet.bots) ? next.fleet.bots : {}
     if (next.fleet.botOrder.includes(botId) || next.fleet.bots[botId]) return { ok: true as const }
     next.fleet.botOrder = [...next.fleet.botOrder, botId]
-    next.fleet.bots[botId] = { profile: { secretEnv: { DISCORD_BOT_TOKEN: `discord_token_${botId}` } } }
+    // New bots should be channel-agnostic by default.
+    // Integrations can be enabled later via per-bot config (and then wire secrets as needed).
+    next.fleet.bots[botId] = {}
 
     const validated = ClawdletsConfigSchema.parse(next)
     const { runId } = await client.mutation(api.runs.create, {

@@ -172,7 +172,7 @@ async function listPlannedFiles(params: {
   return planned;
 }
 
-async function disableGarnixPrivate(destDir: string, host: string): Promise<void> {
+async function disableCacheNetrc(destDir: string, host: string): Promise<void> {
   const configPath = path.join(destDir, "fleet", "clawdlets.json");
   if (!fs.existsSync(configPath)) return;
   const raw = await fs.promises.readFile(configPath, "utf8");
@@ -180,10 +180,8 @@ async function disableGarnixPrivate(destDir: string, host: string): Promise<void
   const hostCfg = parsed?.hosts?.[host];
   if (!hostCfg || typeof hostCfg !== "object") return;
   hostCfg.cache = hostCfg.cache && typeof hostCfg.cache === "object" ? hostCfg.cache : {};
-  hostCfg.cache.garnix = hostCfg.cache.garnix && typeof hostCfg.cache.garnix === "object" ? hostCfg.cache.garnix : {};
-  hostCfg.cache.garnix.private =
-    hostCfg.cache.garnix.private && typeof hostCfg.cache.garnix.private === "object" ? hostCfg.cache.garnix.private : {};
-  hostCfg.cache.garnix.private.enable = false;
+  hostCfg.cache.netrc = hostCfg.cache.netrc && typeof hostCfg.cache.netrc === "object" ? hostCfg.cache.netrc : {};
+  hostCfg.cache.netrc.enable = false;
   await writeFileAtomic(configPath, `${JSON.stringify(parsed, null, 2)}\n`);
 }
 
@@ -256,7 +254,7 @@ export async function initProject(params: {
     const planned = await listPlannedFiles({ templateDir, subs });
     await ensureDir(destDir);
     await copyTree({ srcDir: templateDir, destDir, subs });
-    await disableGarnixPrivate(destDir, host);
+    await disableCacheNetrc(destDir, host);
     return planned;
   });
 

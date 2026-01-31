@@ -83,9 +83,9 @@ export function buildFleetSecretsPlan(params: { config: ClawdletsConfig; hostNam
   const tailnetMode = String((hostCfg as any)?.tailnet?.mode || "none");
   if (tailnetMode === "tailscale") hostSecretNamesRequired.add("tailscale_auth_key");
 
-  const garnixPrivate = (hostCfg as any)?.cache?.garnix?.private;
-  if (garnixPrivate?.enable) {
-    const secretName = String(garnixPrivate?.netrcSecret || "garnix_netrc").trim();
+  const cacheNetrc = (hostCfg as any)?.cache?.netrc;
+  if (cacheNetrc?.enable) {
+    const secretName = String(cacheNetrc?.secretName || "garnix_netrc").trim();
     if (secretName) hostSecretNamesRequired.add(secretName);
   }
 

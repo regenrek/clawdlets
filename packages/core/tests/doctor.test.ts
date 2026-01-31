@@ -108,7 +108,7 @@ describe("doctor", () => {
     await writeFile(operatorKey, "AGE-SECRET-KEY-TEST\n", "utf8");
 
     const clawdletsConfig = {
-      schemaVersion: 10,
+      schemaVersion: 11,
       defaultHost: "clawdbot-fleet-host",
       baseFlake: "",
       fleet: {
@@ -444,7 +444,7 @@ describe("doctor", () => {
 
     const raw = JSON.parse(original) as any;
     raw.hosts["clawdbot-fleet-host"].cache = {
-      garnix: { private: { enable: true, netrcSecret: "garnix_netrc" } },
+      netrc: { enable: true, secretName: "garnix_netrc" },
     };
     await writeFile(configPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
 

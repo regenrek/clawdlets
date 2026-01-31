@@ -1,4 +1,5 @@
 import { getProviderRequiredEnvVars } from "@clawdlets/shared/lib/llm-provider-env";
+import { DEFAULT_NIX_SUBSTITUTERS, DEFAULT_NIX_TRUSTED_PUBLIC_KEYS } from "./nix-cache.js";
 import { assertSafeRecordKey, createNullProtoRecord } from "./safe-record.js";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -86,6 +87,13 @@ export type MigrateToV9Result = {
 };
 
 export type MigrateToV10Result = {
+  ok: true;
+  changed: boolean;
+  warnings: string[];
+  migrated: unknown;
+};
+
+export type MigrateToV11Result = {
   ok: true;
   changed: boolean;
   warnings: string[];
@@ -225,6 +233,110 @@ export function migrateClawdletsConfigToV10(raw: unknown): MigrateToV10Result {
 
   (fleet as any).sshAuthorizedKeys = Array.from(fleetAuthorized);
   (fleet as any).sshKnownHosts = Array.from(fleetKnown);
+
+  return { ok: true, changed, warnings, migrated: next };
+}
+
+function migrateHostCacheToV11(params: {
+  host: string;
+  hostCfg: Record<string, unknown>;
+  warnings: string[];
+}): boolean {
+  const cache = params.hostCfg["cache"];
+  if (!isPlainObject(cache)) return false;
+  const garnix = cache["garnix"];
+  if (!isPlainObject(garnix)) return false;
+  const priv = garnix["private"];
+  if (!isPlainObject(priv)) return false;
+
+  const enable = Boolean(priv["enable"]);
+  const netrcSecret = typeof priv["netrcSecret"] === "string" ? String(priv["netrcSecret"]).trim() : "";
+  const netrcPath = typeof priv["netrcPath"] === "string" ? String(priv["netrcPath"]).trim() : "";
+  const ttl = typeof priv["narinfoCachePositiveTtl"] === "number" ? Number(priv["narinfoCachePositiveTtl"]) : 3600;
+
+  params.hostCfg["cache"] = {
+    substituters: Array.from(DEFAULT_NIX_SUBSTITUTERS),
+    trustedPublicKeys: Array.from(DEFAULT_NIX_TRUSTED_PUBLIC_KEYS),
+    netrc: {
+      enable,
+      secretName: netrcSecret || "garnix_netrc",
+      path: netrcPath || "/etc/nix/netrc",
+      narinfoCachePositiveTtl: Number.isInteger(ttl) && ttl > 0 ? ttl : 3600,
+    },
+  };
+
+  params.warnings.push(`host ${params.host}: migrated cache.garnix.private.* -> cache.{substituters,trustedPublicKeys,netrc.*}`);
+  return true;
+}
+
+function migrateHostSelfUpdateToV11(params: {
+  host: string;
+  hostCfg: Record<string, unknown>;
+  warnings: string[];
+}): boolean {
+  const selfUpdate = params.hostCfg["selfUpdate"];
+  if (!isPlainObject(selfUpdate)) return false;
+
+  const legacyManifestUrl = typeof selfUpdate["manifestUrl"] === "string" ? String(selfUpdate["manifestUrl"]).trim() : "";
+  const legacyPublicKey = typeof selfUpdate["publicKey"] === "string" ? String(selfUpdate["publicKey"]).trim() : "";
+
+  const isLegacy = "manifestUrl" in selfUpdate || "publicKey" in selfUpdate || "signatureUrl" in selfUpdate;
+  if (!isLegacy) return false;
+
+  const enable = Boolean(selfUpdate["enable"]);
+  const interval = typeof selfUpdate["interval"] === "string" ? String(selfUpdate["interval"]).trim() : "";
+
+  params.hostCfg["selfUpdate"] = {
+    enable,
+    interval: interval || "30min",
+    baseUrl: legacyManifestUrl,
+    channel: "prod",
+    publicKeys: legacyPublicKey ? [legacyPublicKey] : [],
+    allowUnsigned: false,
+    allowRollback: false,
+    healthCheckUnit: "",
+  };
+
+  params.warnings.push(`host ${params.host}: migrated selfUpdate.manifestUrl/publicKey -> selfUpdate.baseUrl/publicKeys`);
+  return true;
+}
+
+export function migrateClawdletsConfigToV11(raw: unknown): MigrateToV11Result {
+  if (!isPlainObject(raw)) throw new Error("invalid config (expected JSON object)");
+
+  let next = structuredClone(raw) as Record<string, unknown>;
+  const warnings: string[] = [];
+
+  const schemaVersion = Number(next["schemaVersion"] ?? 0);
+  if (schemaVersion === 11) return { ok: true, changed: false, warnings, migrated: next };
+
+  let changed = false;
+  if (schemaVersion === 8 || schemaVersion === 9) {
+    const res = migrateClawdletsConfigToV10(next);
+    warnings.push(...res.warnings);
+    next = structuredClone(res.migrated) as Record<string, unknown>;
+    changed = res.changed;
+  } else if (schemaVersion !== 10) {
+    throw new Error(`unsupported schemaVersion: ${schemaVersion} (expected 8, 9, or 10)`);
+  }
+
+  if (Number(next["schemaVersion"] ?? 0) === 11) return { ok: true, changed, warnings, migrated: next };
+  if (Number(next["schemaVersion"] ?? 0) !== 10) {
+    throw new Error(`internal error: expected schemaVersion 10 before v11 migration`);
+  }
+
+  next["schemaVersion"] = 11;
+  changed = true;
+
+  const hosts = next["hosts"];
+  if (isPlainObject(hosts)) {
+    for (const [host, hostCfgRaw] of Object.entries(hosts)) {
+      if (!isPlainObject(hostCfgRaw)) continue;
+      const hostCfg = hostCfgRaw as Record<string, unknown>;
+      if (migrateHostCacheToV11({ host, hostCfg, warnings })) changed = true;
+      if (migrateHostSelfUpdateToV11({ host, hostCfg, warnings })) changed = true;
+    }
+  }
 
   return { ok: true, changed, warnings, migrated: next };
 }

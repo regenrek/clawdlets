@@ -1,0 +1,181 @@
+name: updates: promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      fromChannel:
+        description: "Source channel (default: staging)"
+        required: false
+        default: "staging"
+      toChannel:
+        description: "Target channel (default: prod)"
+        required: false
+        default: "prod"
+      host:
+        description: "Optional single host (defaults to all hosts in fleet/clawdlets.json)"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: updates-promote-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    environment: prod
+    env:
+      FROM_CHANNEL: ${{ github.event.inputs.fromChannel || 'staging' }}
+      TO_CHANNEL: ${{ github.event.inputs.toChannel || 'prod' }}
+      SINGLE_HOST: ${{ github.event.inputs.host || '' }}
+      MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: nix install
+        uses: DeterminateSystems/nix-installer-action@ab6bcb2d5af0e904d04aea750e2089e9dc4cbfdd
+
+      - name: nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@87b14cf437d03d37989d87f0fa5ce4f5dc1a330b
+
+      - name: promote (gh-pages)
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${MINISIGN_PRIVATE_KEY:-}" ]]; then
+            echo "error: missing secret MINISIGN_PRIVATE_KEY" >&2
+            exit 2
+          fi
+
+          from_channel="$(echo "${FROM_CHANNEL}" | tr -d '\r' | xargs)"
+          to_channel="$(echo "${TO_CHANNEL}" | tr -d '\r' | xargs)"
+
+          if [[ -z "${from_channel}" || ! "${from_channel}" =~ ^[a-z][a-z0-9-]*$ ]]; then
+            echo "error: invalid fromChannel: ${from_channel}" >&2
+            exit 2
+          fi
+          if [[ -z "${to_channel}" || ! "${to_channel}" =~ ^[a-z][a-z0-9-]*$ ]]; then
+            echo "error: invalid toChannel: ${to_channel}" >&2
+            exit 2
+          fi
+          if [[ "${from_channel}" == "${to_channel}" ]]; then
+            echo "error: fromChannel must differ from toChannel" >&2
+            exit 2
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if ! git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            echo "error: gh-pages branch missing (run updates-publish first)" >&2
+            exit 2
+          fi
+
+          git fetch origin gh-pages:gh-pages
+          git worktree add --force _gh-pages gh-pages
+
+          touch _gh-pages/.nojekyll
+
+          hosts="$(jq -r '.hosts | keys[]' fleet/clawdlets.json)"
+          if [[ -n "${SINGLE_HOST:-}" ]]; then
+            hosts="${SINGLE_HOST}"
+          fi
+
+          for host in ${hosts}; do
+            echo "::group::${host} (${from_channel} -> ${to_channel})"
+
+            from_pointer="_gh-pages/deploy/${host}/${from_channel}/latest.json"
+            if [[ ! -f "${from_pointer}" ]]; then
+              echo "error: missing source pointer: ${from_pointer}" >&2
+              exit 2
+            fi
+
+            from_release_id="$(jq -er '.releaseId | select(type=="number" and . == floor and . > 0) | tostring' "${from_pointer}")"
+            from_manifest="_gh-pages/deploy/${host}/${from_channel}/${from_release_id}.json"
+            if [[ ! -f "${from_manifest}" ]]; then
+              echo "error: missing source manifest: ${from_manifest}" >&2
+              exit 2
+            fi
+
+            secrets_url="$(jq -r '.secrets.url // empty' "${from_manifest}" | tr -d '\r' | xargs || true)"
+            secrets_digest="$(jq -r '.secrets.digest // empty' "${from_manifest}" | tr -d '\r' | xargs || true)"
+            if [[ -n "${secrets_url}" && "${secrets_url}" != *"://"* ]]; then
+              if [[ ! "${secrets_digest}" =~ ^[0-9a-f]{64}$ ]]; then
+                echo "error: invalid secrets.digest in ${from_manifest}" >&2
+                exit 2
+              fi
+              if [[ "${secrets_url}" == /* || "${secrets_url}" == *".."* || "${secrets_url}" =~ [[:space:]] ]]; then
+                echo "error: invalid secrets.url in ${from_manifest}" >&2
+                exit 2
+              fi
+
+              from_secrets="_gh-pages/deploy/${host}/${from_channel}/${secrets_url}"
+              to_secrets="_gh-pages/deploy/${host}/${to_channel}/${secrets_url}"
+
+              if [[ ! -f "${from_secrets}" ]]; then
+                echo "error: missing source secrets bundle: ${from_secrets}" >&2
+                exit 2
+              fi
+
+              if [[ -f "${to_secrets}" ]]; then
+                actual="$(sha256sum "${to_secrets}" | awk '{print $1}')"
+                if [[ "${actual}" != "${secrets_digest}" ]]; then
+                  echo "error: refusing to overwrite secrets bundle with mismatched digest: ${to_secrets}" >&2
+                  exit 2
+                fi
+              else
+                mkdir -p "$(dirname "${to_secrets}")"
+                cp "${from_secrets}" "${to_secrets}"
+              fi
+            fi
+
+            to_pointer="_gh-pages/deploy/${host}/${to_channel}/latest.json"
+            prev=0
+            if [[ -f "${to_pointer}" ]]; then
+              prev="$(jq -r '.releaseId // 0' "${to_pointer}")"
+            fi
+            if [[ ! "${prev}" =~ ^[0-9]+$ ]]; then
+              echo "error: invalid previous releaseId in ${to_pointer}" >&2
+              exit 2
+            fi
+            next=$((prev + 1))
+
+            mkdir -p "$(dirname "${to_pointer}")"
+            to_manifest="_gh-pages/deploy/${host}/${to_channel}/${next}.json"
+
+            nix run .#clawdlets -- release manifest promote \
+              --host "${host}" \
+              --in "${from_manifest}" \
+              --channel "${to_channel}" \
+              --release-id "${next}" \
+              --out "${to_manifest}"
+
+            nix run .#clawdlets -- release manifest sign --in "${to_manifest}"
+
+            nix run .#clawdlets -- release pointer write \
+              --host "${host}" \
+              --channel "${to_channel}" \
+              --release-id "${next}" \
+              --file "${next}.json" \
+              --out "${to_pointer}"
+
+            nix run .#clawdlets -- release manifest sign --in "${to_pointer}"
+
+            echo "::endgroup::"
+          done
+
+          pushd _gh-pages >/dev/null
+          git add -A
+          if git diff --cached --quiet; then
+            echo "noop: nothing to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(updates): promote ${from_channel} -> ${to_channel} ${GITHUB_SHA}"
+          git push origin gh-pages
+          popd >/dev/null

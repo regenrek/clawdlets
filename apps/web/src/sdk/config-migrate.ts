@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start"
-import { migrateClawdletsConfigToV10 } from "@clawdlets/core/lib/clawdlets-config-migrate"
+import { migrateClawdletsConfigToV11 } from "@clawdlets/core/lib/clawdlets-config-migrate"
 import { ClawdletsConfigSchema, writeClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config"
 import { getRepoLayout } from "@clawdlets/core/repo-layout"
 import { api } from "../../convex/_generated/api"
@@ -10,7 +10,7 @@ import { mapValidationIssues, runWithEventsAndStatus, type ValidationIssue } fro
 import { readFile } from "node:fs/promises"
 import { parseProjectIdInput } from "~/sdk/serverfn-validators"
 
-export const migrateClawdletsConfigFileToV10 = createServerFn({ method: "POST" })
+export const migrateClawdletsConfigFileToV11 = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
     return parseProjectIdInput(data)
   })
@@ -34,7 +34,7 @@ export const migrateClawdletsConfigFileToV10 = createServerFn({ method: "POST" }
       }
     }
 
-    const res = migrateClawdletsConfigToV10(parsed)
+    const res = migrateClawdletsConfigToV11(parsed)
     if (!res.changed) return { ok: true as const, changed: false as const, warnings: res.warnings }
 
     const validated = ClawdletsConfigSchema.safeParse(res.migrated)
@@ -45,7 +45,7 @@ export const migrateClawdletsConfigFileToV10 = createServerFn({ method: "POST" }
     const { runId } = await client.mutation(api.runs.create, {
       projectId: data.projectId,
       kind: "config_write",
-      title: "Migrate fleet/clawdlets.json to schemaVersion 10",
+      title: "Migrate fleet/clawdlets.json to schemaVersion 11",
     })
 
     type MigrateRunResult =
@@ -66,7 +66,7 @@ export const migrateClawdletsConfigFileToV10 = createServerFn({ method: "POST" }
         await client.mutation(api.auditLogs.append, {
           projectId: data.projectId,
           action: "config.migrate",
-          target: { to: 10, file: "fleet/clawdlets.json" },
+          target: { to: 11, file: "fleet/clawdlets.json" },
           data: { runId, warnings: res.warnings },
         })
       },

@@ -24,7 +24,7 @@ After tailnet is up:
 ```bash
 clawdlets host set --target-host admin@<magicdns-or-100.x>
 clawdlets host set --ssh-exposure tailnet
-clawdlets server deploy --manifest deploy-manifest.<host>.json
+clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json
 clawdlets lockdown
 ```
 
@@ -34,26 +34,24 @@ Edit config/secrets, commit, push to `main`.
 
 CI (Garnix + GH Actions):
 - builds `packages.x86_64-linux.<host>-system`
-- computes `deploy-manifest.<host>.json` (rev + toplevel + secretsDigest)
+- computes a signed desired-state release manifest (v1) per host+channel
 - publishes manifests to GitHub Pages in the project repo (optional but recommended)
-  - requires enabling GitHub Pages (source: GitHub Actions)
+  - requires enabling GitHub Pages (Deploy from branch: `gh-pages` / root)
   - alternative: publish the manifest artifacts to any HTTPS static host
 
 ## 2) GitOps deploy (push-based)
 
-Enable `.github/workflows/deploy.yml` with:
-- `TAILSCALE_AUTHKEY` (ephemeral/preauth key)
-- `DEPLOY_SSH_KEY` (private key)
-
-CI joins tailnet and runs:
+Run deploy from your operator machine:
 
 ```bash
-node packages/cli/dist/main.mjs server deploy --host <host> --manifest deploy-manifest.<host>.json --ssh-tty false
+clawdlets server deploy --host <host> --manifest deploy/<host>/prod/<releaseId>.json --ssh-tty false
 ```
+
+Optional: wire this into CI (join tailnet + run the same command).
 
 Promote to prod (manual approval):
 
-- Run the `deploy` workflow with `environment=prod` and `rev=<40-hex>` to deploy a pinned manifest.
+- Run workflow `updates: promote` (staging → prod) to publish a prod manifest pointing at an already-built toplevel (no rebuild).
 
 ## 3) Optional self-update (pull-based)
 
@@ -61,10 +59,9 @@ Enable on the host:
 
 ```nix
 clawdlets.selfUpdate.enable = true;
-clawdlets.selfUpdate.manifestUrl = "https://<pages>/deploy/<host>/latest.json";
-# optional signature verification
-clawdlets.selfUpdate.publicKey = "<minisign-pubkey>";
-clawdlets.selfUpdate.signatureUrl = "https://<pages>/deploy/<host>/latest.json.minisig";
+clawdlets.selfUpdate.baseUrl = "https://<pages>/deploy/<host>/prod";
+clawdlets.selfUpdate.channel = "prod";
+clawdlets.selfUpdate.publicKeys = [ "<minisign-pubkey>" ];
 ```
 
 The host fetches the manifest on a timer and switches by `/nix/store/...` (cache-only).

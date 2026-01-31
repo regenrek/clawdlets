@@ -44,8 +44,6 @@ Host entry (`hosts.<host>`):
 
 - `enable`: whether fleet services should run
 - `diskDevice`: passed into the disko module (required for install)
-- `sshAuthorizedKeys`: admin SSH public keys (key-only; no passwords over SSH)
-- `sshKnownHosts`: pinned SSH host keys (known_hosts lines) for deploy automation
 - `flakeHost` (optional): nixosConfiguration output name override
 - `targetHost` (optional): SSH target for server ops (ssh config alias or `user@host`)
 - `hetzner.serverType`: e.g. `cx43`
@@ -57,15 +55,20 @@ Host entry (`hosts.<host>`):
 - `operator.deploy.enable`: allow `admin` to run constrained deploy entrypoints (switch-system/install-secrets). Default: `false`.
 - `sshExposure.mode`: `tailnet|bootstrap|public` (single SSH exposure policy)
 - `tailnet.mode`: `tailscale` or `none` (tailscale mode opens UDP/41641 at the provider firewall for direct tailnet connectivity)
-- `cache.garnix.private.enable`: enable private Garnix cache access (requires netrc secret)
-- `cache.garnix.private.netrcSecret`: sops secret name containing `/etc/nix/netrc`
-- `cache.garnix.private.netrcPath`: path for the netrc file (default: `/etc/nix/netrc`)
-- `cache.garnix.private.narinfoCachePositiveTtl`: TTL for private Garnix cache (default: `3600`)
-- `selfUpdate.enable`: enable pull-based self-updates from a manifest URL
-- `selfUpdate.manifestUrl`: URL to the per-host deploy manifest
+- `cache.substituters`: binary cache URLs (default includes NixOS + Garnix)
+- `cache.trustedPublicKeys`: binary cache public keys (default includes NixOS + Garnix)
+- `cache.netrc.enable`: enable authenticated cache access (via netrc installed from sops secret)
+- `cache.netrc.secretName`: sops secret name containing the netrc contents (default: `garnix_netrc`)
+- `cache.netrc.path`: where to install the netrc file (default: `/etc/nix/netrc`)
+- `cache.netrc.narinfoCachePositiveTtl`: TTL for private cache narinfo URLs (default: `3600`)
+- `selfUpdate.enable`: enable pull-based self-updates
+- `selfUpdate.baseUrl`: base URL for update manifests (per-host/channel paths under this)
+- `selfUpdate.channel`: rollout channel (e.g. `staging`/`prod`)
 - `selfUpdate.interval`: systemd timer cadence (e.g. `30min`)
-- `selfUpdate.publicKey`: minisign public key (optional)
-- `selfUpdate.signatureUrl`: minisign signature URL (required if publicKey is set)
+- `selfUpdate.publicKeys`: minisign public keys (rotation supported)
+- `selfUpdate.allowUnsigned`: dev-only escape hatch (unsafe)
+- `selfUpdate.allowRollback`: break-glass only (accept lower `releaseId`)
+- `selfUpdate.healthCheckUnit`: optional post-switch health gate (record-only)
 
 Cattle (`cattle.*`):
 
@@ -125,6 +128,7 @@ Default autowire scope:
 
 ## Migration notes
 
+- v11: Cache settings are `hosts.<host>.cache.{substituters,trustedPublicKeys,netrc}`; self-updates are `hosts.<host>.selfUpdate.{baseUrl,publicKeys,channel}`.
 - v10: SSH keys are project-scoped under `fleet.sshAuthorizedKeys`/`fleet.sshKnownHosts` (no longer per-host).
 - v9: inline secrets are deprecated; move tokens/api keys to `${ENV_VAR}` wiring and secretEnv mappings (hooks/skills included).
 
@@ -132,7 +136,7 @@ Default autowire scope:
 
 ```json
 {
-  "schemaVersion": 10,
+  "schemaVersion": 11,
   "defaultHost": "clawdbot-fleet-host",
   "baseFlake": "",
   "fleet": {
@@ -174,8 +178,6 @@ Default autowire scope:
     "clawdbot-fleet-host": {
       "enable": false,
       "diskDevice": "/dev/sda",
-      "sshAuthorizedKeys": [],
-      "sshKnownHosts": [],
       "flakeHost": "",
       "hetzner": { "serverType": "cx43", "image": "", "location": "nbg1" },
       "provisioning": {
@@ -184,23 +186,29 @@ Default autowire scope:
         "sshPubkeyFile": "~/.ssh/id_ed25519.pub"
       },
       "cache": {
-        "garnix": {
-          "private": {
-            "enable": false,
-            "netrcSecret": "garnix_netrc",
-            "netrcPath": "/etc/nix/netrc",
-            "narinfoCachePositiveTtl": 3600
-          }
+        "substituters": ["https://cache.nixos.org", "https://cache.garnix.io"],
+        "trustedPublicKeys": [
+          "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=",
+          "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
+        ],
+        "netrc": {
+          "enable": false,
+          "secretName": "garnix_netrc",
+          "path": "/etc/nix/netrc",
+          "narinfoCachePositiveTtl": 3600
         }
       },
       "sshExposure": { "mode": "bootstrap" },
       "tailnet": { "mode": "tailscale" },
       "selfUpdate": {
         "enable": false,
-        "manifestUrl": "",
         "interval": "30min",
-        "publicKey": "",
-        "signatureUrl": ""
+        "baseUrl": "",
+        "channel": "prod",
+        "publicKeys": [],
+        "allowUnsigned": false,
+        "allowRollback": false,
+        "healthCheckUnit": ""
       },
       "agentModelPrimary": "zai/glm-4.7"
     }

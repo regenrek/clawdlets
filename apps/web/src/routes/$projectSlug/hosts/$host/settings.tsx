@@ -12,6 +12,7 @@ import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select"
 import { SettingsSection } from "~/components/ui/settings-section"
 import { Switch } from "~/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip"
+import { looksLikeSshPrivateKeyText, looksLikeSshPublicKeyText } from "~/lib/form-utils"
 import { singleHostCidrFromIp } from "~/lib/ip-utils"
 import { useProjectBySlug } from "~/lib/project-data"
 import { setupFieldHelp } from "~/lib/setup-field-help"
@@ -21,30 +22,6 @@ import { getClawdletsConfig, writeClawdletsConfigFile } from "~/sdk/config"
 export const Route = createFileRoute("/$projectSlug/hosts/$host/settings")({
   component: HostsSetup,
 })
-
-function looksLikeSshPublicKeyText(value: string): boolean {
-  const s = String(value || "").trim()
-  if (!s) return false
-  const firstLine = s.split(/\r?\n/)[0] || ""
-  const tokens = firstLine.trim().split(/\s+/)
-  if (tokens.length < 2) return false
-  const [type, base64] = tokens
-  if (!type) return false
-  if (!type.startsWith("ssh-") && !type.includes("ssh")) return false
-  if (!base64) return false
-  if (!/^[A-Za-z0-9+/]+={0,3}$/.test(base64)) return false
-  return true
-}
-
-function looksLikeSshPrivateKeyText(value: string): boolean {
-  const s = String(value || "").trimStart()
-  if (!s.startsWith("-----BEGIN ")) return false
-  return (
-    s.startsWith("-----BEGIN OPENSSH PRIVATE KEY-----")
-    || s.startsWith("-----BEGIN RSA PRIVATE KEY-----")
-    || s.startsWith("-----BEGIN PRIVATE KEY-----")
-  )
-}
 
 function HostsSetup() {
   const { projectSlug, host: selectedHost } = Route.useParams()
@@ -191,14 +168,12 @@ function HostsSetup() {
         <div className="text-muted-foreground">Missing config.</div>
       ) : hostCfg ? (
         <div className="space-y-6">
-          {/* Connectivity Panel */}
           <ConnectivityPanel
             projectId={projectId as Id<"projects">}
             host={selectedHost}
             targetHost={targetHost}
           />
 
-          {/* Host Status */}
           <SettingsSection
             title="Host Status"
             description={<>Stored in <code className="text-xs">hosts.{selectedHost}</code></>}
@@ -217,7 +192,6 @@ function HostsSetup() {
             <div className="text-lg font-semibold">{selectedHost}</div>
           </SettingsSection>
 
-          {/* Connection */}
           <SettingsSection
             title="Connection"
             description="SSH target and admin access settings."
@@ -267,7 +241,6 @@ function HostsSetup() {
             </div>
           </SettingsSection>
 
-          {/* SSH Access */}
           <SettingsSection
             title="SSH Connectivity"
             description="Controls how operators reach this host via SSH (network exposure + which local public key file to use during provisioning)."
@@ -352,7 +325,6 @@ function HostsSetup() {
             </div>
           </SettingsSection>
 
-          {/* Network */}
           <SettingsSection
             title="Network"
             description="VPN and tailnet configuration."
@@ -369,7 +341,6 @@ function HostsSetup() {
             </div>
           </SettingsSection>
 
-          {/* Hetzner Cloud */}
           <SettingsSection
             title="Hetzner Cloud"
             description="Cloud provider configuration for this host."
@@ -397,7 +368,6 @@ function HostsSetup() {
             </div>
           </SettingsSection>
 
-          {/* NixOS Configuration */}
           <SettingsSection
             title="NixOS Configuration"
             description="System-level NixOS settings."
@@ -419,7 +389,6 @@ function HostsSetup() {
             </div>
           </SettingsSection>
 
-          {/* Agent */}
           <SettingsSection
             title="Agent"
             description="AI agent model configuration."
@@ -435,16 +404,19 @@ function HostsSetup() {
           </SettingsSection>
         </div>
       ) : (
-        <div className="flex flex-col gap-3 text-muted-foreground">
-          <div>Select a host from Hosts overview.</div>
+        <div className="space-y-4">
+          <div className="rounded-lg border bg-card p-4">
+            <div className="text-sm font-medium">Unknown host: {selectedHost}</div>
+            <div className="mt-2 text-sm text-muted-foreground">
+              Add it in the fleet config or go back to hosts.
+            </div>
+          </div>
           <Button
-            size="sm"
-            variant="outline"
+            variant="secondary"
             nativeButton={false}
             render={<Link to="/$projectSlug/hosts" params={{ projectSlug }} />}
-            className="w-fit"
           >
-            View hosts
+            Back to hosts
           </Button>
         </div>
       )}

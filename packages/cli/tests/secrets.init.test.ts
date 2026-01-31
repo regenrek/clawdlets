@@ -189,7 +189,7 @@ describe("secrets init", () => {
     await expect(secretsInit.run({ args: { host: "alpha" } } as any)).rejects.toThrow(/botOrder is empty/i);
   });
 
-  it("fails when private garnix cache lacks netrc secret", async () => {
+  it("fails when cache.netrc lacks secretName", async () => {
     const repoRoot = fs.mkdtempSync(path.join(tmpdir(), "clawdlets-secrets-"));
     const layout = getRepoLayout(repoRoot);
     const config = makeConfig({
@@ -202,18 +202,16 @@ describe("secrets init", () => {
     });
     const hostCfg = config.hosts.alpha;
     hostCfg.cache = {
-      garnix: {
-        private: {
-          enable: true,
-          netrcSecret: "   ",
-          netrcPath: "/etc/nix/netrc",
-          narinfoCachePositiveTtl: 3600,
-        },
+      netrc: {
+        enable: true,
+        secretName: "   ",
+        path: "/etc/nix/netrc",
+        narinfoCachePositiveTtl: 3600,
       },
     } as any;
     loadHostContextMock.mockReturnValue({ layout, config, hostName: "alpha", hostCfg });
     const { secretsInit } = await import("../src/commands/secrets/init.js");
-    await expect(secretsInit.run({ args: { host: "alpha" } } as any)).rejects.toThrow(/netrcSecret must be set/i);
+    await expect(secretsInit.run({ args: { host: "alpha" } } as any)).rejects.toThrow(/secretName must be set/i);
   });
 
   it("fails when discord secret config is missing", async () => {
@@ -442,7 +440,7 @@ describe("secrets init", () => {
       hostOverrides: {
         ...baseHost,
         tailnet: { mode: "tailscale" },
-        cache: { garnix: { private: { enable: true, netrcSecret: "garnix_netrc", netrcPath: "/etc/nix/netrc", narinfoCachePositiveTtl: 3600 } } },
+        cache: { netrc: { enable: true, secretName: "garnix_netrc", path: "/etc/nix/netrc", narinfoCachePositiveTtl: 3600 } },
       },
       fleetOverrides: { botOrder: ["maren"], bots: { maren: {} } },
     });

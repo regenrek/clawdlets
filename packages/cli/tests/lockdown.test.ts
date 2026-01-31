@@ -80,7 +80,7 @@ function setConfig() {
     layout: getRepoLayout("/repo"),
     configPath: "/repo/fleet/clawdlets.json",
     config: {
-      schemaVersion: 10,
+      schemaVersion: 11,
       defaultHost: hostName,
       fleet: { sshAuthorizedKeys: [], sshKnownHosts: [], botOrder: ["maren"], bots: { maren: {} } },
       hosts: {

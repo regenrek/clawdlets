@@ -9,9 +9,8 @@ const loadHostContextMock = vi.fn();
 const requireDeployGateMock = vi.fn();
 const loadDeployCredsMock = vi.fn();
 const resolveManifestSignaturePathMock = vi.fn(() => "/tmp/manifest.minisig");
-const resolveManifestPublicKeyMock = vi.fn(() => "pub");
+const resolveManifestPublicKeysMock = vi.fn(() => ["pub"]);
 const verifyManifestSignatureMock = vi.fn();
-const parseDeployManifestMock = vi.fn();
 const createSecretsTarMock = vi.fn();
 const runMock = vi.fn();
 const sshRunMock = vi.fn();
@@ -30,17 +29,9 @@ vi.mock("@clawdlets/core/lib/deploy-creds", () => ({
 
 vi.mock("../src/lib/manifest-signature.js", () => ({
   resolveManifestSignaturePath: resolveManifestSignaturePathMock,
-  resolveManifestPublicKey: resolveManifestPublicKeyMock,
+  resolveManifestPublicKeys: resolveManifestPublicKeysMock,
   verifyManifestSignature: verifyManifestSignatureMock,
 }));
-
-vi.mock("../src/lib/deploy-manifest.js", async () => {
-  const actual = await vi.importActual<typeof import("../src/lib/deploy-manifest.js")>("../src/lib/deploy-manifest.js");
-  return {
-    ...actual,
-    parseDeployManifest: parseDeployManifestMock,
-  };
-});
 
 vi.mock("@clawdlets/core/lib/secrets-tar", () => ({
   createSecretsTar: createSecretsTarMock,
@@ -65,7 +56,7 @@ describe("server deploy", () => {
     vi.clearAllMocks();
   });
 
-  it("deploys using manifest and writes output manifest", async () => {
+  it("deploys using release manifest and triggers updater apply", async () => {
     const layout = getRepoLayout("/repo");
     const config = makeConfig({
       hostName: "alpha",
@@ -76,24 +67,29 @@ describe("server deploy", () => {
     loadDeployCredsMock.mockReturnValue({ envFile: { origin: "default", status: "ok", path: "/repo/.clawdlets/env" }, values: { NIX_BIN: "nix" } });
 
     const manifestPath = path.join(tmpdir(), "manifest.json");
-    fs.writeFileSync(manifestPath, "{}");
-    parseDeployManifestMock.mockReturnValue({
-      rev: "a".repeat(40),
+    fs.writeFileSync(manifestPath, JSON.stringify({
+      schemaVersion: 1,
       host: "alpha",
+      system: "x86_64-linux",
+      channel: "prod",
+      releaseId: 1,
+      issuedAt: "2026-01-01T00:00:00.000Z",
+      rev: "a".repeat(40),
       toplevel: "/nix/store/abcd1234",
-      secretsDigest: "b".repeat(64),
-    });
+      secrets: { digest: "b".repeat(64) },
+    }, null, 2) + "\n");
 
     const tarPath = path.join(tmpdir(), "secrets.tgz");
     fs.writeFileSync(tarPath, "data");
     createSecretsTarMock.mockResolvedValue({ tarPath, digest: "b".repeat(64) });
 
-    const outPath = path.join(tmpdir(), "deploy-out.json");
     const { serverDeploy } = await import("../src/commands/server/deploy.js");
-    await serverDeploy.run({ args: { host: "alpha", targetHost: "admin@host", manifest: manifestPath, manifestOut: outPath } } as any);
-    expect(runMock).toHaveBeenCalled();
-    expect(sshRunMock).toHaveBeenCalled();
-    expect(fs.existsSync(outPath)).toBe(true);
+    await serverDeploy.run({ args: { host: "alpha", targetHost: "admin@host", manifest: manifestPath } } as any);
+    expect(runMock).toHaveBeenCalledTimes(3);
+    expect(sshRunMock).toHaveBeenCalledTimes(3);
+    expect(sshRunMock.mock.calls.map((c) => c[1]).join("\n")).toMatch(/install-secrets/);
+    expect(sshRunMock.mock.calls.map((c) => c[1]).join("\n")).toMatch(/update-ingest/);
+    expect(sshRunMock.mock.calls.map((c) => c[1]).join("\n")).toMatch(/clawdlets-update-apply\.service/);
   });
 
   it("rejects manifest host mismatch", async () => {
@@ -102,14 +98,18 @@ describe("server deploy", () => {
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ repoRoot: "/repo", layout, hostName: "alpha", hostCfg });
     loadDeployCredsMock.mockReturnValue({ envFile: { origin: "default", status: "ok", path: "/repo/.clawdlets/env" }, values: { NIX_BIN: "nix" } });
-    parseDeployManifestMock.mockReturnValue({
-      rev: "a".repeat(40),
-      host: "beta",
-      toplevel: "/nix/store/abcd1234",
-      secretsDigest: "b".repeat(64),
-    });
     const manifestPath = path.join(tmpdir(), "manifest.json");
-    fs.writeFileSync(manifestPath, "{}");
+    fs.writeFileSync(manifestPath, JSON.stringify({
+      schemaVersion: 1,
+      host: "beta",
+      system: "x86_64-linux",
+      channel: "prod",
+      releaseId: 1,
+      issuedAt: "2026-01-01T00:00:00.000Z",
+      rev: "a".repeat(40),
+      toplevel: "/nix/store/abcd1234",
+      secrets: { digest: "b".repeat(64) },
+    }, null, 2) + "\n");
     const { serverDeploy } = await import("../src/commands/server/deploy.js");
     await expect(serverDeploy.run({ args: { host: "alpha", manifest: manifestPath } } as any)).rejects.toThrow(/manifest host mismatch/i);
   });
@@ -120,14 +120,18 @@ describe("server deploy", () => {
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ repoRoot: "/repo", layout, hostName: "alpha", hostCfg });
     loadDeployCredsMock.mockReturnValue({ envFile: { origin: "default", status: "ok", path: "/repo/.clawdlets/env" }, values: { NIX_BIN: "nix" } });
-    parseDeployManifestMock.mockReturnValue({
-      rev: "a".repeat(40),
-      host: "alpha",
-      toplevel: "/nix/store/abcd1234",
-      secretsDigest: "b".repeat(64),
-    });
     const manifestPath = path.join(tmpdir(), "manifest.json");
-    fs.writeFileSync(manifestPath, "{}");
+    fs.writeFileSync(manifestPath, JSON.stringify({
+      schemaVersion: 1,
+      host: "alpha",
+      system: "x86_64-linux",
+      channel: "prod",
+      releaseId: 1,
+      issuedAt: "2026-01-01T00:00:00.000Z",
+      rev: "a".repeat(40),
+      toplevel: "/nix/store/abcd1234",
+      secrets: { digest: "b".repeat(64) },
+    }, null, 2) + "\n");
     const { serverDeploy } = await import("../src/commands/server/deploy.js");
     await expect(serverDeploy.run({ args: { host: "alpha", manifest: manifestPath, rev: "deadbeef" } } as any)).rejects.toThrow(
       /manifest rev mismatch/i,
@@ -140,17 +144,21 @@ describe("server deploy", () => {
     const hostCfg = config.hosts.alpha;
     loadHostContextMock.mockReturnValue({ repoRoot: "/repo", layout, hostName: "alpha", hostCfg });
     loadDeployCredsMock.mockReturnValue({ envFile: { origin: "default", status: "ok", path: "/repo/.clawdlets/env" }, values: { NIX_BIN: "nix" } });
-    parseDeployManifestMock.mockReturnValue({
-      rev: "a".repeat(40),
+    const manifestPath = path.join(tmpdir(), "manifest.json");
+    fs.writeFileSync(manifestPath, JSON.stringify({
+      schemaVersion: 1,
       host: "alpha",
+      system: "x86_64-linux",
+      channel: "prod",
+      releaseId: 1,
+      issuedAt: "2026-01-01T00:00:00.000Z",
+      rev: "a".repeat(40),
       toplevel: "/nix/store/abcd1234",
-      secretsDigest: "b".repeat(64),
-    });
+      secrets: { digest: "b".repeat(64) },
+    }, null, 2) + "\n");
     const tarPath = path.join(tmpdir(), "secrets.tgz");
     fs.writeFileSync(tarPath, "data");
     createSecretsTarMock.mockResolvedValue({ tarPath, digest: "c".repeat(64) });
-    const manifestPath = path.join(tmpdir(), "manifest.json");
-    fs.writeFileSync(manifestPath, "{}");
     const { serverDeploy } = await import("../src/commands/server/deploy.js");
     await expect(serverDeploy.run({ args: { host: "alpha", manifest: manifestPath } } as any)).rejects.toThrow(/secrets digest mismatch/i);
   });

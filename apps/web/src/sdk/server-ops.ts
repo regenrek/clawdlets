@@ -19,6 +19,10 @@ import {
   parseServerRestartStartInput,
   parseServerStatusExecuteInput,
   parseServerStatusStartInput,
+  parseServerUpdateLogsExecuteInput,
+  parseServerUpdateLogsStartInput,
+  parseServerUpdateStatusExecuteInput,
+  parseServerUpdateStatusStartInput,
 } from "~/sdk/serverfn-validators"
 
 function requireTypedConfirmation(params: {
@@ -299,6 +303,150 @@ export const serverLogsExecute = createServerFn({ method: "POST" })
         data.host,
         "--unit",
         unit,
+        "--lines",
+        lines,
+        ...(data.since.trim() ? ["--since", data.since.trim()] : []),
+        ...(data.follow ? ["--follow"] : []),
+        ...(data.targetHost.trim() ? ["--target-host", data.targetHost.trim()] : []),
+        "--ssh-tty=false",
+      ]
+      await spawnCommand({
+        client,
+        runId: data.runId,
+        cwd: repoRoot,
+        cmd: "node",
+        args,
+        env: cliEnv.env,
+        envAllowlist: cliEnv.envAllowlist,
+        redactTokens,
+      })
+      await client.mutation(api.runs.setStatus, { runId: data.runId, status: "succeeded" })
+      return { ok: true as const }
+    } catch (err) {
+      const res = await setRunFailedOrCanceled({ client, runId: data.runId, error: err })
+      return { ok: false as const, ...res }
+    }
+  })
+
+export const serverUpdateStatusStart = createServerFn({ method: "POST" })
+  .inputValidator(parseServerUpdateStatusStartInput)
+  .handler(async ({ data }) => {
+    const client = createConvexClient()
+    const { runId } = await client.mutation(api.runs.create, {
+      projectId: data.projectId,
+      kind: "server_update_status",
+      title: `Updater status (${data.host})`,
+    })
+    return { runId }
+  })
+
+export const serverUpdateStatusExecute = createServerFn({ method: "POST" })
+  .inputValidator(parseServerUpdateStatusExecuteInput)
+  .handler(async ({ data }) => {
+    const client = createConvexClient()
+    const { repoRoot } = await requireAdminAndBoundRun({
+      client,
+      projectId: data.projectId,
+      runId: data.runId,
+      expectedKind: "server_update_status",
+    })
+    const redactTokens = await readClawdletsEnvTokens(repoRoot)
+    const cliEntry = resolveClawdletsCliEntry()
+    const cliEnv = getClawdletsCliEnv()
+
+    try {
+      const args = [
+        cliEntry,
+        "server",
+        "update",
+        "status",
+        "--host",
+        data.host,
+        ...(data.targetHost.trim() ? ["--target-host", data.targetHost.trim()] : []),
+        "--ssh-tty=false",
+      ]
+      const captured = await spawnCommandCapture({
+        client,
+        runId: data.runId,
+        cwd: repoRoot,
+        cmd: "node",
+        args,
+        env: cliEnv.env,
+        envAllowlist: cliEnv.envAllowlist,
+        redactTokens,
+        maxCaptureBytes: 256_000,
+        allowNonZeroExit: true,
+      })
+
+      let parsed: any = null
+      try {
+        parsed = JSON.parse(captured.stdout || "")
+      } catch {
+        parsed = { raw: captured.stdout || "", stderr: captured.stderr || "", exitCode: captured.exitCode }
+      }
+
+      const ok = captured.exitCode === 0
+      await client.mutation(api.runs.setStatus, {
+        runId: data.runId,
+        status: ok ? "succeeded" : "failed",
+        errorMessage: ok ? undefined : "updater status failed",
+      })
+
+      await client.mutation(api.runEvents.appendBatch, {
+        runId: data.runId,
+        events: [
+          {
+            ts: Date.now(),
+            level: ok ? "info" : "error",
+            message: ok ? "Updater status fetched" : "Updater status failed",
+            data: parsed,
+          },
+        ],
+      })
+
+      return { ok, result: parsed }
+    } catch (err) {
+      const res = await setRunFailedOrCanceled({ client, runId: data.runId, error: err })
+      return { ok: false as const, ...res, result: { error: res.message } }
+    }
+  })
+
+export const serverUpdateLogsStart = createServerFn({ method: "POST" })
+  .inputValidator(parseServerUpdateLogsStartInput)
+  .handler(async ({ data }) => {
+    const client = createConvexClient()
+    const { runId } = await client.mutation(api.runs.create, {
+      projectId: data.projectId,
+      kind: "server_update_logs",
+      title: `Updater logs (${data.host})`,
+    })
+    return { runId }
+  })
+
+export const serverUpdateLogsExecute = createServerFn({ method: "POST" })
+  .inputValidator(parseServerUpdateLogsExecuteInput)
+  .handler(async ({ data }) => {
+    const client = createConvexClient()
+    const { repoRoot } = await requireAdminAndBoundRun({
+      client,
+      projectId: data.projectId,
+      runId: data.runId,
+      expectedKind: "server_update_logs",
+    })
+    const redactTokens = await readClawdletsEnvTokens(repoRoot)
+    const cliEntry = resolveClawdletsCliEntry()
+    const cliEnv = getClawdletsCliEnv()
+
+    const lines = data.lines.trim() || "200"
+
+    try {
+      const args = [
+        cliEntry,
+        "server",
+        "update",
+        "logs",
+        "--host",
+        data.host,
         "--lines",
         lines,
         ...(data.since.trim() ? ["--since", data.since.trim()] : []),

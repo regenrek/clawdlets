@@ -11,10 +11,9 @@ export function RunLogTail({ runId, onDone }: { runId: Id<"runs">; onDone?: (sta
   const router = useRouter();
   const convexQueryClient = router.options.context.convexQueryClient;
 
-  const runQuery = useQuery({ ...convexQuery(api.runs.get, { runId }), gcTime: 5_000 });
+  const runQuery = useQuery({ ...convexQuery(api.runs.get, { runId }) });
   const pageQuery = useQuery({
     ...convexQuery(api.runEvents.pageByRun, { runId, paginationOpts: { numItems: 300, cursor: null } }),
-    gcTime: 5_000,
   });
 
   const [olderPages, setOlderPages] = React.useState<any[]>([]);

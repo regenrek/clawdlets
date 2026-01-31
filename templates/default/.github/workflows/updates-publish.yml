@@ -1,0 +1,159 @@
+name: updates: publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Release channel (default: staging)"
+        required: false
+        default: "staging"
+      host:
+        description: "Optional single host (defaults to all hosts in fleet/clawdlets.json)"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: updates-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      CHANNEL: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.channel || 'staging' }}
+      SINGLE_HOST: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.host || '' }}
+      MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: nix install
+        uses: DeterminateSystems/nix-installer-action@ab6bcb2d5af0e904d04aea750e2089e9dc4cbfdd
+
+      - name: nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@87b14cf437d03d37989d87f0fa5ce4f5dc1a330b
+
+      - name: publish (gh-pages)
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${MINISIGN_PRIVATE_KEY:-}" ]]; then
+            echo "error: missing secret MINISIGN_PRIVATE_KEY" >&2
+            exit 2
+          fi
+
+          channel="$(echo "${CHANNEL}" | tr -d '\r' | xargs)"
+          if [[ -z "${channel}" || ! "${channel}" =~ ^[a-z][a-z0-9-]*$ ]]; then
+            echo "error: invalid channel: ${channel}" >&2
+            exit 2
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages:gh-pages
+            git worktree add --force _gh-pages gh-pages
+          else
+            git worktree add --force _gh-pages
+            pushd _gh-pages >/dev/null
+            git checkout --orphan gh-pages
+            find . -mindepth 1 -maxdepth 1 -not -name .git -exec rm -rf {} +
+            popd >/dev/null
+          fi
+
+          touch _gh-pages/.nojekyll
+
+          hosts="$(jq -r '.hosts | keys[]' fleet/clawdlets.json)"
+          if [[ -n "${SINGLE_HOST:-}" ]]; then
+            hosts="${SINGLE_HOST}"
+          fi
+
+          for host in ${hosts}; do
+            echo "::group::${host} (${channel})"
+
+            pointer_path="_gh-pages/deploy/${host}/${channel}/latest.json"
+            prev=0
+            if [[ -f "${pointer_path}" ]]; then
+              prev="$(jq -r '.releaseId // 0' "${pointer_path}")"
+            fi
+            if [[ ! "${prev}" =~ ^[0-9]+$ ]]; then
+              echo "error: invalid previous releaseId in ${pointer_path}" >&2
+              exit 2
+            fi
+            next=$((prev + 1))
+
+            mkdir -p "$(dirname "${pointer_path}")"
+            manifest_path="_gh-pages/deploy/${host}/${channel}/${next}.json"
+
+            toplevel="$(nix eval --raw ".#packages.x86_64-linux.\\\"${host}-system\\\".outPath")"
+
+            cache_flags=()
+            while IFS= read -r s; do
+              [[ -z "${s}" ]] && continue
+              cache_flags+=(--cache-substituter "${s}")
+            done < <(jq -r --arg host "${host}" '.hosts[$host].cache.substituters[]? // empty' fleet/clawdlets.json)
+            while IFS= read -r k; do
+              [[ -z "${k}" ]] && continue
+              cache_flags+=(--cache-trusted-key "${k}")
+            done < <(jq -r --arg host "${host}" '.hosts[$host].cache.trustedPublicKeys[]? // empty' fleet/clawdlets.json)
+
+            if [[ "${#cache_flags[@]}" -eq 0 ]]; then
+              echo "error: missing cache config for host=${host} (expected hosts.<host>.cache.substituters/trustedPublicKeys)" >&2
+              exit 1
+            fi
+
+            ttl_flag=()
+            netrc_enabled="$(jq -r --arg host "${host}" '.hosts[$host].cache.netrc.enable // false' fleet/clawdlets.json)"
+            if [[ "${netrc_enabled}" == "true" ]]; then
+              ttl="$(jq -r --arg host "${host}" '.hosts[$host].cache.netrc.narinfoCachePositiveTtl // 3600' fleet/clawdlets.json)"
+              if [[ "${ttl}" =~ ^[0-9]+$ ]]; then
+                ttl_flag=(--cache-narinfo-cache-positive-ttl "${ttl}")
+              fi
+            fi
+
+            nix run .#clawdlets -- release manifest build \
+              --host "${host}" \
+              --channel "${channel}" \
+              --system x86_64-linux \
+              --release-id "${next}" \
+              --rev "${GITHUB_SHA}" \
+              --toplevel "${toplevel}" \
+              --min-updater-version 1.0.0 \
+              --secrets-format sops-tar \
+              --secrets-url "secrets/{digest}.tgz" \
+              --secrets-bundle-out "_gh-pages/deploy/${host}/${channel}/secrets/{digest}.tgz" \
+              "${cache_flags[@]}" \
+              "${ttl_flag[@]}" \
+              --out "${manifest_path}"
+
+            nix run .#clawdlets -- release manifest sign --in "${manifest_path}"
+
+            nix run .#clawdlets -- release pointer write \
+              --host "${host}" \
+              --channel "${channel}" \
+              --release-id "${next}" \
+              --file "${next}.json" \
+              --out "${pointer_path}"
+
+            nix run .#clawdlets -- release manifest sign --in "${pointer_path}"
+
+            echo "::endgroup::"
+          done
+
+          pushd _gh-pages >/dev/null
+          git add -A
+          if git diff --cached --quiet; then
+            echo "noop: nothing to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(updates): publish ${channel} ${GITHUB_SHA}"
+          git push origin gh-pages
+          popd >/dev/null

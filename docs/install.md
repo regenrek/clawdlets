@@ -229,8 +229,9 @@ Then deploy as usual (see below).
 Use a pinned commit for deploys. Short revs are fine; the CLI resolves them to a full SHA.
 
 ```bash
-clawdlets server manifest --host <host> --out deploy-manifest.<host>.json
-clawdlets server deploy --target-host admin@<ipv4> --manifest deploy-manifest.<host>.json
+clawdlets release manifest build --host <host> --channel prod --system x86_64-linux --release-id <releaseId> --out deploy/<host>/prod/<releaseId>.json
+clawdlets release manifest sign --in deploy/<host>/prod/<releaseId>.json
+clawdlets server deploy --target-host admin@<ipv4> --manifest deploy/<host>/prod/<releaseId>.json
 ```
 
 More deploy/update options (and tradeoffs): `docs/deploy.md`.
@@ -351,7 +352,7 @@ clawdlets host set --ssh-exposure tailnet
 2) Deploy the updated system (cache-only):
 
 ```bash
-clawdlets server deploy --manifest deploy-manifest.<host>.json
+clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json
 ```
 
 3) Apply (one-shot helper; provisioning only):

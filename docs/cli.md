@@ -32,8 +32,10 @@ Related
 - audit (includes `clawdbot security audit`): `clawdlets server audit --host <host>` (or `--target-host <ssh-alias>`)
 - logs: `clawdlets server logs --target-host <host> --unit clawdbot-melinda.service --since 10m --follow`
 - restart: `clawdlets server restart --target-host <host> --unit clawdbot-melinda.service`
-- manifest: `clawdlets server manifest --host <host> --out deploy-manifest.<host>.json`
-- deploy pinned: `clawdlets server deploy --manifest deploy-manifest.<host>.json`
+- release manifest: `clawdlets release manifest build --host <host> --channel prod --release-id <releaseId> --out deploy/<host>/prod/<releaseId>.json`
+- sign manifest: `clawdlets release manifest sign --in deploy/<host>/prod/<releaseId>.json`
+- pointer: `clawdlets release pointer write --release-id <releaseId> --out deploy/<host>/prod/latest.json`
+- deploy pinned: `clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json`
 - GitHub sync timers: `clawdlets server github-sync status --target-host <host>`
 - GitHub sync run: `clawdlets server github-sync run --target-host <host> --bot melinda`
 - GitHub sync logs: `clawdlets server github-sync logs --target-host <host> --bot melinda --follow`

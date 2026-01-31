@@ -9,10 +9,18 @@ import { KpiCard } from "~/components/dashboard/kpi-card"
 import { RecentRunsTable, type RunRow } from "~/components/dashboard/recent-runs-table"
 import { RunActivityChart } from "~/components/dashboard/run-activity-chart"
 import { useProjectBySlug } from "~/lib/project-data"
-import { getClawdletsConfig } from "~/sdk/config"
 import { api } from "../../../../../convex/_generated/api"
+import { clawdletsConfigQueryOptions, projectsListQueryOptions } from "~/lib/query-options"
+import { slugifyProjectName } from "~/lib/project-routing"
 
 export const Route = createFileRoute("/$projectSlug/hosts/$host/")({
+  loader: async ({ context, params }) => {
+    const projects = await context.queryClient.ensureQueryData(projectsListQueryOptions())
+    const project = projects.find((p) => slugifyProjectName(p.name) === params.projectSlug) ?? null
+    const projectId = (project?._id as Id<"projects"> | null) ?? null
+    if (!projectId) return
+    await context.queryClient.ensureQueryData(clawdletsConfigQueryOptions(projectId))
+  },
   component: HostOverview,
 })
 
@@ -24,9 +32,7 @@ function HostOverview() {
   const projectId = projectQuery.projectId
 
   const cfg = useQuery({
-    queryKey: ["clawdletsConfig", projectId],
-    queryFn: async () =>
-      await getClawdletsConfig({ data: { projectId: projectId as Id<"projects"> } }),
+    ...clawdletsConfigQueryOptions(projectId as Id<"projects"> | null),
     enabled: Boolean(projectId),
   })
 
@@ -46,7 +52,6 @@ function HostOverview() {
       }
       return await convexQueryClient.convexClient.query(api.runs.listByProjectPage, args)
     },
-    gcTime: 5_000,
   })
   const runs = (recentRuns.data?.page ?? []) as RunRow[]
 
@@ -90,6 +95,14 @@ function HostOverview() {
                 render={<Link to="/$projectSlug/hosts/$host/deploy" params={{ projectSlug, host }} />}
               >
                 Deploy
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                nativeButton={false}
+                render={<Link to="/$projectSlug/hosts/$host/updates" params={{ projectSlug, host }} />}
+              >
+                Updates
               </Button>
               <Button
                 size="sm"

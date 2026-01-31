@@ -105,6 +105,7 @@
             // {
               clawdlets-cattle-image = self.nixosConfigurations.clawdlets-cattle.config.formats.raw;
               clawdlets-cattle-system = self.nixosConfigurations.clawdlets-cattle.config.system.build.toplevel;
+              clawdlets = clawdlets.packages.${system}.clawdlets;
             }
             // (
               if first == null then

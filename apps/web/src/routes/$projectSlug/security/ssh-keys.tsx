@@ -112,15 +112,12 @@ function SecuritySshKeys() {
   if (!config) {
     return <div className="text-muted-foreground">Missing config.</div>
   }
+
   return (
     <div className="space-y-6">
       <SettingsSection
         title="SSH Keys"
-        description={
-          <>
-            Manage project-level authorized keys and known hosts shared across all hosts.
-          </>
-        }
+        description={<>Manage project-level authorized keys and known hosts shared across all hosts.</>}
         actions={
           <Button disabled={addSsh.isPending} onClick={() => addSsh.mutate()}>
             Add SSH Keys
@@ -141,6 +138,7 @@ function SecuritySshKeys() {
                 placeholder="ssh-ed25519 AAAA... user@host"
               />
             </div>
+
             <div className="space-y-2 md:col-span-2">
               <LabelWithHelp htmlFor="knownHostsText" help={setupFieldHelp.hosts.knownHostsFile}>
                 Paste known_hosts entries (optional)
@@ -153,6 +151,7 @@ function SecuritySshKeys() {
                 placeholder="github.com ssh-ed25519 AAAA..."
               />
             </div>
+
             <div className="space-y-2">
               <LabelWithHelp htmlFor="keyFile" help={setupFieldHelp.hosts.sshKeyFile}>
                 Upload public key file (.pub)
@@ -181,6 +180,7 @@ function SecuritySshKeys() {
                 Reads locally in your browser; server never reads <code>~/.ssh</code>.
               </div>
             </div>
+
             <div className="space-y-2">
               <LabelWithHelp htmlFor="knownHosts" help={setupFieldHelp.hosts.knownHostsFile}>
                 Upload known_hosts file
@@ -210,53 +210,55 @@ function SecuritySshKeys() {
             </div>
           </div>
 
-          <div className="border-t pt-4 grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <div className="text-xs font-medium">Authorized keys</div>
-              {fleetSshKeys.authorized.length ? (
-                <div className="max-h-44 overflow-auto pr-1 space-y-2">
-                  {fleetSshKeys.authorized.map((key: string) => (
-                    <div key={key} className="flex items-start gap-2 rounded-md border bg-background/30 p-2">
-                      <code className="flex-1 text-xs font-mono break-all">{key}</code>
-                      <Button
-                        type="button"
-                        size="xs"
-                        variant="destructive"
-                        disabled={removeAuthorizedKey.isPending}
-                        onClick={() => removeAuthorizedKey.mutate(key)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-xs text-muted-foreground">None.</div>
-              )}
+              <div className="text-sm font-medium">Authorized keys</div>
+              <div className="rounded-md border bg-card p-3">
+                {fleetSshKeys.authorized.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">None</div>
+                ) : (
+                  <div className="space-y-2">
+                    {fleetSshKeys.authorized.map((k: string) => (
+                      <div key={k} className="flex items-center justify-between gap-2">
+                        <code className="text-xs break-all">{k}</code>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => removeAuthorizedKey.mutate(k)}
+                          disabled={removeAuthorizedKey.isPending}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
-              <div className="text-xs font-medium">Known hosts</div>
-              {fleetSshKeys.knownHosts.length ? (
-                <div className="max-h-44 overflow-auto pr-1 space-y-2">
-                  {fleetSshKeys.knownHosts.map((entry: string) => (
-                    <div key={entry} className="flex items-start gap-2 rounded-md border bg-background/30 p-2">
-                      <code className="flex-1 text-xs font-mono break-all">{entry}</code>
-                      <Button
-                        type="button"
-                        size="xs"
-                        variant="destructive"
-                        disabled={removeKnownHost.isPending}
-                        onClick={() => removeKnownHost.mutate(entry)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-xs text-muted-foreground">None.</div>
-              )}
+              <div className="text-sm font-medium">known_hosts</div>
+              <div className="rounded-md border bg-card p-3">
+                {fleetSshKeys.knownHosts.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">None</div>
+                ) : (
+                  <div className="space-y-2">
+                    {fleetSshKeys.knownHosts.map((entry: string) => (
+                      <div key={entry} className="flex items-center justify-between gap-2">
+                        <code className="text-xs break-all">{entry}</code>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => removeKnownHost.mutate(entry)}
+                          disabled={removeKnownHost.isPending}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

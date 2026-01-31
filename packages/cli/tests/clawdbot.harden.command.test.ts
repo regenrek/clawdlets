@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 
 function baseConfig(host: string) {
   return {
-    schemaVersion: 10,
+    schemaVersion: 11,
     defaultHost: host,
     baseFlake: "",
     fleet: {
@@ -52,18 +52,26 @@ function baseConfig(host: string) {
           sshPubkeyFile: "~/.ssh/id_ed25519.pub",
         },
         cache: {
-          garnix: {
-            private: {
-              enable: false,
-              netrcSecret: "garnix_netrc",
-              netrcPath: "/etc/nix/netrc",
-              narinfoCachePositiveTtl: 3600,
-            },
-          },
+          substituters: ["https://cache.nixos.org", "https://cache.garnix.io"],
+          trustedPublicKeys: [
+            "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=",
+            "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=",
+          ],
+          netrc: { enable: false, secretName: "garnix_netrc", path: "/etc/nix/netrc", narinfoCachePositiveTtl: 3600 },
         },
         operator: { deploy: { enable: false } },
         sshExposure: { mode: "bootstrap" },
         tailnet: { mode: "none" },
+        selfUpdate: {
+          enable: false,
+          interval: "30min",
+          baseUrl: "",
+          channel: "prod",
+          publicKeys: [],
+          allowUnsigned: false,
+          allowRollback: false,
+          healthCheckUnit: "",
+        },
       },
     },
   };

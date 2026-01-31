@@ -10,6 +10,7 @@ import { SecretEnvSchema, SecretFilesSchema } from "./secret-wiring.js";
 import { isValidTargetHost } from "./ssh-remote.js";
 import { TtlStringSchema } from "@clawdlets/cattle-core/lib/ttl";
 import { HcloudLabelsSchema, validateHcloudLabelsAtPath } from "@clawdlets/cattle-core/lib/hcloud-labels";
+import { DEFAULT_NIX_SUBSTITUTERS, DEFAULT_NIX_TRUSTED_PUBLIC_KEYS } from "./nix-cache.js";
 
 export const SSH_EXPOSURE_MODES = ["tailnet", "bootstrap", "public"] as const;
 export const SshExposureModeSchema = z.enum(SSH_EXPOSURE_MODES);
@@ -19,7 +20,7 @@ export const TAILNET_MODES = ["none", "tailscale"] as const;
 export const TailnetModeSchema = z.enum(TAILNET_MODES);
 export type TailnetMode = z.infer<typeof TailnetModeSchema>;
 
-export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 10 as const;
+export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 11 as const;
 
 const JsonObjectSchema: z.ZodType<Record<string, unknown>> = z.record(z.string(), z.any());
 
@@ -179,39 +180,52 @@ const HostSchema = z.object({
     .default(() => ({ mode: "tailscale" as const })),
   cache: z
     .object({
-      garnix: z
+      substituters: z
+        .array(z.string().trim().min(1))
+        .min(1, { message: "cache.substituters must not be empty" })
+        .default(() => Array.from(DEFAULT_NIX_SUBSTITUTERS)),
+      trustedPublicKeys: z
+        .array(z.string().trim().min(1))
+        .min(1, { message: "cache.trustedPublicKeys must not be empty" })
+        .default(() => Array.from(DEFAULT_NIX_TRUSTED_PUBLIC_KEYS)),
+      netrc: z
         .object({
-          private: z
-            .object({
-              enable: z.boolean().default(false),
-              netrcSecret: SecretNameSchema.default("garnix_netrc"),
-              netrcPath: z.string().trim().default("/etc/nix/netrc"),
-              narinfoCachePositiveTtl: z.number().int().positive().default(3600),
-            })
-            .default(() => ({
-              enable: false,
-              netrcSecret: "garnix_netrc",
-              netrcPath: "/etc/nix/netrc",
-              narinfoCachePositiveTtl: 3600,
-            })),
+          enable: z.boolean().default(false),
+          secretName: SecretNameSchema.default("garnix_netrc"),
+          path: z.string().trim().default("/etc/nix/netrc"),
+          narinfoCachePositiveTtl: z.number().int().positive().default(3600),
         })
         .default(() => ({
-          private: {
-            enable: false,
-            netrcSecret: "garnix_netrc",
-            netrcPath: "/etc/nix/netrc",
-            narinfoCachePositiveTtl: 3600,
-          },
+          enable: false,
+          secretName: "garnix_netrc",
+          path: "/etc/nix/netrc",
+          narinfoCachePositiveTtl: 3600,
         })),
     })
+    .superRefine((cache, ctx) => {
+      if (cache.netrc.enable && !cache.netrc.secretName.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["netrc", "secretName"],
+          message: "cache.netrc.secretName must be set when cache.netrc.enable is true",
+        });
+      }
+      if (cache.netrc.enable && !cache.netrc.path.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["netrc", "path"],
+          message: "cache.netrc.path must be set when cache.netrc.enable is true",
+        });
+      }
+    })
     .default(() => ({
-      garnix: {
-        private: {
-          enable: false,
-          netrcSecret: "garnix_netrc",
-          netrcPath: "/etc/nix/netrc",
-          narinfoCachePositiveTtl: 3600,
-        },
+      substituters: Array.from(DEFAULT_NIX_SUBSTITUTERS),
+      trustedPublicKeys: Array.from(DEFAULT_NIX_TRUSTED_PUBLIC_KEYS),
+      netrc: {
+        enable: false,
+        secretName: "garnix_netrc",
+        path: "/etc/nix/netrc",
+        narinfoCachePositiveTtl: 3600,
       },
     })),
   operator: z
@@ -226,12 +240,39 @@ const HostSchema = z.object({
   selfUpdate: z
     .object({
       enable: z.boolean().default(false),
-      manifestUrl: z.string().trim().default(""),
       interval: z.string().trim().default("30min"),
-      publicKey: z.string().trim().default(""),
-      signatureUrl: z.string().trim().default(""),
+      baseUrl: z.string().trim().default(""),
+      channel: z
+        .string()
+        .trim()
+        .default("prod")
+        .refine((v) => /^[a-z][a-z0-9-]*$/.test(v), { message: "invalid selfUpdate.channel (use [a-z][a-z0-9-]*)" }),
+      publicKeys: z.array(z.string().trim().min(1)).default([]),
+      allowUnsigned: z.boolean().default(false),
+      allowRollback: z.boolean().default(false),
+      healthCheckUnit: z.string().trim().default(""),
     })
-    .default(() => ({ enable: false, manifestUrl: "", interval: "30min", publicKey: "", signatureUrl: "" })),
+    .superRefine((v, ctx) => {
+      if (v.enable && !v.baseUrl) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["baseUrl"], message: "selfUpdate.baseUrl must be set when enabled" });
+      }
+      if (v.enable && !v.allowUnsigned && v.publicKeys.length === 0) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["publicKeys"], message: "selfUpdate.publicKeys must be set when enabled (or enable allowUnsigned for dev)" });
+      }
+      if (v.healthCheckUnit && !/^[A-Za-z0-9@._:-]+(\.service)?$/.test(v.healthCheckUnit)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["healthCheckUnit"], message: "invalid selfUpdate.healthCheckUnit" });
+      }
+    })
+    .default(() => ({
+      enable: false,
+      interval: "30min",
+      baseUrl: "",
+      channel: "prod",
+      publicKeys: [],
+      allowUnsigned: false,
+      allowRollback: false,
+      healthCheckUnit: "",
+    })),
   agentModelPrimary: z.string().trim().default("anthropic/claude-opus-4-5"),
 });
 
@@ -344,18 +385,7 @@ export function getTailnetMode(hostCfg: ClawdletsHostConfig | null | undefined):
 export function createDefaultClawdletsConfig(params: { host: string; bots?: string[] }): ClawdletsConfig {
   const host = params.host.trim() || "clawdbot-fleet-host";
   const bots = (params.bots || ["maren", "sonja", "gunnar", "melinda"]).map((b) => b.trim()).filter(Boolean);
-  const botsRecord = Object.fromEntries(
-    bots.map((b) => [
-      b,
-      {
-        profile: {
-          secretEnv: {
-            DISCORD_BOT_TOKEN: `discord_token_${b}`,
-          },
-        },
-      },
-    ]),
-  );
+  const botsRecord = Object.fromEntries(bots.map((b) => [b, {}]));
   return ClawdletsConfigSchema.parse({
     schemaVersion: CLAWDLETS_CONFIG_SCHEMA_VERSION,
     defaultHost: host,
@@ -392,17 +422,26 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
         sshExposure: { mode: "bootstrap" },
         tailnet: { mode: "tailscale" },
         cache: {
-          garnix: {
-            private: {
-              enable: false,
-              netrcSecret: "garnix_netrc",
-              netrcPath: "/etc/nix/netrc",
-              narinfoCachePositiveTtl: 3600,
-            },
+          substituters: Array.from(DEFAULT_NIX_SUBSTITUTERS),
+          trustedPublicKeys: Array.from(DEFAULT_NIX_TRUSTED_PUBLIC_KEYS),
+          netrc: {
+            enable: false,
+            secretName: "garnix_netrc",
+            path: "/etc/nix/netrc",
+            narinfoCachePositiveTtl: 3600,
           },
         },
         operator: { deploy: { enable: false } },
-        selfUpdate: { enable: false, manifestUrl: "", interval: "30min", publicKey: "", signatureUrl: "" },
+        selfUpdate: {
+          enable: false,
+          interval: "30min",
+          baseUrl: "",
+          channel: "prod",
+          publicKeys: [],
+          allowUnsigned: false,
+          allowRollback: false,
+          healthCheckUnit: "",
+        },
         agentModelPrimary: "zai/glm-4.7",
       },
     },
