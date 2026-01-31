@@ -7,8 +7,7 @@ let
   tailnetMode = tailnet.mode or "none";
   sshExposureMode = ((hostCfg.sshExposure or { }).mode or "tailnet");
   cacheCfg = (hostCfg.cache or { });
-  garnixCache = (cacheCfg.garnix or { });
-  garnixPrivate = (garnixCache.private or { });
+  cacheNetrc = (cacheCfg.netrc or { });
   selfUpdate = (hostCfg.selfUpdate or { });
   allowMissingSecrets = config.clawdlets.bootstrap.allowMissingSecrets;
   fleet = import ../lib/fleet-config.nix { inherit lib project; };
@@ -33,10 +32,21 @@ in {
     if tailnetMode == "tailscale" then "tailscale_auth_key" else null;
   clawdlets.operator.deploy.enable =
     ((hostCfg.operator or { }).deploy or { }).enable or false;
-  clawdlets.cache.garnix.private.enable = (garnixPrivate.enable or false);
-  clawdlets.cache.garnix.private.netrcSecret = (garnixPrivate.netrcSecret or "garnix_netrc");
-  clawdlets.cache.garnix.private.netrcPath = (garnixPrivate.netrcPath or "/etc/nix/netrc");
-  clawdlets.cache.garnix.private.narinfoCachePositiveTtl = (garnixPrivate.narinfoCachePositiveTtl or 3600);
+  clawdlets.cache.substituters =
+    if (cacheCfg.substituters or null) != null then (cacheCfg.substituters or [ ]) else [
+      "https://cache.nixos.org"
+      "https://cache.garnix.io"
+    ];
+  clawdlets.cache.trustedPublicKeys =
+    if (cacheCfg.trustedPublicKeys or null) != null then (cacheCfg.trustedPublicKeys or [ ]) else [
+      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+      "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
+    ];
+
+  clawdlets.cache.netrc.enable = (cacheNetrc.enable or false);
+  clawdlets.cache.netrc.secretName = (cacheNetrc.secretName or "garnix_netrc");
+  clawdlets.cache.netrc.path = (cacheNetrc.path or "/etc/nix/netrc");
+  clawdlets.cache.netrc.narinfoCachePositiveTtl = (cacheNetrc.narinfoCachePositiveTtl or 3600);
 
   clawdlets.selfUpdate.enable = (selfUpdate.enable or false);
   clawdlets.selfUpdate.interval = (selfUpdate.interval or "30min");

@@ -6,7 +6,7 @@ describe("clawdlets config validate", () => {
     const { validateClawdletsConfig } = await import("../src/lib/clawdlets-config-validate");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         secretEnv: { OPENAI_API_KEY: "openai_api_key" },
@@ -37,7 +37,7 @@ describe("clawdlets config validate", () => {
     const { validateClawdletsConfig } = await import("../src/lib/clawdlets-config-validate");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         secretEnv: { OPENAI_API_KEY: "openai_api_key" },
@@ -63,7 +63,7 @@ describe("clawdlets config validate", () => {
     const { validateClawdletsConfig } = await import("../src/lib/clawdlets-config-validate");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         secretEnv: { OPENAI_API_KEY: "openai_api_key" },
@@ -91,7 +91,7 @@ describe("clawdlets config validate", () => {
     const { validateClawdletsConfig } = await import("../src/lib/clawdlets-config-validate");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         secretEnv: {},
@@ -127,7 +127,7 @@ describe("clawdlets config validate", () => {
     const { validateClawdletsConfig } = await import("../src/lib/clawdlets-config-validate");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         secretEnv: {},

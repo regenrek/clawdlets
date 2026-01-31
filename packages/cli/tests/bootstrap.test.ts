@@ -90,6 +90,14 @@ const baseHost = {
   provisioning: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
   sshExposure: { mode: "bootstrap" },
   tailnet: { mode: "tailscale" },
+  cache: {
+    substituters: ["https://cache.nixos.org", "https://cache.garnix.io"],
+    trustedPublicKeys: [
+      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=",
+      "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=",
+    ],
+    netrc: { enable: false, secretName: "garnix_netrc", path: "/etc/nix/netrc", narinfoCachePositiveTtl: 3600 },
+  },
   agentModelPrimary: "zai/glm-4.7",
 };
 
@@ -98,7 +106,7 @@ function setConfig(hostOverrides: Partial<typeof baseHost>) {
     layout: getRepoLayout("/repo"),
     configPath: "/repo/fleet/clawdlets.json",
     config: {
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: { sshAuthorizedKeys: [], sshKnownHosts: [] },
       hosts: {
         [hostName]: { ...baseHost, ...hostOverrides },

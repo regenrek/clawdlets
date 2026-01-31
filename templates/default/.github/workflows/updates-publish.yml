@@ -94,10 +94,25 @@ jobs:
 
             toplevel="$(nix eval --raw ".#packages.x86_64-linux.\\\"${host}-system\\\".outPath")"
 
+            cache_flags=()
+            while IFS= read -r s; do
+              [[ -z "${s}" ]] && continue
+              cache_flags+=(--cache-substituter "${s}")
+            done < <(jq -r --arg host "${host}" '.hosts[$host].cache.substituters[]? // empty' fleet/clawdlets.json)
+            while IFS= read -r k; do
+              [[ -z "${k}" ]] && continue
+              cache_flags+=(--cache-trusted-key "${k}")
+            done < <(jq -r --arg host "${host}" '.hosts[$host].cache.trustedPublicKeys[]? // empty' fleet/clawdlets.json)
+
+            if [[ "${#cache_flags[@]}" -eq 0 ]]; then
+              echo "error: missing cache config for host=${host} (expected hosts.<host>.cache.substituters/trustedPublicKeys)" >&2
+              exit 1
+            fi
+
             ttl_flag=()
-            private_enabled="$(jq -r --arg host "${host}" '.hosts[$host].cache.garnix.private.enable // false' fleet/clawdlets.json)"
-            if [[ "${private_enabled}" == "true" ]]; then
-              ttl="$(jq -r --arg host "${host}" '.hosts[$host].cache.garnix.private.narinfoCachePositiveTtl // 3600' fleet/clawdlets.json)"
+            netrc_enabled="$(jq -r --arg host "${host}" '.hosts[$host].cache.netrc.enable // false' fleet/clawdlets.json)"
+            if [[ "${netrc_enabled}" == "true" ]]; then
+              ttl="$(jq -r --arg host "${host}" '.hosts[$host].cache.netrc.narinfoCachePositiveTtl // 3600' fleet/clawdlets.json)"
               if [[ "${ttl}" =~ ^[0-9]+$ ]]; then
                 ttl_flag=(--cache-narinfo-cache-positive-ttl "${ttl}")
               fi
@@ -114,10 +129,7 @@ jobs:
               --secrets-format sops-tar \
               --secrets-url "secrets/{digest}.tgz" \
               --secrets-bundle-out "_gh-pages/deploy/${host}/${channel}/secrets/{digest}.tgz" \
-              --cache-substituter https://cache.nixos.org \
-              --cache-substituter https://cache.garnix.io \
-              --cache-trusted-key "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=" \
-              --cache-trusted-key "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=" \
+              "${cache_flags[@]}" \
               "${ttl_flag[@]}" \
               --out "${manifest_path}"
 

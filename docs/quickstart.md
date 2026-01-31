@@ -47,9 +47,9 @@ Note: `project init` already includes `fleet/clawdlets.json`. Don’t run `clawd
 Template source defaults to the pinned config in `config/template-source.json` (repo + path + 40-hex ref).
 Override with `--template`, `--template-path`, or `--template-ref` (or env `CLAWDLETS_TEMPLATE_*`).
 
-0.5) Enable Garnix for the project repo (private cache) and add the netrc secret:
-- turn on Garnix for the repo and set the cache to private
-- add `secrets/hosts/<host>/garnix_netrc.yaml` with your netrc credentials (required)
+0.5) Optional: private cache auth (Garnix/Attic/Harmonia/etc):
+- enable cache netrc in config: `clawdlets host set --cache-netrc-enable true --cache-netrc-secret-name garnix_netrc`
+- add `secrets/hosts/<host>/garnix_netrc.yaml` with your netrc credentials
 
 1) Configure fleet + host (CLI-first):
 - configure channels (Discord/Telegram/Slack/WhatsApp) in each bot’s `fleet.bots.<bot>.clawdbot` (recommended via web UI: Setup → Bots → Integrations)

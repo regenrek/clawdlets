@@ -142,12 +142,11 @@ clawdlets secrets sync --rev <sha|HEAD>
 
 Public cache only (default): just add substituters + trusted keys.
 
-Private Garnix cache:
+Authenticated cache (private Garnix / Attic / Harmonia / etc):
 
-- set `hosts.<host>.cache.garnix.private.enable = true` in `fleet/clawdlets.json`
-- provide `/etc/nix/netrc` via sops secret (`hosts.<host>.cache.garnix.private.netrcSecret`)
-- keep `narinfo-cache-positive-ttl` at 3600 (required for presigned URLs)
-- ensure the Garnix project/cache is set to private in Garnix
+- set `hosts.<host>.cache.netrc.enable = true` in `fleet/clawdlets.json`
+- provide `/etc/nix/netrc` via sops secret (`hosts.<host>.cache.netrc.secretName`)
+- set `hosts.<host>.cache.netrc.narinfoCachePositiveTtl` to match your cache behavior (private Garnix requires this due to presigned URLs)
 
 See `nix/modules/clawdlets-host-baseline.nix` (in this repo) for the module options.
 

@@ -6,7 +6,7 @@ describe("secrets autowire", () => {
     const { planSecretsAutowire } = await import("../src/lib/secrets-autowire");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["alpha", "beta"],
         secretEnv: {},
@@ -42,7 +42,7 @@ describe("secrets autowire", () => {
     const { planSecretsAutowire } = await import("../src/lib/secrets-autowire");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: ["maren"],
         secretEnv: { OPENAI_API_KEY: "openai_api_key" },

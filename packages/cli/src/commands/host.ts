@@ -13,6 +13,7 @@ import {
   writeClawdletsConfig,
   type ClawdletsHostConfig,
 } from "@clawdlets/core/lib/clawdlets-config";
+import { DEFAULT_NIX_SUBSTITUTERS, DEFAULT_NIX_TRUSTED_PUBLIC_KEYS } from "@clawdlets/core/lib/nix-cache";
 
 function parseBoolOrUndefined(v: unknown): boolean | undefined {
   if (v === undefined || v === null) return undefined;
@@ -52,13 +53,13 @@ const add = defineCommand({
       sshExposure: { mode: "bootstrap" },
       tailnet: { mode: "tailscale" },
       cache: {
-        garnix: {
-          private: {
-            enable: false,
-            netrcSecret: "garnix_netrc",
-            netrcPath: "/etc/nix/netrc",
-            narinfoCachePositiveTtl: 3600,
-          },
+        substituters: Array.from(DEFAULT_NIX_SUBSTITUTERS),
+        trustedPublicKeys: Array.from(DEFAULT_NIX_TRUSTED_PUBLIC_KEYS),
+        netrc: {
+          enable: false,
+          secretName: "garnix_netrc",
+          path: "/etc/nix/netrc",
+          narinfoCachePositiveTtl: 3600,
         },
       },
       operator: { deploy: { enable: false } },
@@ -117,10 +118,12 @@ const set = defineCommand({
     "disk-device": { type: "string", description: "Disk device (Hetzner Cloud: /dev/sda).", },
     "agent-model-primary": { type: "string", description: "Primary agent model (e.g. zai/glm-4.7)." },
     tailnet: { type: "string", description: "Tailnet mode: none|tailscale." },
-    "garnix-private-cache": { type: "string", description: "Enable private Garnix cache access (true/false). Requires garnix netrc secret.", },
-    "garnix-netrc-secret": { type: "string", description: "Sops secret name containing /etc/nix/netrc (default: garnix_netrc).", },
-    "garnix-netrc-path": { type: "string", description: "Filesystem path for netrc on host (default: /etc/nix/netrc).", },
-    "garnix-narinfo-cache-positive-ttl": { type: "string", description: "narinfo-cache-positive-ttl when private cache enabled (default: 3600).", },
+    "cache-substituter": { type: "string", description: "Nix substituter (repeatable; replaces host cache list).", array: true },
+    "cache-trusted-public-key": { type: "string", description: "Nix trusted public key (repeatable; replaces host cache list).", array: true },
+    "cache-netrc-enable": { type: "string", description: "Enable netrc-file for private cache auth (true/false).", },
+    "cache-netrc-secret-name": { type: "string", description: "Sops secret name containing the netrc file (default: garnix_netrc).", },
+    "cache-netrc-path": { type: "string", description: "Filesystem path for netrc on host (default: /etc/nix/netrc).", },
+    "cache-narinfo-cache-positive-ttl": { type: "string", description: "narinfo-cache-positive-ttl when netrc enabled (default: 3600).", },
     "flake-host": { type: "string", description: "Flake output host name override (default: same as host name)." },
     "target-host": { type: "string", description: "SSH target (ssh config alias or user@host)." },
     "server-type": { type: "string", description: "Hetzner server type (e.g. cx43)." },
@@ -172,18 +175,24 @@ const set = defineCommand({
     if ((args as any)["disk-device"] !== undefined) next.diskDevice = String((args as any)["disk-device"]).trim();
     if ((args as any)["agent-model-primary"] !== undefined) next.agentModelPrimary = String((args as any)["agent-model-primary"]).trim();
 
-    if ((args as any)["garnix-private-cache"] !== undefined) {
-      const v = parseBoolOrUndefined((args as any)["garnix-private-cache"]);
-      if (v !== undefined) next.cache.garnix.private.enable = v;
+    if (Array.isArray((args as any)["cache-substituter"])) {
+      next.cache.substituters = (args as any)["cache-substituter"].map((x: unknown) => String(x).trim()).filter(Boolean);
     }
-    if ((args as any)["garnix-netrc-secret"] !== undefined) next.cache.garnix.private.netrcSecret = String((args as any)["garnix-netrc-secret"]).trim();
-    if ((args as any)["garnix-netrc-path"] !== undefined) next.cache.garnix.private.netrcPath = String((args as any)["garnix-netrc-path"]).trim();
-    if ((args as any)["garnix-narinfo-cache-positive-ttl"] !== undefined) {
-      const raw = String((args as any)["garnix-narinfo-cache-positive-ttl"]).trim();
+    if (Array.isArray((args as any)["cache-trusted-public-key"])) {
+      next.cache.trustedPublicKeys = (args as any)["cache-trusted-public-key"].map((x: unknown) => String(x).trim()).filter(Boolean);
+    }
+    if ((args as any)["cache-netrc-enable"] !== undefined) {
+      const v = parseBoolOrUndefined((args as any)["cache-netrc-enable"]);
+      if (v !== undefined) next.cache.netrc.enable = v;
+    }
+    if ((args as any)["cache-netrc-secret-name"] !== undefined) next.cache.netrc.secretName = String((args as any)["cache-netrc-secret-name"]).trim();
+    if ((args as any)["cache-netrc-path"] !== undefined) next.cache.netrc.path = String((args as any)["cache-netrc-path"]).trim();
+    if ((args as any)["cache-narinfo-cache-positive-ttl"] !== undefined) {
+      const raw = String((args as any)["cache-narinfo-cache-positive-ttl"]).trim();
       if (raw) {
         const n = Number(raw);
-        if (!Number.isInteger(n) || n <= 0) throw new Error("invalid --garnix-narinfo-cache-positive-ttl (expected positive integer)");
-        next.cache.garnix.private.narinfoCachePositiveTtl = n;
+        if (!Number.isInteger(n) || n <= 0) throw new Error("invalid --cache-narinfo-cache-positive-ttl (expected positive integer)");
+        next.cache.netrc.narinfoCachePositiveTtl = n;
       }
     }
 

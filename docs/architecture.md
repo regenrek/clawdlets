@@ -16,7 +16,7 @@ Rules of thumb:
 ## Defaults worth knowing
 
 - Template defaults `sshExposure.mode=bootstrap` (public SSH only for day-0).
-- `cache.garnix.private.enable` defaults to `false` (opt-in).
+- `cache.netrc.enable` defaults to `false` (opt-in).
 - `provisioning.adminCidr` must be a CIDR; world-open requires `adminCidrAllowWorldOpen=true`.
 
 ## E2E Lifecycle Diagram

@@ -6,7 +6,7 @@ describe("secrets write allowlist", () => {
     const { assertSecretsAreManaged, buildManagedHostSecretNameAllowlist } = await import("../src/sdk/secrets-allowlist")
 
     const config = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: { botOrder: [], bots: {}, secretEnv: {} },
       hosts: { alpha: { tailnet: { mode: "none" }, agentModelPrimary: "zai/glm-4.7" } },
     })
@@ -22,7 +22,7 @@ describe("secrets write allowlist", () => {
     const { buildManagedHostSecretNameAllowlist } = await import("../src/sdk/secrets-allowlist")
 
     const config = ClawdletsConfigSchema.parse({
-      schemaVersion: 10,
+      schemaVersion: 11,
       fleet: {
         botOrder: [],
         bots: {},
@@ -32,7 +32,7 @@ describe("secrets write allowlist", () => {
       hosts: {
         alpha: {
           tailnet: { mode: "tailscale" },
-          cache: { garnix: { private: { enable: true, netrcSecret: "garnix_netrc" } } },
+          cache: { netrc: { enable: true, secretName: "garnix_netrc" } },
         },
       },
     })

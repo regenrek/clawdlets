@@ -104,9 +104,9 @@ export const secretsInit = defineCommand({
 	    const bots = clawdletsConfig.fleet.botOrder;
 	    if (bots.length === 0) throw new Error("fleet.botOrder is empty (set bots in fleet/clawdlets.json)");
 
-	    const garnixPrivate = hostCfg.cache?.garnix?.private;
-	    const garnixPrivateEnabled = Boolean(garnixPrivate?.enable);
-	    const garnixNetrcPath = garnixPrivateEnabled ? String(garnixPrivate?.netrcPath || "/etc/nix/netrc").trim() : "";
+	    const cacheNetrc = hostCfg.cache?.netrc;
+	    const cacheNetrcEnabled = Boolean(cacheNetrc?.enable);
+	    const cacheNetrcPath = cacheNetrcEnabled ? String(cacheNetrc?.path || "/etc/nix/netrc").trim() : "";
 
 	    let secretsPlan = buildFleetSecretsPlan({ config: clawdletsConfig, hostName });
 	    if (secretsPlan.missingSecretConfig.length > 0) {
@@ -137,7 +137,7 @@ export const secretsInit = defineCommand({
 
 	    hostCfg = (clawdletsConfig.hosts as any)?.[hostName] || hostCfg;
 	    const sets = buildSecretsInitTemplateSets({ secretsPlan, hostCfg });
-	    const garnixNetrcSecretName = sets.garnixNetrcSecretName;
+	    const cacheNetrcSecretName = sets.cacheNetrcSecretName;
 
 	    const defaultSecretsJsonPath = path.join(layout.runtimeDir, "secrets.json");
 	    const defaultSecretsJsonDisplay = path.relative(process.cwd(), defaultSecretsJsonPath) || defaultSecretsJsonPath;
@@ -340,7 +340,7 @@ export const secretsInit = defineCommand({
       type Step =
         | { kind: "adminPassword" }
         | { kind: "tailscaleAuthKey" }
-	        | { kind: "garnixNetrcFile"; secretName: string; netrcPath: string }
+	        | { kind: "cacheNetrcFile"; secretName: string; netrcPath: string }
 	        | { kind: "secret"; secretName: string };
 
 	      const requiredSecretsToPrompt = sets.requiredSecrets;
@@ -349,8 +349,8 @@ export const secretsInit = defineCommand({
 	        { kind: "adminPassword" },
 	        ...(sets.requiresTailscaleAuthKey ? ([{ kind: "tailscaleAuthKey" }] as const) : []),
 	        ...requiredSecretsToPrompt.map((secretName) =>
-	          garnixPrivateEnabled && secretName === garnixNetrcSecretName
-	            ? ({ kind: "garnixNetrcFile", secretName, netrcPath: garnixNetrcPath || "/etc/nix/netrc" } as const)
+	          cacheNetrcEnabled && secretName === cacheNetrcSecretName
+	            ? ({ kind: "cacheNetrcFile", secretName, netrcPath: cacheNetrcPath || "/etc/nix/netrc" } as const)
 	            : ({ kind: "secret", secretName } as const),
         ),
       ];
@@ -364,10 +364,10 @@ export const secretsInit = defineCommand({
           });
         } else if (step.kind === "tailscaleAuthKey") {
           v = await p.password({ message: "Tailscale auth key (tailscale_auth_key) (required for non-interactive tailnet bootstrap)" });
-        } else if (step.kind === "garnixNetrcFile") {
+        } else if (step.kind === "cacheNetrcFile") {
           v = await p.text({
-            message: `Path to netrc file for private Garnix cache (${step.secretName} → ${step.netrcPath}) (required)`,
-            placeholder: `${layout.runtimeDir}/garnix.netrc`,
+            message: `Path to netrc file for private cache access (${step.secretName} → ${step.netrcPath}) (required)`,
+            placeholder: `${layout.runtimeDir}/nix.netrc`,
           });
         } else if (step.kind === "secret") {
           v = await p.password({ message: `Secret value (${step.secretName}) (required)` });
@@ -386,7 +386,7 @@ export const secretsInit = defineCommand({
         const s = String(v ?? "");
         if (step.kind === "adminPassword") values.adminPassword = s;
         else if (step.kind === "tailscaleAuthKey") values.tailscaleAuthKey = s;
-        else if (step.kind === "garnixNetrcFile") {
+        else if (step.kind === "cacheNetrcFile") {
           const rawPath = s.trim();
           if (!rawPath) values.secrets[step.secretName] = "";
           else {

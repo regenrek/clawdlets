@@ -130,7 +130,7 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 - Local deploy creds: `clawdlets env init` + `clawdlets env show` (default env file: `.clawdlets/env`).
 - Cache-only deploy flow: `clawdlets server deploy` (secrets + desired-state apply) via signed release manifest.
 - Host deploy entrypoints: `/etc/clawdlets/bin/install-secrets` + `/etc/clawdlets/bin/switch-system` (sudo allowlist via `clawdlets.operator.deploy`).
-- Private Garnix cache support: `clawdlets.cache.garnix.private.*` (netrc + narinfo TTL).
+- Authenticated cache support: `clawdlets.cache.netrc.*` (netrc + narinfo TTL).
 - CI workflows: build+publish signed release manifests and `deploy` (GitOps tailnet deploy).
 - Manifest signing support in CI (minisign) + self-update signature verification.
 - Release manifest commands: `clawdlets release manifest build|sign|verify`.

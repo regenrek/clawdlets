@@ -104,7 +104,7 @@ The two public keys must match. If they don’t, `clawdlets secrets init` rewrit
 ## Common keys
 
 - `tailscale_auth_key` (required when using Tailscale auto-join)
-- `garnix_netrc` (netrc for private Garnix cache access; installed at `/etc/nix/netrc` when enabled)
+- `garnix_netrc` (netrc for authenticated cache access; installed at `/etc/nix/netrc` when `hosts.<host>.cache.netrc.enable = true`)
 - `discord_token_<bot>` (default mapping via `fleet.bots.<bot>.profile.secretEnv.DISCORD_BOT_TOKEN`)
 - LLM API keys (wired via env vars referenced in clawdbot config, then mapped in `fleet.secretEnv` and/or per-bot overrides in `fleet.bots.<bot>.profile.secretEnv`):
   - `z_ai_api_key` (Z.AI; env: `ZAI_API_KEY`)

@@ -6,7 +6,7 @@ Goal: prove clawdlets can provision + operate a single Hetzner host end-to-end w
 
 ### Provision + install
 
-- `fleet/clawdlets.json` exists (schemaVersion 10) and is the single source of truth for fleet + hosts.
+- `fleet/clawdlets.json` exists (schemaVersion 11) and is the single source of truth for fleet + hosts.
 - `CLAWDLETS_INTERACTIVE=1 clawdlets secrets init` created/updated:
   - `secrets/.sops.yaml`
   - `secrets/keys/hosts/<host>.agekey.yaml` (encrypted host age key)

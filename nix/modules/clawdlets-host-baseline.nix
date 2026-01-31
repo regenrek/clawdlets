@@ -109,31 +109,47 @@ in
     };
 
     cache = {
-      garnix = {
-        private = {
-          enable = lib.mkOption {
-            type = lib.types.bool;
-            default = false;
-            description = "Enable private Garnix cache access (netrc + TTL).";
-          };
+      substituters = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [
+          "https://cache.nixos.org"
+          "https://cache.garnix.io"
+        ];
+        description = "Nix substituters for this host.";
+      };
 
-          netrcSecret = lib.mkOption {
-            type = lib.types.nullOr lib.types.str;
-            default = "garnix_netrc";
-            description = "Sops secret name containing the netrc for private Garnix cache access.";
-          };
+      trustedPublicKeys = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [
+          "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+          "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
+        ];
+        description = "Nix trusted-public-keys for this host.";
+      };
 
-          netrcPath = lib.mkOption {
-            type = lib.types.str;
-            default = "/etc/nix/netrc";
-            description = "Filesystem path for the Garnix netrc file (root-owned, 0400).";
-          };
+      netrc = {
+        enable = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = "Enable private cache access via netrc-file (e.g. private Garnix, Attic, Harmonia).";
+        };
 
-          narinfoCachePositiveTtl = lib.mkOption {
-            type = lib.types.int;
-            default = 3600;
-            description = "narinfo-cache-positive-ttl for private Garnix cache (seconds).";
-          };
+        secretName = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = "garnix_netrc";
+          description = "Sops secret name containing the netrc file contents.";
+        };
+
+        path = lib.mkOption {
+          type = lib.types.str;
+          default = "/etc/nix/netrc";
+          description = "Filesystem path for netrc-file (root-owned, 0400).";
+        };
+
+        narinfoCachePositiveTtl = lib.mkOption {
+          type = lib.types.int;
+          default = 3600;
+          description = "narinfo-cache-positive-ttl when using authenticated caches (seconds).";
         };
       };
     };
@@ -189,17 +205,11 @@ in
       max-jobs = lib.mkDefault 1;
       cores = lib.mkDefault 2;
 
-      substituters = [
-        "https://cache.nixos.org"
-        "https://cache.garnix.io"
-      ];
-      trusted-public-keys = [
-        "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-        "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
-      ];
-    } // lib.optionalAttrs cfg.cache.garnix.private.enable {
-      netrc-file = cfg.cache.garnix.private.netrcPath;
-      narinfo-cache-positive-ttl = cfg.cache.garnix.private.narinfoCachePositiveTtl;
+      substituters = cfg.cache.substituters;
+      trusted-public-keys = cfg.cache.trustedPublicKeys;
+    } // lib.optionalAttrs cfg.cache.netrc.enable {
+      netrc-file = cfg.cache.netrc.path;
+      narinfo-cache-positive-ttl = cfg.cache.netrc.narinfoCachePositiveTtl;
     };
 
     boot.loader.grub = {
@@ -249,13 +259,13 @@ in
         (lib.optionalAttrs (isTailscale && tailscaleCfg.authKeySecret != null && tailscaleCfg.authKeySecret != "") {
           "${tailscaleCfg.authKeySecret}" = mkSopsSecret tailscaleCfg.authKeySecret;
         })
-        (lib.optionalAttrs (cfg.cache.garnix.private.enable && !allowMissingSecrets && cfg.cache.garnix.private.netrcSecret != null && cfg.cache.garnix.private.netrcSecret != "") {
-          "${cfg.cache.garnix.private.netrcSecret}" = {
+        (lib.optionalAttrs (cfg.cache.netrc.enable && !allowMissingSecrets && cfg.cache.netrc.secretName != null && cfg.cache.netrc.secretName != "") {
+          "${cfg.cache.netrc.secretName}" = {
             owner = "root";
             group = "root";
             mode = "0400";
-            path = cfg.cache.garnix.private.netrcPath;
-            sopsFile = "${hostSecretsDir}/${cfg.cache.garnix.private.netrcSecret}.yaml";
+            path = cfg.cache.netrc.path;
+            sopsFile = "${hostSecretsDir}/${cfg.cache.netrc.secretName}.yaml";
           };
         })
       ];
@@ -277,10 +287,18 @@ in
         message = "clawdlets.tailnet.tailscale.authKeySecret must be set when tailnet mode is tailscale (or set clawdlets.sshExposure.mode to bootstrap/public for first boot).";
       }
       {
+        assertion = cfg.cache.substituters != [];
+        message = "clawdlets.cache.substituters must not be empty.";
+      }
+      {
+        assertion = cfg.cache.trustedPublicKeys != [];
+        message = "clawdlets.cache.trustedPublicKeys must not be empty.";
+      }
+      {
         assertion =
-          (!cfg.cache.garnix.private.enable)
-          || ((cfg.cache.garnix.private.netrcSecret or null) != null && (cfg.cache.garnix.private.netrcSecret or "") != "");
-        message = "clawdlets.cache.garnix.private.netrcSecret must be set when private Garnix cache is enabled.";
+          (!cfg.cache.netrc.enable)
+          || ((cfg.cache.netrc.secretName or null) != null && (cfg.cache.netrc.secretName or "") != "");
+        message = "clawdlets.cache.netrc.secretName must be set when cache.netrc is enabled.";
       }
       {
         assertion = (!proxyEnabled) || egress.proxy.allowedDomains != [];

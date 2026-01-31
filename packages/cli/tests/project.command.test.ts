@@ -42,7 +42,7 @@ describe("project init", () => {
           fleet: { botOrder: [], bots: {} },
           hosts: {
             "clawdbot-fleet-host": {
-              cache: { garnix: { private: { enable: true } } },
+              cache: { netrc: { enable: true } },
             },
           },
         },
@@ -78,7 +78,7 @@ describe("project init", () => {
     const readme = fs.readFileSync(path.join(target, "README.md"), "utf8");
     expect(readme).toMatch(/my-fleet/);
     const cfg = JSON.parse(fs.readFileSync(path.join(target, "fleet", "clawdlets.json"), "utf8"));
-    expect(cfg.hosts["clawdbot-fleet-host"].cache.garnix.private.enable).toBe(false);
+    expect(cfg.hosts["clawdbot-fleet-host"].cache.netrc.enable).toBe(false);
   });
 
   it("rejects missing --dir", async () => {

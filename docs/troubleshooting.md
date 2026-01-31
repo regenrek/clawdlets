@@ -66,7 +66,7 @@ clawdlets server restart --target-host <host> --unit clawdbot-melinda.service
 
 - Confirm the manifest’s `toplevel` exists in the cache (Garnix).
 - Re-run the manifest workflow on `main` to republish.
-- Ensure the host has `https://cache.garnix.io` in substituters.
+- Ensure the host Nix settings include the substituter(s) used by the manifest (see `hosts.<host>.cache.substituters`).
 
 ## Self-update: minisign verification failed
 

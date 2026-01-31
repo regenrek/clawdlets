@@ -312,6 +312,9 @@ export const bootstrap = defineCommand({
       }
     }
 
+    const extraSubstituters = hostCfg.cache.substituters.join(" ");
+    const extraTrustedPublicKeys = hostCfg.cache.trustedPublicKeys.join(" ");
+
     const nixosAnywhereArgs = [
       "run",
       "--option",
@@ -336,10 +339,10 @@ export const bootstrap = defineCommand({
       "true",
       "--option",
       "extra-substituters",
-      "https://cache.garnix.io",
+      extraSubstituters,
       "--option",
       "extra-trusted-public-keys",
-      "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=",
+      extraTrustedPublicKeys,
       "--build-on-remote",
       "--extra-files",
       extraFiles,
@@ -355,8 +358,8 @@ export const bootstrap = defineCommand({
       NIX_CONFIG: [
         nixosAnywhereBaseEnv.NIX_CONFIG,
         "accept-flake-config = true",
-        "extra-substituters = https://cache.garnix.io",
-        "extra-trusted-public-keys = cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=",
+        `extra-substituters = ${extraSubstituters}`,
+        `extra-trusted-public-keys = ${extraTrustedPublicKeys}`,
         githubToken ? `access-tokens = github.com=${githubToken}` : "",
       ]
         .filter(Boolean)

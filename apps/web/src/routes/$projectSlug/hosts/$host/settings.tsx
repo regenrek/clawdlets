@@ -13,6 +13,7 @@ import { PageHeader } from "~/components/ui/page-header"
 import { SettingsSection } from "~/components/ui/settings-section"
 import { Switch } from "~/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip"
+import { looksLikeSshPrivateKeyText, looksLikeSshPublicKeyText } from "~/lib/form-utils"
 import { singleHostCidrFromIp } from "~/lib/ip-utils"
 import { useProjectBySlug } from "~/lib/project-data"
 import { setupFieldHelp } from "~/lib/setup-field-help"
@@ -31,30 +32,6 @@ export const Route = createFileRoute("/$projectSlug/hosts/$host/settings")({
   },
   component: HostsSetup,
 })
-
-function looksLikeSshPublicKeyText(value: string): boolean {
-  const s = String(value || "").trim()
-  if (!s) return false
-  const firstLine = s.split(/\r?\n/)[0] || ""
-  const tokens = firstLine.trim().split(/\s+/)
-  if (tokens.length < 2) return false
-  const [type, base64] = tokens
-  if (!type) return false
-  if (!type.startsWith("ssh-") && !type.includes("ssh")) return false
-  if (!base64) return false
-  if (!/^[A-Za-z0-9+/]+={0,3}$/.test(base64)) return false
-  return true
-}
-
-function looksLikeSshPrivateKeyText(value: string): boolean {
-  const s = String(value || "").trimStart()
-  if (!s.startsWith("-----BEGIN ")) return false
-  return (
-    s.startsWith("-----BEGIN OPENSSH PRIVATE KEY-----")
-    || s.startsWith("-----BEGIN RSA PRIVATE KEY-----")
-    || s.startsWith("-----BEGIN PRIVATE KEY-----")
-  )
-}
 
 function HostSettingsForm(props: {
   projectId: Id<"projects">
@@ -113,6 +90,7 @@ function HostSettingsForm(props: {
       if (looksLikeSshPrivateKeyText(sshPubkeyFileTrimmed) || looksLikeSshPublicKeyText(sshPubkeyFileTrimmed)) {
         throw new Error("SSH pubkey file must be a local file path (not key contents). Use Security → SSH Keys to paste keys.")
       }
+
       const next = {
         ...props.config,
         hosts: {
