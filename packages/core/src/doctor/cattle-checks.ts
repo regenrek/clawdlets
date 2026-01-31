@@ -43,8 +43,7 @@ export async function addCattleChecks(params: {
     detail: cattleImage ? cattleImage : "(unset)",
   });
 
-  const hostCfg = config.hosts[params.host];
-  const sshKeys = hostCfg?.sshAuthorizedKeys || [];
+  const sshKeys = config.fleet?.sshAuthorizedKeys || [];
   push({
     status: Array.isArray(sshKeys) && sshKeys.length > 0 ? "ok" : "warn",
     label: "sshAuthorizedKeys",

@@ -8,18 +8,18 @@ import {
 import { splitDotPath } from "@clawdlets/core/lib/dot-path"
 import { deleteAtPath, getAtPath, setAtPath } from "@clawdlets/core/lib/object-path"
 import { api } from "../../convex/_generated/api"
-import type { Id } from "../../convex/_generated/dataModel"
 import { createConvexClient } from "~/server/convex"
 import { readClawdletsEnvTokens } from "~/server/redaction"
 import { BOT_CLAWDBOT_POLICY_MESSAGE, isBotClawdbotPath } from "~/sdk/config-helpers"
 import { getAdminProjectContext } from "~/sdk/repo-root"
 import { mapValidationIssues, runWithEventsAndStatus, type ValidationIssue } from "~/sdk/run-with-events"
+import { parseProjectIdInput } from "~/sdk/serverfn-validators"
 
 export const configDotGet = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
+    const base = parseProjectIdInput(data)
     const d = data as Record<string, unknown>
-    return { projectId: d["projectId"] as Id<"projects">, path: String(d["path"] || "") }
+    return { ...base, path: String(d["path"] || "") }
   })
   .handler(async ({ data }) => {
     const client = createConvexClient()
@@ -32,10 +32,10 @@ export const configDotGet = createServerFn({ method: "POST" })
 
 export const configDotSet = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
+    const base = parseProjectIdInput(data)
     const d = data as Record<string, unknown>
     return {
-      projectId: d["projectId"] as Id<"projects">,
+      ...base,
       path: String(d["path"] || ""),
       value: d["value"] === undefined ? undefined : String(d["value"]),
       valueJson: d["valueJson"] === undefined ? undefined : String(d["valueJson"]),

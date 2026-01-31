@@ -54,6 +54,9 @@ function NewProject() {
           templateSpec,
         },
       }),
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : String(err))
+    },
   })
 
   const start = useMutation({
@@ -71,6 +74,9 @@ function NewProject() {
       setRunId(res.runId)
       setProjectId(res.projectId)
       void projectCreateExecute({ data: res })
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : String(err))
     },
   })
 
@@ -105,7 +111,7 @@ function NewProject() {
                   label="Project directory (optional)"
                   description={
                     <>
-                      Default: <code>{defaultBaseDir}/{nameSlug}</code>. Stored locally; Convex saves metadata only.
+                      Default: <code>{defaultBaseDir}/{nameSlug}</code>. Stored locally.
                     </>
                   }
                   actions={
@@ -203,28 +209,7 @@ function NewProject() {
           </AccordionItem>
         </Accordion>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={plan.isPending || !name.trim()}
-            onClick={() => plan.mutate()}
-          >
-            Preview files
-          </Button>
-          <Button
-            type="button"
-            disabled={
-              start.isPending ||
-              !!runId ||
-              !name.trim() ||
-              !effectiveLocalPath.trim() ||
-              !effectiveHost.trim()
-            }
-            onClick={() => start.mutate()}
-          >
-            Create
-          </Button>
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Button
             variant="ghost"
             nativeButton={false}
@@ -232,6 +217,29 @@ function NewProject() {
           >
             Cancel
           </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={plan.isPending || !name.trim()}
+              onClick={() => plan.mutate()}
+            >
+              Preview files
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                start.isPending ||
+                !!runId ||
+                !name.trim() ||
+                !effectiveLocalPath.trim() ||
+                !effectiveHost.trim()
+              }
+              onClick={() => start.mutate()}
+            >
+              Create
+            </Button>
+          </div>
         </div>
 
         {plan.data ? (

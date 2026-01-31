@@ -44,13 +44,13 @@ describe("config migrate", () => {
       }
     })
     vi.doMock("@clawdlets/core/lib/clawdlets-config-migrate", () => ({
-      migrateClawdletsConfigToV9: () => ({ changed: true, migrated: { schemaVersion: 9 }, warnings: [] }),
+      migrateClawdletsConfigToV10: () => ({ changed: true, migrated: { schemaVersion: 10 }, warnings: [] }),
     }))
 
     const mod = await import("~/sdk/config-migrate")
     const res = await runWithStartContext(
       { request: new Request("http://localhost"), contextAfterGlobalMiddlewares: {}, executedRequestMiddlewares: new Set() },
-      async () => await mod.migrateClawdletsConfigFileToV9({ data: { projectId: "p1" as any } }),
+      async () => await mod.migrateClawdletsConfigFileToV10({ data: { projectId: "p1" as any } }),
     )
 
     expect(res.ok).toBe(true)

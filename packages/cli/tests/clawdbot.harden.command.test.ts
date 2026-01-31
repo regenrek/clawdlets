@@ -5,12 +5,14 @@ import { tmpdir } from "node:os";
 
 function baseConfig(host: string) {
   return {
-    schemaVersion: 9,
+    schemaVersion: 10,
     defaultHost: host,
     baseFlake: "",
     fleet: {
       secretEnv: {},
       secretFiles: {},
+      sshAuthorizedKeys: [],
+      sshKnownHosts: [],
       botOrder: ["agent"],
       bots: {
         agent: {
@@ -42,8 +44,6 @@ function baseConfig(host: string) {
       [host]: {
         enable: false,
         diskDevice: "/dev/sda",
-        sshAuthorizedKeys: [],
-        sshKnownHosts: [],
         flakeHost: "",
         hetzner: { serverType: "cx22" },
         provisioning: {

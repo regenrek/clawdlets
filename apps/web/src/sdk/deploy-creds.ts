@@ -13,9 +13,9 @@ import { sanitizeOperatorId } from "@clawdlets/shared/lib/identifiers"
 import os from "node:os"
 
 import { api } from "../../convex/_generated/api"
-import type { Id } from "../../convex/_generated/dataModel"
 import { createConvexClient } from "~/server/convex"
 import { getRepoRoot } from "~/sdk/repo-root"
+import { parseProjectIdInput } from "~/sdk/serverfn-validators"
 
 export type DeployCredsStatusKey = {
   key: string
@@ -65,9 +65,7 @@ function renderTemplate(defaultEnvPath: string): string {
 
 export const getDeployCredsStatus = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
-    const d = data as Record<string, unknown>
-    return { projectId: d["projectId"] as Id<"projects"> }
+    return parseProjectIdInput(data)
   })
   .handler(async ({ data }) => {
     const client = createConvexClient()
@@ -98,7 +96,7 @@ export const getDeployCredsStatus = createServerFn({ method: "POST" })
 
 export const updateDeployCreds = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
+    const base = parseProjectIdInput(data)
     const d = data as Record<string, unknown>
     const updatesRaw = d["updates"]
     const updates = (!updatesRaw || typeof updatesRaw !== "object" || Array.isArray(updatesRaw))
@@ -113,7 +111,7 @@ export const updateDeployCreds = createServerFn({ method: "POST" })
       out[k] = v
     }
 
-    return { projectId: d["projectId"] as Id<"projects">, updates: out }
+    return { ...base, updates: out }
   })
   .handler(async ({ data }) => {
     const client = createConvexClient()
@@ -179,9 +177,7 @@ type KeyCandidate = {
 
 export const detectSopsAgeKey = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
-    const d = data as Record<string, unknown>
-    return { projectId: d["projectId"] as Id<"projects"> }
+    return parseProjectIdInput(data)
   })
   .handler(async ({ data }) => {
     const client = createConvexClient()
@@ -251,9 +247,7 @@ export const detectSopsAgeKey = createServerFn({ method: "POST" })
 
 export const generateSopsAgeKey = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
-    const d = data as Record<string, unknown>
-    return { projectId: d["projectId"] as Id<"projects"> }
+    return parseProjectIdInput(data)
   })
   .handler(async ({ data }) => {
     const client = createConvexClient()

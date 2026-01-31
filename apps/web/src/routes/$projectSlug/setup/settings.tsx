@@ -1,10 +1,12 @@
 import { convexQuery } from "@convex-dev/react-query"
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, Link } from "@tanstack/react-router"
+import { useConvexAuth } from "convex/react"
 import type { Id } from "../../../../convex/_generated/dataModel"
 import { api } from "../../../../convex/_generated/api"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
+import { authClient } from "~/lib/auth-client"
 import { useProjectBySlug } from "~/lib/project-data"
 
 export const Route = createFileRoute("/$projectSlug/setup/settings")({
@@ -15,10 +17,13 @@ function ProjectSettings() {
   const { projectSlug } = Route.useParams()
   const projectQuery = useProjectBySlug(projectSlug)
   const projectId = projectQuery.projectId
+  const { data: session, isPending } = authClient.useSession()
+  const { isAuthenticated, isLoading } = useConvexAuth()
+  const canQuery = Boolean(session?.user?.id) && isAuthenticated && !isPending && !isLoading
   const project = useQuery({
     ...convexQuery(api.projects.get, { projectId: projectId as Id<"projects"> }),
     gcTime: 5_000,
-    enabled: Boolean(projectId),
+    enabled: Boolean(projectId) && canQuery,
   })
 
   const p = project.data?.project

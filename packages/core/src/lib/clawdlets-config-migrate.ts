@@ -19,6 +19,11 @@ function toStringRecord(value: unknown): Record<string, string> {
   return out;
 }
 
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => (typeof entry === "string" ? entry.trim() : "")).filter(Boolean);
+}
+
 function ensureObject(parent: Record<string, unknown>, key: string): Record<string, unknown> {
   const existing = parent[key];
   if (isPlainObject(existing)) return existing;
@@ -74,6 +79,13 @@ function ensureDiscordTokenEnvRef(botCfg: Record<string, unknown>): boolean {
 }
 
 export type MigrateToV9Result = {
+  ok: true;
+  changed: boolean;
+  warnings: string[];
+  migrated: unknown;
+};
+
+export type MigrateToV10Result = {
   ok: true;
   changed: boolean;
   warnings: string[];
@@ -158,6 +170,61 @@ export function migrateClawdletsConfigToV9(raw: unknown): MigrateToV9Result {
       changed = true;
     }
   }
+
+  return { ok: true, changed, warnings, migrated: next };
+}
+
+export function migrateClawdletsConfigToV10(raw: unknown): MigrateToV10Result {
+  if (!isPlainObject(raw)) throw new Error("invalid config (expected JSON object)");
+
+  let next = structuredClone(raw) as Record<string, unknown>;
+  const warnings: string[] = [];
+
+  const schemaVersion = Number(next["schemaVersion"] ?? 0);
+  if (schemaVersion === 10) return { ok: true, changed: false, warnings, migrated: next };
+
+  let changed = false;
+  if (schemaVersion === 8) {
+    const res = migrateClawdletsConfigToV9(next);
+    warnings.push(...res.warnings);
+    next = structuredClone(res.migrated) as Record<string, unknown>;
+    changed = res.changed;
+  } else if (schemaVersion !== 9) {
+    throw new Error(`unsupported schemaVersion: ${schemaVersion} (expected 8 or 9)`);
+  }
+
+  if (Number(next["schemaVersion"] ?? 0) === 10) {
+    return { ok: true, changed, warnings, migrated: next };
+  }
+
+  next["schemaVersion"] = 10;
+  changed = true;
+
+  const fleet = ensureObject(next, "fleet");
+  const fleetAuthorized = new Set(toStringArray((fleet as any).sshAuthorizedKeys));
+  const fleetKnown = new Set(toStringArray((fleet as any).sshKnownHosts));
+  (fleet as any).sshAuthorizedKeys = Array.from(fleetAuthorized);
+  (fleet as any).sshKnownHosts = Array.from(fleetKnown);
+
+  const hosts = (next as any).hosts;
+  if (isPlainObject(hosts)) {
+    for (const [host, hostCfg] of Object.entries(hosts)) {
+      if (!isPlainObject(hostCfg)) continue;
+      const hostKeys = toStringArray((hostCfg as any).sshAuthorizedKeys);
+      const hostKnown = toStringArray((hostCfg as any).sshKnownHosts);
+      if (hostKeys.length || hostKnown.length) {
+        for (const key of hostKeys) fleetAuthorized.add(key);
+        for (const entry of hostKnown) fleetKnown.add(entry);
+        warnings.push(`host ${host}: moved sshAuthorizedKeys/sshKnownHosts to fleet scope`);
+        delete (hostCfg as any).sshAuthorizedKeys;
+        delete (hostCfg as any).sshKnownHosts;
+        changed = true;
+      }
+    }
+  }
+
+  (fleet as any).sshAuthorizedKeys = Array.from(fleetAuthorized);
+  (fleet as any).sshKnownHosts = Array.from(fleetKnown);
 
   return { ok: true, changed, warnings, migrated: next };
 }

@@ -2,6 +2,7 @@ import { convexQuery } from "@convex-dev/react-query"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useRouter, useRouterState } from "@tanstack/react-router"
 import * as React from "react"
+import { useConvexAuth } from "convex/react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Add01Icon,
@@ -25,6 +26,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -36,7 +38,6 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover"
 import { SidebarTrigger } from "~/components/ui/sidebar"
-import { useAuthState } from "~/lib/auth-state"
 import { authClient } from "~/lib/auth-client"
 import { useProjectsList } from "~/lib/project-data"
 import {
@@ -69,17 +70,19 @@ type HostOption = {
 }
 
 function AppHeader({ showSidebarToggle = true }: { showSidebarToggle?: boolean }) {
-  const { authDisabled } = useAuthState()
   const router = useRouter()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const { data: session } = authClient.useSession()
+  const { data: session, isPending } = authClient.useSession()
+  const { isAuthenticated, isLoading } = useConvexAuth()
   const instanceHost = getInstanceHostFromWindow()
   const projectSlug = parseProjectSlug(pathname)
   const activeHost = parseHostName(pathname) || ""
+  const canQuery = Boolean(session?.user?.id) && isAuthenticated && !isPending && !isLoading
 
   const currentUser = useQuery({
     ...convexQuery(api.users.getCurrent, {}),
     gcTime: 60_000,
+    enabled: canQuery,
   })
   const userLabel =
     currentUser.data?.email ||
@@ -218,13 +221,13 @@ function AppHeader({ showSidebarToggle = true }: { showSidebarToggle?: boolean }
             }
           />
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel className="truncate">
-              {userLabel}
-            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="truncate">
+                {userLabel}
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            {authDisabled ? (
-              <DropdownMenuItem disabled>Auth disabled</DropdownMenuItem>
-            ) : (
+            <DropdownMenuGroup>
               <DropdownMenuItem
                 onClick={() => {
                   void (async () => {
@@ -236,14 +239,16 @@ function AppHeader({ showSidebarToggle = true }: { showSidebarToggle?: boolean }
               >
                 Sign out
               </DropdownMenuItem>
-            )}
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              render={<a href="https://github.com/regenrek/clawdlets" />}
-            >
-              <HugeiconsIcon icon={GithubIcon} strokeWidth={2} />
-              GitHub
-            </DropdownMenuItem>
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                render={<a href="https://github.com/regenrek/clawdlets" />}
+              >
+                <HugeiconsIcon icon={GithubIcon} strokeWidth={2} />
+                GitHub
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

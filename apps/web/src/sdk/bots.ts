@@ -1,6 +1,11 @@
 import { createServerFn } from "@tanstack/react-start"
-import { CHANNEL_PRESETS, applyChannelPreset, applySecurityDefaults } from "@clawdlets/core/lib/config-patch"
+import { applySecurityDefaults } from "@clawdlets/core/lib/config-patch"
+import { applyCapabilityPreset, getChannelCapabilityPreset, type CapabilityPreset } from "@clawdlets/core/lib/capability-presets"
+import { diffConfig, type ConfigDiffEntry } from "@clawdlets/core/lib/config-diff"
 import { validateClawdbotConfig } from "@clawdlets/core/lib/clawdbot-schema-validate"
+import { diffChannelSchemasFromArtifacts } from "@clawdlets/core/lib/clawdbot-schema-diff"
+import { getPinnedClawdbotSchema } from "@clawdlets/core/lib/clawdbot-schema"
+import { suggestSecretNameForEnvVar } from "@clawdlets/core/lib/fleet-secrets-plan-helpers"
 import {
   ClawdletsConfigSchema,
   loadClawdletsConfigRaw,
@@ -11,7 +16,13 @@ import { api } from "../../convex/_generated/api"
 import { createConvexClient } from "~/server/convex"
 import { readClawdletsEnvTokens } from "~/server/redaction"
 import { getAdminProjectContext } from "~/sdk/repo-root"
-import { parseBotClawdbotConfigInput, parseProjectBotInput } from "~/sdk/serverfn-validators"
+import {
+  parseBotClawdbotConfigInput,
+  parseBotCapabilityPresetInput,
+  parseBotCapabilityPresetPreviewInput,
+  parseProjectBotInput,
+  parseProjectHostBotInput,
+} from "~/sdk/serverfn-validators"
 import { mapValidationIssues, runWithEventsAndStatus, type ValidationIssue } from "~/sdk/run-with-events"
 import { sanitizeErrorMessage } from "@clawdlets/core/lib/safe-error"
 
@@ -25,6 +36,43 @@ export function sanitizeLiveSchemaError(err: unknown): string {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function resolvePreset(kind: string, presetId: string): CapabilityPreset {
+  if (kind === "channel") return getChannelCapabilityPreset(presetId)
+  throw new Error("unsupported preset kind")
+}
+
+function ensureSecretEnvMapping(params: {
+  secretEnv: Record<string, unknown>
+  envVar: string
+  botId: string
+}): void {
+  const envVar = params.envVar.trim()
+  if (!envVar) return
+  const existing = params.secretEnv[envVar]
+  if (typeof existing === "string" && existing.trim()) return
+  params.secretEnv[envVar] = suggestSecretNameForEnvVar(envVar, params.botId)
+}
+
+function ensureBotProfileSecretEnv(bot: Record<string, unknown>): Record<string, unknown> {
+  const profile = isPlainObject(bot.profile) ? (bot.profile as Record<string, unknown>) : {}
+  bot.profile = profile
+  const secretEnv = isPlainObject(profile.secretEnv) ? (profile.secretEnv as Record<string, unknown>) : {}
+  profile.secretEnv = secretEnv
+  return secretEnv
+}
+
+function mapSchemaIssues(issues: Array<{ path: Array<string | number>; message: string }>): ValidationIssue[] {
+  return issues.map((issue) => ({
+    code: "schema",
+    path: issue.path,
+    message: issue.message,
+  }))
+}
+
+function mapSchemaFailure(message: string): ValidationIssue[] {
+  return [{ code: "schema", path: [], message }]
 }
 
 export const setBotClawdbotConfig = createServerFn({ method: "POST" })
@@ -64,7 +112,7 @@ export const setBotClawdbotConfig = createServerFn({ method: "POST" })
         console.error("setBotClawdbotConfig live schema failed", message)
         return {
           ok: false as const,
-          issues: [{ code: "schema", path: [], message }] satisfies ValidationIssue[],
+          issues: mapSchemaFailure(message),
         }
       }
     }
@@ -73,11 +121,7 @@ export const setBotClawdbotConfig = createServerFn({ method: "POST" })
     if (!schemaValidation.ok) {
       return {
         ok: false as const,
-        issues: schemaValidation.issues.map((issue) => ({
-          code: "schema",
-          path: issue.path,
-          message: issue.message,
-        })),
+        issues: mapSchemaIssues(schemaValidation.issues),
       }
     }
 
@@ -113,20 +157,14 @@ export const setBotClawdbotConfig = createServerFn({ method: "POST" })
     })
   })
 
-export const applyBotChannelPreset = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) => {
-    const base = parseProjectBotInput(data)
-    const d = data as Record<string, unknown>
-    return {
-      ...base,
-      preset: String(d["preset"] || ""),
-    }
-  })
+export const applyBotCapabilityPreset = createServerFn({ method: "POST" })
+  .inputValidator(parseBotCapabilityPresetInput)
   .handler(async ({ data }) => {
     const botId = data.botId.trim()
-
-    const preset = data.preset.trim()
-    if (!CHANNEL_PRESETS.includes(preset as any)) throw new Error("invalid channel preset")
+    const preset = resolvePreset(data.kind, data.presetId)
+    if (data.schemaMode === "live" && !data.host.trim()) {
+      return { ok: false as const, issues: mapSchemaFailure("live schema validation requires a host") }
+    }
 
     const client = createConvexClient()
     const { repoRoot } = await getAdminProjectContext(client, data.projectId)
@@ -137,40 +175,42 @@ export const applyBotChannelPreset = createServerFn({ method: "POST" })
     const existingBot = next?.fleet?.bots?.[botId]
     if (!existingBot || typeof existingBot !== "object") throw new Error("bot not found")
 
-    const { clawdbot, warnings } = applyChannelPreset({ clawdbot: existingBot.clawdbot, preset: preset as any })
-    {
-      const hardened = applySecurityDefaults({ clawdbot })
-      existingBot.clawdbot = hardened.clawdbot
-      for (const w of hardened.warnings) warnings.push(w)
+    let warnings: string[] = []
+    try {
+      const result = applyCapabilityPreset({ clawdbot: existingBot.clawdbot, preset })
+      existingBot.clawdbot = result.clawdbot
+      warnings = result.warnings
+      const secretEnv = ensureBotProfileSecretEnv(existingBot)
+      for (const envVar of result.requiredEnv) {
+        ensureSecretEnvMapping({ secretEnv, envVar, botId })
+      }
+    } catch (err) {
+      return { ok: false as const, issues: mapSchemaFailure(String((err as Error)?.message || err)) }
     }
 
-    existingBot.profile = existingBot.profile && typeof existingBot.profile === "object" && !Array.isArray(existingBot.profile)
-      ? existingBot.profile
-      : {}
-    existingBot.profile.secretEnv = existingBot.profile.secretEnv && typeof existingBot.profile.secretEnv === "object" && !Array.isArray(existingBot.profile.secretEnv)
-      ? existingBot.profile.secretEnv
-      : {}
-
-    const secretEnv = existingBot.profile.secretEnv as Record<string, unknown>
-
-    if (preset === "discord") {
-      if (typeof secretEnv["DISCORD_BOT_TOKEN"] !== "string" || !String(secretEnv["DISCORD_BOT_TOKEN"]).trim()) {
-        secretEnv["DISCORD_BOT_TOKEN"] = `discord_token_${botId}`
-      }
+    const schemaValidation = validateClawdbotConfig(existingBot.clawdbot)
+    if (!schemaValidation.ok) {
+      return { ok: false as const, issues: mapSchemaIssues(schemaValidation.issues) }
     }
 
-    if (preset === "telegram") {
-      if (typeof secretEnv["TELEGRAM_BOT_TOKEN"] !== "string" || !String(secretEnv["TELEGRAM_BOT_TOKEN"]).trim()) {
-        secretEnv["TELEGRAM_BOT_TOKEN"] = `telegram_bot_token_${botId}`
-      }
-    }
-
-    if (preset === "slack") {
-      if (typeof secretEnv["SLACK_BOT_TOKEN"] !== "string" || !String(secretEnv["SLACK_BOT_TOKEN"]).trim()) {
-        secretEnv["SLACK_BOT_TOKEN"] = `slack_bot_token_${botId}`
-      }
-      if (typeof secretEnv["SLACK_APP_TOKEN"] !== "string" || !String(secretEnv["SLACK_APP_TOKEN"]).trim()) {
-        secretEnv["SLACK_APP_TOKEN"] = `slack_app_token_${botId}`
+    if (data.schemaMode === "live") {
+      try {
+        const { fetchClawdbotSchemaLive } = await import("~/server/clawdbot-schema.server")
+        const live = await fetchClawdbotSchemaLive({
+          projectId: data.projectId,
+          host: data.host,
+          botId,
+        })
+        if (!live.ok) {
+          return { ok: false as const, issues: mapSchemaFailure(live.message || LIVE_SCHEMA_ERROR_FALLBACK) }
+        }
+        const liveValidation = validateClawdbotConfig(existingBot.clawdbot, live.schema.schema as Record<string, unknown>)
+        if (!liveValidation.ok) {
+          return { ok: false as const, issues: mapSchemaIssues(liveValidation.issues) }
+        }
+      } catch (err) {
+        const message = sanitizeLiveSchemaError(err)
+        return { ok: false as const, issues: mapSchemaFailure(message) }
       }
     }
 
@@ -180,14 +220,14 @@ export const applyBotChannelPreset = createServerFn({ method: "POST" })
     const { runId } = await client.mutation(api.runs.create, {
       projectId: data.projectId,
       kind: "config_write",
-      title: `bot ${botId} preset ${preset}`,
+      title: `bot ${botId} preset ${preset.id}`,
     })
 
     await client.mutation(api.auditLogs.append, {
       projectId: data.projectId,
       action: "bot.preset.apply",
       target: { botId },
-      data: { preset, runId, warnings },
+      data: { preset: preset.id, runId, warnings },
     })
 
     type ApplyPresetResult = { ok: true; runId: typeof runId; warnings: string[] } | RunFailure
@@ -197,7 +237,7 @@ export const applyBotChannelPreset = createServerFn({ method: "POST" })
       runId,
       redactTokens,
       fn: async (emit) => {
-        await emit({ level: "info", message: `Applying ${preset} preset for ${botId}` })
+        await emit({ level: "info", message: `Applying ${preset.id} preset for ${botId}` })
         for (const w of warnings) await emit({ level: "warn", message: w })
         await writeClawdletsConfig({ configPath, config: validated.data })
         await emit({ level: "info", message: "Done." })
@@ -205,6 +245,85 @@ export const applyBotChannelPreset = createServerFn({ method: "POST" })
       onSuccess: () => ({ ok: true as const, runId, warnings }),
       onError: (message) => ({ ok: false as const, issues: [{ code: "error", path: [], message }] }),
     })
+  })
+
+export const previewBotCapabilityPreset = createServerFn({ method: "POST" })
+  .inputValidator(parseBotCapabilityPresetPreviewInput)
+  .handler(async ({ data }) => {
+    const botId = data.botId.trim()
+    const preset = resolvePreset(data.kind, data.presetId)
+    const { config: raw } = loadClawdletsConfigRaw({
+      repoRoot: (await getAdminProjectContext(createConvexClient(), data.projectId)).repoRoot,
+    })
+    const existingBot = (raw as any)?.fleet?.bots?.[botId]
+    if (!existingBot || typeof existingBot !== "object") throw new Error("bot not found")
+
+    const nextBot = structuredClone(existingBot) as Record<string, unknown>
+    let warnings: string[] = []
+    let requiredEnv: string[] = []
+    try {
+      const result = applyCapabilityPreset({ clawdbot: (nextBot as any).clawdbot, preset })
+      ;(nextBot as any).clawdbot = result.clawdbot
+      warnings = result.warnings
+      requiredEnv = result.requiredEnv
+      const secretEnv = ensureBotProfileSecretEnv(nextBot)
+      for (const envVar of result.requiredEnv) {
+        ensureSecretEnvMapping({ secretEnv, envVar, botId })
+      }
+    } catch (err) {
+      return { ok: false as const, issues: mapSchemaFailure(String((err as Error)?.message || err)) }
+    }
+
+    const schemaValidation = validateClawdbotConfig((nextBot as any).clawdbot)
+    const diff = diffConfig(existingBot, nextBot, `fleet.bots.${botId}`)
+
+    return {
+      ok: true as const,
+      diff: diff as ConfigDiffEntry[],
+      warnings,
+      requiredEnv,
+      issues: schemaValidation.ok ? [] : mapSchemaIssues(schemaValidation.issues),
+    }
+  })
+
+export const verifyBotClawdbotSchema = createServerFn({ method: "POST" })
+  .inputValidator(parseProjectHostBotInput)
+  .handler(async ({ data }) => {
+    const botId = data.botId.trim()
+    if (!data.host.trim()) {
+      return { ok: false as const, issues: mapSchemaFailure("live schema verification requires a host") }
+    }
+    const client = createConvexClient()
+    const { repoRoot } = await getAdminProjectContext(client, data.projectId)
+    const { config: raw } = loadClawdletsConfigRaw({ repoRoot })
+    const existingBot = (raw as any)?.fleet?.bots?.[botId]
+    if (!existingBot || typeof existingBot !== "object") throw new Error("bot not found")
+
+    const pinned = getPinnedClawdbotSchema()
+    let liveSchema: Record<string, unknown> | null = null
+    try {
+      const { fetchClawdbotSchemaLive } = await import("~/server/clawdbot-schema.server")
+      const live = await fetchClawdbotSchemaLive({
+        projectId: data.projectId,
+        host: data.host,
+        botId,
+      })
+      if (!live.ok) {
+        return { ok: false as const, issues: mapSchemaFailure(live.message || LIVE_SCHEMA_ERROR_FALLBACK) }
+      }
+      liveSchema = live.schema.schema as Record<string, unknown>
+      const liveValidation = validateClawdbotConfig((existingBot as any).clawdbot, liveSchema)
+      return {
+        ok: true as const,
+        issues: liveValidation.ok ? [] : mapSchemaIssues(liveValidation.issues),
+        schemaDiff: diffChannelSchemasFromArtifacts(pinned, live.schema),
+        liveVersion: live.schema.version,
+        pinnedVersion: pinned.version,
+      }
+    } catch (err) {
+      const message = sanitizeLiveSchemaError(err)
+      return { ok: false as const, issues: mapSchemaFailure(message) }
+    }
   })
 
 export const hardenBotClawdbotConfig = createServerFn({ method: "POST" })

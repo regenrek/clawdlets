@@ -108,11 +108,13 @@ describe("doctor", () => {
     await writeFile(operatorKey, "AGE-SECRET-KEY-TEST\n", "utf8");
 
     const clawdletsConfig = {
-      schemaVersion: 9,
+      schemaVersion: 10,
       defaultHost: "clawdbot-fleet-host",
       baseFlake: "",
       fleet: {
         secretEnv: { ZAI_API_KEY: "z_ai_api_key" },
+        sshAuthorizedKeys: ["ssh-ed25519 AAAATEST test"],
+        sshKnownHosts: [],
         botOrder: ["alpha", "beta"],
         bots: {
           alpha: {
@@ -131,7 +133,6 @@ describe("doctor", () => {
         "clawdbot-fleet-host": {
           enable: false,
           diskDevice: "/dev/disk/by-id/TEST",
-          sshAuthorizedKeys: ["ssh-ed25519 AAAATEST test"],
           flakeHost: "",
           hetzner: { serverType: "cx43" },
           provisioning: { adminCidr: "203.0.113.10/32", sshPubkeyFile: "id_ed25519.pub" },

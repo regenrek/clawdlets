@@ -1,10 +1,12 @@
 {
-  "schemaVersion": 9,
+  "schemaVersion": 10,
   "defaultHost": "clawdbot-fleet-host",
   "baseFlake": "",
   "fleet": {
     "secretEnv": {},
     "secretFiles": {},
+    "sshAuthorizedKeys": [],
+    "sshKnownHosts": [],
     "botOrder": ["agent"],
     "bots": {
       "agent": {
@@ -33,8 +35,6 @@
     "clawdbot-fleet-host": {
       "enable": false,
       "diskDevice": "/dev/sda",
-      "sshAuthorizedKeys": [],
-      "sshKnownHosts": [],
       "flakeHost": "",
       "hetzner": { "serverType": "cx22" },
       "provisioning": {

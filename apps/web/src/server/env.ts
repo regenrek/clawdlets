@@ -1,17 +1,14 @@
-export function isAuthDisabled(): boolean {
-  const raw = String(
-    process.env["CLAWDLETS_AUTH_DISABLED"] ||
-      process.env["VITE_CLAWDLETS_AUTH_DISABLED"] ||
-      "",
-  )
-    .trim()
-    .toLowerCase()
-  return raw === "1" || raw === "true" || raw === "yes"
+export function hasAuthEnv(): boolean {
+  const siteUrl = String(process.env["SITE_URL"] || "").trim()
+  const secret = String(process.env["BETTER_AUTH_SECRET"] || "").trim()
+  const convexUrl = String(process.env["VITE_CONVEX_URL"] || process.env["CONVEX_URL"] || "").trim()
+  const convexSiteUrl = String(
+    process.env["VITE_CONVEX_SITE_URL"] || process.env["CONVEX_SITE_URL"] || "",
+  ).trim()
+  return Boolean(siteUrl && secret && convexUrl && convexSiteUrl)
 }
 
-export function assertAuthNotDisabledInProd(): void {
-  if (process.env.NODE_ENV === "production" && isAuthDisabled()) {
-    throw new Error("CLAWDLETS_AUTH_DISABLED is not allowed in production")
-  }
+export function assertAuthEnv(): void {
+  if (hasAuthEnv()) return
+  throw new Error("missing SITE_URL, BETTER_AUTH_SECRET, VITE_CONVEX_URL, VITE_CONVEX_SITE_URL")
 }
-

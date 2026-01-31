@@ -65,7 +65,6 @@ const hostName = "clawdbot-beta-4";
 const baseHost = {
   enable: true,
   diskDevice: "/dev/sda",
-  sshAuthorizedKeys: [],
   flakeHost: "",
   targetHost: "admin@100.64.0.10",
   hetzner: { serverType: "cx43" },
@@ -81,9 +80,9 @@ function setConfig() {
     layout: getRepoLayout("/repo"),
     configPath: "/repo/fleet/clawdlets.json",
     config: {
-      schemaVersion: 8,
+      schemaVersion: 10,
       defaultHost: hostName,
-      fleet: { botOrder: ["maren"], bots: { maren: {} } },
+      fleet: { sshAuthorizedKeys: [], sshKnownHosts: [], botOrder: ["maren"], bots: { maren: {} } },
       hosts: {
         [hostName]: baseHost,
       },

@@ -6,6 +6,8 @@ import type { Id, TableNames } from "../../convex/_generated/dataModel"
 
 export const SERVER_CHANNEL_OPS = ["status", "capabilities", "login", "logout"] as const
 export type ServerChannelOp = (typeof SERVER_CHANNEL_OPS)[number]
+export const CAPABILITY_PRESET_KINDS = ["channel", "model", "security", "plugin"] as const
+export type CapabilityPresetKind = (typeof CAPABILITY_PRESET_KINDS)[number]
 
 function requireObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid input")
@@ -46,6 +48,14 @@ function parseServerChannelOp(value: unknown): ServerChannelOp {
   if (!trimmed) throw new Error("invalid op")
   if (!SERVER_CHANNEL_OPS.includes(trimmed as ServerChannelOp)) throw new Error("invalid op")
   return trimmed as ServerChannelOp
+}
+
+function parseCapabilityPresetKind(value: unknown): CapabilityPresetKind {
+  if (typeof value !== "string") throw new Error("invalid preset kind")
+  const trimmed = value.trim()
+  if (!trimmed) throw new Error("invalid preset kind")
+  if (!CAPABILITY_PRESET_KINDS.includes(trimmed as CapabilityPresetKind)) throw new Error("invalid preset kind")
+  return trimmed as CapabilityPresetKind
 }
 
 function parseOptionalString(value: unknown, maxLen: number): string {
@@ -151,9 +161,8 @@ export function parseProjectHostRequiredInput(data: unknown): { projectId: Id<"p
   return { projectId: parseConvexId(d["projectId"], "projectId"), host: parseHostNameRequired(d["host"]) }
 }
 
-export function parseHostSshKeysInput(data: unknown): {
+export function parseProjectSshKeysInput(data: unknown): {
   projectId: Id<"projects">
-  host: string
   keyText: string
   knownHostsText: string
 } {
@@ -165,7 +174,6 @@ export function parseHostSshKeysInput(data: unknown): {
   }
   return {
     projectId: parseConvexId(d["projectId"], "projectId"),
-    host: parseHostNameRequired(d["host"]),
     keyText: parseOptionalString(d["keyText"], 64 * 1024),
     knownHostsText: parseOptionalString(d["knownHostsText"], 256 * 1024),
   }
@@ -185,6 +193,49 @@ export function parseProjectBotInput(data: unknown): { projectId: Id<"projects">
   return {
     projectId: parseConvexId(d["projectId"], "projectId"),
     botId: parseBotIdRequired(d["botId"]),
+  }
+}
+
+export function parseBotCapabilityPresetInput(data: unknown): {
+  projectId: Id<"projects">
+  botId: string
+  host: string
+  kind: CapabilityPresetKind
+  presetId: string
+  schemaMode: "live" | "pinned"
+} {
+  const d = requireObject(data)
+  let schemaMode: "live" | "pinned" = "pinned"
+  if (typeof d["schemaMode"] === "string") {
+    const trimmed = d["schemaMode"].trim()
+    if (trimmed === "live") schemaMode = "live"
+  }
+  const presetId = parseOptionalString(d["presetId"], 128)
+  if (!presetId) throw new Error("invalid presetId")
+  return {
+    projectId: parseConvexId(d["projectId"], "projectId"),
+    botId: parseBotIdRequired(d["botId"]),
+    host: parseOptionalHostName(d["host"]),
+    kind: parseCapabilityPresetKind(d["kind"]),
+    presetId,
+    schemaMode,
+  }
+}
+
+export function parseBotCapabilityPresetPreviewInput(data: unknown): {
+  projectId: Id<"projects">
+  botId: string
+  kind: CapabilityPresetKind
+  presetId: string
+} {
+  const d = requireObject(data)
+  const presetId = parseOptionalString(d["presetId"], 128)
+  if (!presetId) throw new Error("invalid presetId")
+  return {
+    projectId: parseConvexId(d["projectId"], "projectId"),
+    botId: parseBotIdRequired(d["botId"]),
+    kind: parseCapabilityPresetKind(d["kind"]),
+    presetId,
   }
 }
 

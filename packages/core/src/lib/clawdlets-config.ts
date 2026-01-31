@@ -19,7 +19,7 @@ export const TAILNET_MODES = ["none", "tailscale"] as const;
 export const TailnetModeSchema = z.enum(TAILNET_MODES);
 export type TailnetMode = z.infer<typeof TailnetModeSchema>;
 
-export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 9 as const;
+export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 10 as const;
 
 const JsonObjectSchema: z.ZodType<Record<string, unknown>> = z.record(z.string(), z.any());
 
@@ -62,6 +62,8 @@ const FleetSchema = z
   .object({
     secretEnv: SecretEnvSchema,
     secretFiles: SecretFilesSchema,
+    sshAuthorizedKeys: z.array(z.string().trim().min(1)).default(() => []),
+    sshKnownHosts: z.array(z.string().trim().min(1)).default(() => []),
     botOrder: z.array(BotIdSchema).default(() => []),
     bots: z.record(BotIdSchema, FleetBotSchema).default(() => ({})),
     codex: z
@@ -120,8 +122,6 @@ const FleetSchema = z
 const HostSchema = z.object({
   enable: z.boolean().default(false),
   diskDevice: z.string().trim().default("/dev/sda"),
-  sshAuthorizedKeys: z.array(z.string().trim().min(1)).default(() => []),
-  sshKnownHosts: z.array(z.string().trim().min(1)).default(() => []),
   flakeHost: z.string().trim().default(""),
   targetHost: z
     .string()
@@ -142,7 +142,9 @@ const HostSchema = z.object({
     .object({
       adminCidr: z.string().trim().default(""),
       adminCidrAllowWorldOpen: z.boolean().default(false),
-      sshPubkeyFile: z.string().trim().default("~/.ssh/id_ed25519.pub"),
+      // Local path on the operator machine that runs provisioning.
+      // Intentionally default empty to avoid silently persisting a guessed path in shared config.
+      sshPubkeyFile: z.string().trim().default(""),
     })
     .superRefine((value, ctx) => {
       const adminCidr = value.adminCidr.trim();
@@ -164,7 +166,7 @@ const HostSchema = z.object({
         });
       }
     })
-    .default(() => ({ adminCidr: "", adminCidrAllowWorldOpen: false, sshPubkeyFile: "~/.ssh/id_ed25519.pub" })),
+    .default(() => ({ adminCidr: "", adminCidrAllowWorldOpen: false, sshPubkeyFile: "" })),
   sshExposure: z
     .object({
       mode: SshExposureModeSchema.default("bootstrap"),
@@ -280,6 +282,8 @@ export const ClawdletsConfigSchema = z.object({
   fleet: FleetSchema.default(() => ({
     secretEnv: {},
     secretFiles: {},
+    sshAuthorizedKeys: [],
+    sshKnownHosts: [],
     botOrder: [],
     bots: {},
     codex: { enable: false, bots: [] },
@@ -359,6 +363,8 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
     fleet: {
       secretEnv: { ZAI_API_KEY: "z_ai_api_key" },
       secretFiles: {},
+      sshAuthorizedKeys: [],
+      sshKnownHosts: [],
       botOrder: bots,
       bots: botsRecord,
       codex: { enable: false, bots: [] },
@@ -380,11 +386,9 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
       [host]: {
         enable: false,
         diskDevice: "/dev/sda",
-        sshAuthorizedKeys: [],
-        sshKnownHosts: [],
         flakeHost: "",
         hetzner: { serverType: "cx43", image: "", location: "nbg1" },
-        provisioning: { adminCidr: "", adminCidrAllowWorldOpen: false, sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
+        provisioning: { adminCidr: "", adminCidrAllowWorldOpen: false, sshPubkeyFile: "" },
         sshExposure: { mode: "bootstrap" },
         tailnet: { mode: "tailscale" },
         cache: {

@@ -1,16 +1,22 @@
 import { convexQuery } from "@convex-dev/react-query"
 import { useQuery } from "@tanstack/react-query"
 import * as React from "react"
+import { useConvexAuth } from "convex/react"
 import { api } from "../../convex/_generated/api"
 import type { Id } from "../../convex/_generated/dataModel"
 import { slugifyProjectName } from "~/lib/project-routing"
+import { authClient } from "~/lib/auth-client"
 
 export type ProjectDoc = (typeof api.projects.list)["_returnType"][number]
 
 export function useProjectsList() {
+  const { data: session, isPending } = authClient.useSession()
+  const { isAuthenticated, isLoading } = useConvexAuth()
+  const canQuery = Boolean(session?.user?.id) && isAuthenticated && !isPending && !isLoading
   return useQuery({
     ...convexQuery(api.projects.list, {}),
     gcTime: 5_000,
+    enabled: canQuery,
   })
 }
 

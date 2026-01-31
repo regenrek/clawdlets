@@ -125,18 +125,21 @@ Default autowire scope:
 
 ## Migration notes
 
+- v10: SSH keys are project-scoped under `fleet.sshAuthorizedKeys`/`fleet.sshKnownHosts` (no longer per-host).
 - v9: inline secrets are deprecated; move tokens/api keys to `${ENV_VAR}` wiring and secretEnv mappings (hooks/skills included).
 
 ## Example
 
 ```json
 {
-  "schemaVersion": 9,
+  "schemaVersion": 10,
   "defaultHost": "clawdbot-fleet-host",
   "baseFlake": "",
   "fleet": {
     "secretEnv": { "ZAI_API_KEY": "z_ai_api_key" },
     "secretFiles": {},
+    "sshAuthorizedKeys": [],
+    "sshKnownHosts": [],
     "botOrder": ["maren"],
     "bots": {
       "maren": {

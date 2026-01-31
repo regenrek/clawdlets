@@ -46,8 +46,8 @@ async function loadWorkspaceDocs(options: { pathExists: boolean; writeThrows: bo
       if (options.writeThrows) throw new Error("write failed")
     },
   }))
-  vi.doMock("trash", () => ({
-    default: async () => {
+  vi.doMock("@clawdlets/core/lib/fs-trash", () => ({
+    moveToTrash: async () => {
       if (options.trashThrows) throw new Error("trash failed")
     },
   }))

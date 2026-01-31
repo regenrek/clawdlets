@@ -3,8 +3,6 @@ import type { ClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config";
 export const baseHost = {
   enable: false,
   diskDevice: "/dev/sda",
-  sshAuthorizedKeys: [] as string[],
-  sshKnownHosts: [] as string[],
   flakeHost: "",
   targetHost: "admin@host",
   hetzner: { serverType: "cx43", image: "", location: "nbg1" },
@@ -36,6 +34,8 @@ export function makeConfig(params?: {
   const fleet = {
     secretEnv: {},
     secretFiles: {},
+    sshAuthorizedKeys: [] as string[],
+    sshKnownHosts: [] as string[],
     botOrder: [] as string[],
     bots: {} as Record<string, unknown>,
     codex: { enable: false, bots: [] },
@@ -43,7 +43,7 @@ export function makeConfig(params?: {
     ...(params?.fleetOverrides ?? {}),
   };
   return {
-    schemaVersion: 9,
+    schemaVersion: 10,
     defaultHost: hostName,
     fleet,
     hosts: { [hostName]: host } as Record<string, typeof host>,

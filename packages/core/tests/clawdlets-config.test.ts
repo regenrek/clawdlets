@@ -18,13 +18,12 @@ describe("clawdlets config schema", () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 9,
+        schemaVersion: 10,
         fleet: { botOrder: ["maren"], bots: { maren: {} } },
         hosts: {
           "../pwn": {
             enable: false,
             diskDevice: "/dev/sda",
-            sshAuthorizedKeys: [],
             sshExposure: { mode: "tailnet" },
             tailnet: { mode: "none" },
             agentModelPrimary: "zai/glm-4.7",
@@ -38,13 +37,12 @@ describe("clawdlets config schema", () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 9,
+        schemaVersion: 10,
         fleet: { botOrder: ["maren", "maren"], bots: { maren: {} } },
         hosts: {
           "clawdbot-fleet-host": {
             enable: false,
             diskDevice: "/dev/sda",
-            sshAuthorizedKeys: [],
             sshExposure: { mode: "tailnet" },
             tailnet: { mode: "none" },
             agentModelPrimary: "zai/glm-4.7",
@@ -58,13 +56,12 @@ describe("clawdlets config schema", () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 9,
+        schemaVersion: 10,
         fleet: { botOrder: [], bots: { maren: {} } },
         hosts: {
           "clawdbot-fleet-host": {
             enable: false,
             diskDevice: "/dev/sda",
-            sshAuthorizedKeys: [],
             sshExposure: { mode: "tailnet" },
             tailnet: { mode: "none" },
             agentModelPrimary: "zai/glm-4.7",
@@ -78,13 +75,12 @@ describe("clawdlets config schema", () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 9,
+        schemaVersion: 10,
         fleet: { botOrder: ["maren", "ghost"], bots: { maren: {} } },
         hosts: {
           "clawdbot-fleet-host": {
             enable: false,
             diskDevice: "/dev/sda",
-            sshAuthorizedKeys: [],
             sshExposure: { mode: "tailnet" },
             tailnet: { mode: "none" },
             agentModelPrimary: "zai/glm-4.7",
@@ -98,13 +94,12 @@ describe("clawdlets config schema", () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 9,
+        schemaVersion: 10,
         fleet: { botOrder: ["maren"], bots: { maren: {}, sonja: {} } },
         hosts: {
           "clawdbot-fleet-host": {
             enable: false,
             diskDevice: "/dev/sda",
-            sshAuthorizedKeys: [],
             sshExposure: { mode: "tailnet" },
             tailnet: { mode: "none" },
             agentModelPrimary: "zai/glm-4.7",
@@ -118,13 +113,12 @@ describe("clawdlets config schema", () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 9,
+        schemaVersion: 10,
         fleet: { botOrder: ["maren"], bots: { maren: {} } },
         hosts: {
           "clawdbot-fleet-host": {
             enable: false,
             diskDevice: "/dev/sda",
-            sshAuthorizedKeys: [],
             provisioning: { adminCidr: "not-a-cidr", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
             sshExposure: { mode: "bootstrap" },
             tailnet: { mode: "none" },
@@ -139,13 +133,12 @@ describe("clawdlets config schema", () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 9,
+        schemaVersion: 10,
         fleet: { botOrder: ["maren"], bots: { maren: {} } },
         hosts: {
           "clawdbot-fleet-host": {
             enable: false,
             diskDevice: "/dev/sda",
-            sshAuthorizedKeys: [],
             provisioning: { adminCidr: "0.0.0.0/0", sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
             sshExposure: { mode: "bootstrap" },
             tailnet: { mode: "none" },
@@ -160,13 +153,12 @@ describe("clawdlets config schema", () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 9,
+        schemaVersion: 10,
         fleet: { botOrder: ["maren"], bots: { maren: {} } },
         hosts: {
           "clawdbot-fleet-host": {
             enable: false,
             diskDevice: "/dev/sda",
-            sshAuthorizedKeys: [],
             provisioning: {
               adminCidr: "0.0.0.0/0",
               adminCidrAllowWorldOpen: true,
@@ -203,14 +195,13 @@ describe("clawdlets config schema", () => {
     const baseHost = {
       enable: false,
       diskDevice: "/dev/sda",
-      sshAuthorizedKeys: [],
       sshExposure: { mode: "tailnet" },
       tailnet: { mode: "none" },
       agentModelPrimary: "zai/glm-4.7",
     } as const;
 
     const cfgA = ClawdletsConfigSchema.parse({
-      schemaVersion: 9,
+      schemaVersion: 10,
       fleet: { botOrder: ["maren"], bots: { maren: {} } },
       hosts: { "clawdbot-fleet-host": baseHost },
     }) as any;
@@ -219,7 +210,7 @@ describe("clawdlets config schema", () => {
     cfgA.fleet.bots.maren.profile.secretEnv.LOCAL_ENV_VAR = "local_secret";
 
     const cfgB = ClawdletsConfigSchema.parse({
-      schemaVersion: 9,
+      schemaVersion: 10,
       fleet: { botOrder: ["maren"], bots: { maren: {} } },
       hosts: { "clawdbot-fleet-host": baseHost },
     }) as any;
@@ -232,14 +223,13 @@ describe("clawdlets config schema", () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 9,
+        schemaVersion: 10,
         defaultHost: "missing-host",
         fleet: { botOrder: ["maren"], bots: { maren: {} } },
         hosts: {
           "clawdbot-fleet-host": {
             enable: false,
             diskDevice: "/dev/sda",
-            sshAuthorizedKeys: [],
             sshExposure: { mode: "tailnet" },
             tailnet: { mode: "none" },
             agentModelPrimary: "zai/glm-4.7",
@@ -254,7 +244,6 @@ describe("clawdlets config schema", () => {
     const baseHost = {
       enable: false,
       diskDevice: "/dev/sda",
-      sshAuthorizedKeys: [],
       sshExposure: { mode: "tailnet" },
       tailnet: { mode: "none" },
       agentModelPrimary: "zai/glm-4.7",
@@ -297,7 +286,6 @@ describe("clawdlets config schema", () => {
     const baseHost = {
       enable: false,
       diskDevice: "/dev/sda",
-      sshAuthorizedKeys: [],
       sshExposure: { mode: "tailnet" },
       tailnet: { mode: "none" },
       agentModelPrimary: "zai/glm-4.7",
@@ -343,7 +331,6 @@ describe("clawdlets config schema", () => {
           "clawdbot-fleet-host": {
             enable: false,
             diskDevice: "/dev/sda",
-            sshAuthorizedKeys: [],
             publicSsh: { enable: false },
             tailnet: { mode: "none" },
             agentModelPrimary: "zai/glm-4.7",
@@ -369,7 +356,6 @@ describe("clawdlets config schema", () => {
           "clawdbot-fleet-host": {
             enable: false,
             diskDevice: "/dev/sda",
-            sshAuthorizedKeys: [],
             opentofu: {},
             tailnet: { mode: "none" },
             agentModelPrimary: "zai/glm-4.7",
@@ -383,11 +369,36 @@ describe("clawdlets config schema", () => {
     }
   });
 
+  it("loadClawdletsConfig rejects legacy host ssh keys", async () => {
+    const { loadClawdletsConfig } = await import("../src/lib/clawdlets-config");
+    const repoRoot = await mkdtemp(path.join(tmpdir(), "clawdlets-config-legacy-"));
+    try {
+      await mkdir(path.join(repoRoot, "fleet"), { recursive: true });
+      const legacy = {
+        schemaVersion: 9,
+        fleet: { botOrder: ["maren"], bots: { maren: {} } },
+        hosts: {
+          "clawdbot-fleet-host": {
+            enable: false,
+            diskDevice: "/dev/sda",
+            sshAuthorizedKeys: ["ssh-ed25519 AAAATEST legacy"],
+            tailnet: { mode: "none" },
+            agentModelPrimary: "zai/glm-4.7",
+          },
+        },
+      };
+      await writeFile(path.join(repoRoot, "fleet", "clawdlets.json"), JSON.stringify(legacy, null, 2), "utf8");
+      expect(() => loadClawdletsConfig({ repoRoot })).toThrow(/host SSH keys are now project-scoped/i);
+    } finally {
+      await rm(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("rejects invalid fleet.secretEnv entries", async () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 9,
+        schemaVersion: 10,
         fleet: {
           botOrder: ["maren"],
           secretEnv: { "bad-key": "../pwn" },
@@ -412,7 +423,6 @@ describe("clawdlets config schema", () => {
           "clawdbot-fleet-host": {
             enable: false,
             diskDevice: "/dev/sda",
-            sshAuthorizedKeys: [],
             tailnet: { mode: "none" },
             agentModelPrimary: "zai/glm-4.7",
           },
@@ -429,7 +439,7 @@ describe("clawdlets config schema", () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 9,
+        schemaVersion: 10,
         cattle: { enabled: true, hetzner: { image: "img-1", defaultTtl: "2 hours" } },
         fleet: { botOrder: ["maren"], bots: { maren: {} } },
         hosts: {
@@ -443,7 +453,7 @@ describe("clawdlets config schema", () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 9,
+        schemaVersion: 10,
         cattle: { enabled: true, hetzner: { image: "" } },
         fleet: { botOrder: ["maren"], bots: { maren: {} } },
         hosts: {
@@ -457,7 +467,7 @@ describe("clawdlets config schema", () => {
     const { ClawdletsConfigSchema } = await import("../src/lib/clawdlets-config");
     expect(() =>
       ClawdletsConfigSchema.parse({
-        schemaVersion: 9,
+        schemaVersion: 10,
         cattle: { enabled: false, hetzner: { labels: { "bad key": "x" } } },
         fleet: { botOrder: ["maren"], bots: { maren: {} } },
         hosts: {

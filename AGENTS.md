@@ -10,6 +10,7 @@ must
 rules
 - no destructive ops unless asked (rm/reset/clean/force-push)
 - no live infra unless asked (bootstrap/lockdown/opentofu apply)
+- avoid sindresorhus deps; implement small helpers in-house
 
 never commit (secrets/instance)
 - .clawdlets/

@@ -58,7 +58,12 @@ describe("prepare-package guardrails", () => {
       expect(ver.status).toBe(0);
       expect(String(ver.stdout || "").trim()).toBe(String(outPkg.version));
 
-      const pack = spawnSync("npm", ["pack", "--silent"], { cwd: tmpOut, encoding: "utf8" });
+      const npmCache = path.join(tmpBase, ".npm-cache");
+      const pack = spawnSync("npm", ["pack", "--silent"], {
+        cwd: tmpOut,
+        encoding: "utf8",
+        env: { ...process.env, npm_config_cache: npmCache },
+      });
       expect(pack.status).toBe(0);
       const tgz = String(pack.stdout || "").trim();
       expect(tgz).toMatch(/\.tgz$/);

@@ -11,13 +11,6 @@ import { routeTree } from './routeTree.gen'
 import { DefaultCatchBoundary } from './components/DefaultCatchBoundary'
 import { NotFound } from './components/NotFound'
 
-function isAuthDisabled(): boolean {
-  const raw = String((import.meta as any).env.VITE_CLAWDLETS_AUTH_DISABLED || '')
-    .trim()
-    .toLowerCase()
-  return raw === '1' || raw === 'true' || raw === 'yes'
-}
-
 export function getRouter() {
   if (typeof document !== 'undefined') {
     notifyManager.setScheduler(window.requestAnimationFrame)
@@ -28,7 +21,7 @@ export function getRouter() {
     console.error('missing envar CONVEX_URL')
   }
   const convexQueryClient = new ConvexQueryClient(CONVEX_URL, {
-    expectAuth: !isAuthDisabled(),
+    expectAuth: true,
   })
 
   const queryClient: QueryClient = new QueryClient({

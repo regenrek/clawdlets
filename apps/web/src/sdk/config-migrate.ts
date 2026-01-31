@@ -1,20 +1,18 @@
 import { createServerFn } from "@tanstack/react-start"
-import { migrateClawdletsConfigToV9 } from "@clawdlets/core/lib/clawdlets-config-migrate"
+import { migrateClawdletsConfigToV10 } from "@clawdlets/core/lib/clawdlets-config-migrate"
 import { ClawdletsConfigSchema, writeClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config"
 import { getRepoLayout } from "@clawdlets/core/repo-layout"
 import { api } from "../../convex/_generated/api"
-import type { Id } from "../../convex/_generated/dataModel"
 import { createConvexClient } from "~/server/convex"
 import { readClawdletsEnvTokens } from "~/server/redaction"
 import { getRepoRoot } from "~/sdk/repo-root"
 import { mapValidationIssues, runWithEventsAndStatus, type ValidationIssue } from "~/sdk/run-with-events"
 import { readFile } from "node:fs/promises"
+import { parseProjectIdInput } from "~/sdk/serverfn-validators"
 
-export const migrateClawdletsConfigFileToV9 = createServerFn({ method: "POST" })
+export const migrateClawdletsConfigFileToV10 = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
-    const d = data as Record<string, unknown>
-    return { projectId: d["projectId"] as Id<"projects"> }
+    return parseProjectIdInput(data)
   })
   .handler(async ({ data }) => {
     const client = createConvexClient()
@@ -36,7 +34,7 @@ export const migrateClawdletsConfigFileToV9 = createServerFn({ method: "POST" })
       }
     }
 
-    const res = migrateClawdletsConfigToV9(parsed)
+    const res = migrateClawdletsConfigToV10(parsed)
     if (!res.changed) return { ok: true as const, changed: false as const, warnings: res.warnings }
 
     const validated = ClawdletsConfigSchema.safeParse(res.migrated)
@@ -47,7 +45,7 @@ export const migrateClawdletsConfigFileToV9 = createServerFn({ method: "POST" })
     const { runId } = await client.mutation(api.runs.create, {
       projectId: data.projectId,
       kind: "config_write",
-      title: "Migrate fleet/clawdlets.json to schemaVersion 9",
+      title: "Migrate fleet/clawdlets.json to schemaVersion 10",
     })
 
     type MigrateRunResult =
@@ -68,7 +66,7 @@ export const migrateClawdletsConfigFileToV9 = createServerFn({ method: "POST" })
         await client.mutation(api.auditLogs.append, {
           projectId: data.projectId,
           action: "config.migrate",
-          target: { to: 9, file: "fleet/clawdlets.json" },
+          target: { to: 10, file: "fleet/clawdlets.json" },
           data: { runId, warnings: res.warnings },
         })
       },

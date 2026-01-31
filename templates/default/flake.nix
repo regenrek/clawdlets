@@ -22,7 +22,8 @@
           (hostName:
             let
               hostCfg = cfg.hosts.${hostName} or { };
-              keys = hostCfg.sshAuthorizedKeys or [ ];
+              fleetCfg = cfg.fleet or { };
+              keys = fleetCfg.sshAuthorizedKeys or [ ];
             in
               builtins.isList keys && keys != [ ]
           )

@@ -10,6 +10,11 @@ export function assertNoLegacyHostKeys(parsed: unknown): void {
     if ("opentofu" in hostCfg) {
       throw new Error(`legacy host config key opentofu found for ${host}; use provisioning`);
     }
+    if ("sshAuthorizedKeys" in hostCfg || "sshKnownHosts" in hostCfg) {
+      throw new Error(
+        `host SSH keys are now project-scoped; move hosts.${host}.sshAuthorizedKeys/sshKnownHosts to fleet.sshAuthorizedKeys/sshKnownHosts`,
+      );
+    }
   }
 }
 
@@ -64,4 +69,3 @@ export function assertNoLegacyEnvSecrets(parsed: unknown): void {
     }
   }
 }
-

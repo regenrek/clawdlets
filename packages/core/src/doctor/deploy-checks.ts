@@ -225,7 +225,7 @@ export async function addDeployChecks(params: {
 
           const sshKey = fs.existsSync(abs) ? normalizeSshPublicKey(fs.readFileSync(abs, "utf8")) : null;
           if (sshKey) {
-            const authorized = (clawdletsHostCfg.sshAuthorizedKeys || []) as string[];
+            const authorized = ((clawdletsCfg as any).fleet?.sshAuthorizedKeys || []) as string[];
             const has = authorized.some((k) => normalizeSshPublicKey(k) === sshKey);
             push({
               status: has ? "ok" : "warn",

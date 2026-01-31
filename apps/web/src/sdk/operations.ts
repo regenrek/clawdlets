@@ -11,6 +11,7 @@ import { getClawdletsCliEnv } from "~/server/run-env"
 import { runWithEvents, spawnCommand } from "~/server/run-manager"
 import { getAdminProjectContext } from "~/sdk/repo-root"
 import { requireAdminAndBoundRun } from "~/sdk/run-guards"
+import { parseProjectIdInput } from "~/sdk/serverfn-validators"
 
 function checkLevel(status: DoctorCheck["status"]): "info" | "warn" | "error" {
   if (status === "ok") return "info"
@@ -20,10 +21,10 @@ function checkLevel(status: DoctorCheck["status"]): "info" | "warn" | "error" {
 
 export const runDoctor = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
+    const base = parseProjectIdInput(data)
     const d = data as Record<string, unknown>
     return {
-      projectId: d["projectId"] as Id<"projects">,
+      ...base,
       host: String(d["host"] || ""),
       scope: (typeof d["scope"] === "string" ? d["scope"] : "all") as
         | "repo"
@@ -77,10 +78,10 @@ export const runDoctor = createServerFn({ method: "POST" })
 
 export const bootstrapStart = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
+    const base = parseProjectIdInput(data)
     const d = data as Record<string, unknown>
     return {
-      projectId: d["projectId"] as Id<"projects">,
+      ...base,
       host: String(d["host"] || ""),
       mode: (String(d["mode"] || "nixos-anywhere").trim() || "nixos-anywhere") as "nixos-anywhere" | "image",
     }
@@ -103,15 +104,16 @@ export const bootstrapStart = createServerFn({ method: "POST" })
 
 export const bootstrapExecute = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
+    const base = parseProjectIdInput(data)
     const d = data as Record<string, unknown>
     return {
-      projectId: d["projectId"] as Id<"projects">,
+      ...base,
       runId: d["runId"] as Id<"runs">,
       host: String(d["host"] || ""),
       mode: (String(d["mode"] || "nixos-anywhere").trim() || "nixos-anywhere") as "nixos-anywhere" | "image",
       force: Boolean(d["force"]),
       dryRun: Boolean(d["dryRun"]),
+      lockdownAfter: Boolean(d["lockdownAfter"]),
       rev: typeof d["rev"] === "string" ? d["rev"] : "",
     }
   })
@@ -140,6 +142,7 @@ export const bootstrapExecute = createServerFn({ method: "POST" })
           data.host,
           `--mode=${data.mode}`,
           ...(data.rev.trim() ? ["--rev", data.rev.trim()] : []),
+          ...(data.lockdownAfter ? ["--lockdown-after"] : []),
           ...(data.force ? ["--force"] : []),
           ...(data.dryRun ? ["--dry-run"] : []),
         ],

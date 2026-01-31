@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 
 describe("config patch channel presets", () => {
   it("applies discord preset (enabled + env token ref)", async () => {
-    const { applyChannelPreset } = await import("../src/lib/config-patch");
+    const { applyCapabilityPreset, getChannelCapabilityPreset } = await import("../src/lib/capability-presets");
 
-    const res = applyChannelPreset({ clawdbot: {}, preset: "discord" });
+    const res = applyCapabilityPreset({ clawdbot: {}, preset: getChannelCapabilityPreset("discord") });
     expect(res.warnings).toEqual([]);
     expect(res.clawdbot).toMatchObject({
       channels: { discord: { enabled: true, token: "${DISCORD_BOT_TOKEN}" } },
@@ -12,20 +12,20 @@ describe("config patch channel presets", () => {
   });
 
   it("rejects inline discord token values", async () => {
-    const { applyChannelPreset } = await import("../src/lib/config-patch");
+    const { applyCapabilityPreset, getChannelCapabilityPreset } = await import("../src/lib/capability-presets");
 
     expect(() =>
-      applyChannelPreset({
+      applyCapabilityPreset({
         clawdbot: { channels: { discord: { enabled: true, token: "inline-token" } } },
-        preset: "discord",
+        preset: getChannelCapabilityPreset("discord"),
       }),
     ).toThrow(/channels\.discord\.token already set/);
   });
 
   it("applies slack preset (env refs for botToken + appToken)", async () => {
-    const { applyChannelPreset } = await import("../src/lib/config-patch");
+    const { applyCapabilityPreset, getChannelCapabilityPreset } = await import("../src/lib/capability-presets");
 
-    const res = applyChannelPreset({ clawdbot: {}, preset: "slack" });
+    const res = applyCapabilityPreset({ clawdbot: {}, preset: getChannelCapabilityPreset("slack") });
     expect(res.warnings).toEqual([]);
     expect(res.clawdbot).toMatchObject({
       channels: {
@@ -39,9 +39,9 @@ describe("config patch channel presets", () => {
   });
 
   it("adds a warning for whatsapp preset (stateful login)", async () => {
-    const { applyChannelPreset } = await import("../src/lib/config-patch");
+    const { applyCapabilityPreset, getChannelCapabilityPreset } = await import("../src/lib/capability-presets");
 
-    const res = applyChannelPreset({ clawdbot: {}, preset: "whatsapp" });
+    const res = applyCapabilityPreset({ clawdbot: {}, preset: getChannelCapabilityPreset("whatsapp") });
     expect(res.clawdbot).toMatchObject({ channels: { whatsapp: { enabled: true } } });
     expect(res.warnings.join("\n")).toMatch(/stateful login/i);
   });

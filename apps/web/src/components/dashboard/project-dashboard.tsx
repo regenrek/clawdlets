@@ -3,11 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useRouter } from "@tanstack/react-router"
 import * as React from "react"
 import { toast } from "sonner"
+import { useConvexAuth } from "convex/react"
 
 import { api } from "../../../convex/_generated/api"
 import type { Id } from "../../../convex/_generated/dataModel"
 import { getDashboardOverview } from "~/sdk/dashboard"
-import { migrateClawdletsConfigFileToV9 } from "~/sdk/config-migrate"
+import { migrateClawdletsConfigFileToV10 } from "~/sdk/config-migrate"
 import { Badge } from "~/components/ui/badge"
 import {
   Card,
@@ -22,6 +23,7 @@ import { KpiCard } from "~/components/dashboard/kpi-card"
 import { RecentRunsTable, type RunRow } from "~/components/dashboard/recent-runs-table"
 import { RunActivityChart } from "~/components/dashboard/run-activity-chart"
 import { formatShortDateTime, projectStatusBadgeVariant } from "~/components/dashboard/dashboard-utils"
+import { authClient } from "~/lib/auth-client"
 
 function isMigratableConfigError(message: string): boolean {
   const m = message.toLowerCase()
@@ -38,11 +40,15 @@ export function ProjectDashboard(props: {
   const router = useRouter()
   const queryClient = useQueryClient()
   const convexQueryClient = router.options.context.convexQueryClient
+  const { data: session, isPending } = authClient.useSession()
+  const { isAuthenticated, isLoading } = useConvexAuth()
+  const canQuery = Boolean(session?.user?.id) && isAuthenticated && !isPending && !isLoading
 
   const overview = useQuery({
     queryKey: ["dashboardOverview"],
     queryFn: async () => await getDashboardOverview({ data: {} }),
     gcTime: 5_000,
+    enabled: canQuery,
   })
 
   const project = React.useMemo(() => {
@@ -51,7 +57,7 @@ export function ProjectDashboard(props: {
 
   const recentRuns = useQuery({
     queryKey: ["dashboardRecentRuns", project?.projectId ?? null],
-    enabled: Boolean(project?.projectId),
+    enabled: Boolean(project?.projectId) && canQuery,
     queryFn: async () => {
       const args = {
         projectId: project!.projectId as Id<"projects">,
@@ -72,6 +78,7 @@ export function ProjectDashboard(props: {
       projectId: props.projectId,
     }),
     gcTime: 5_000,
+    enabled: canQuery,
   })
 
   const canWrite = projectAccess.data?.role === "admin"
@@ -80,11 +87,11 @@ export function ProjectDashboard(props: {
   const migrate = useMutation({
     mutationFn: async () => {
       if (!project) throw new Error("project not loaded")
-      return await migrateClawdletsConfigFileToV9({ data: { projectId: project.projectId } })
+      return await migrateClawdletsConfigFileToV10({ data: { projectId: project.projectId } })
     },
     onSuccess: (res) => {
       if (res.ok) {
-        toast.success(res.changed ? "Migrated config" : "Config already schemaVersion 9")
+        toast.success(res.changed ? "Migrated config" : "Config already schemaVersion 10")
         void queryClient.invalidateQueries({ queryKey: ["dashboardOverview"] })
         void queryClient.invalidateQueries({
           queryKey: ["dashboardRecentRuns", project?.projectId ?? null],
@@ -217,10 +224,10 @@ export function ProjectDashboard(props: {
                       disabled={!canWrite || migrate.isPending}
                       onClick={() => migrate.mutate()}
                     >
-                      Migrate to schemaVersion 9
+                      Migrate to schemaVersion 10
                     </Button>
                     <div className="text-muted-foreground text-xs">
-                      CLI: <code>clawdlets config migrate --to v9</code>
+                      CLI: <code>clawdlets config migrate --to v10</code>
                     </div>
                   </div>
                 ) : null}

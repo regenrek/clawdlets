@@ -32,6 +32,7 @@ import {
 import { Button } from "~/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "~/components/ui/dropdown-menu"
 import { Label } from "~/components/ui/label"
+import { NavUser } from "~/components/layout/nav-user"
 import { useProjectBySlug, useProjectsList } from "~/lib/project-data"
 import {
   buildHostPath,
@@ -199,9 +200,10 @@ function AppSidebar() {
   const projectNav: NavItem[] = projectId
     ? [
         {
-          to: `${projectBase}/api-keys`,
-          label: "API Keys",
+          to: `${projectBase}/security`,
+          label: "Security",
           icon: KeyIcon,
+          tooltip: "Project-wide API keys and SSH keys.",
         },
       ]
     : []
@@ -364,22 +366,26 @@ function AppSidebar() {
           </>
         ) : null}
       </SidebarContent>
-      {filteredProject.length ? (
-        <SidebarFooter>
-          <SidebarSeparator />
-          <SidebarGroup>
-            <SidebarMenu>
-              {filteredProject.map((item) => (
-                <NavLink
-                  key={item.to}
-                  item={item}
-                  isActive={isActivePath(item.to)}
-                />
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
-        </SidebarFooter>
-      ) : null}
+      <SidebarFooter>
+        {filteredProject.length ? (
+          <>
+            <SidebarSeparator />
+            <SidebarGroup>
+              <SidebarMenu>
+                {filteredProject.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    item={item}
+                    isActive={isActivePath(item.to)}
+                  />
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+            <SidebarSeparator />
+          </>
+        ) : null}
+        <NavUser />
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
 	  parseBotClawdbotConfigInput,
-	  parseHostSshKeysInput,
+	  parseProjectSshKeysInput,
 	  parseProjectIdInput,
 	  parseProjectBotInput,
 	  parseProjectHostInput,
@@ -266,9 +266,8 @@ describe("serverfn validators", () => {
 
 	  it("rejects ssh key import file paths", () => {
 	    expect(() =>
-	      parseHostSshKeysInput({
+	      parseProjectSshKeysInput({
 	        projectId: "p1",
-	        host: "alpha",
 	        keyText: "",
 	        knownHostsText: "",
 	        keyFilePath: "/etc/passwd",
@@ -278,15 +277,13 @@ describe("serverfn validators", () => {
 
 	  it("parses ssh key import text inputs", () => {
 	    expect(
-	      parseHostSshKeysInput({
+	      parseProjectSshKeysInput({
 	        projectId: "p1",
-	        host: "alpha",
 	        keyText: "ssh-ed25519 AAAA",
 	        knownHostsText: "github.com ssh-ed25519 AAAA",
 	      }),
 	    ).toEqual({
 	      projectId: "p1",
-	      host: "alpha",
 	      keyText: "ssh-ed25519 AAAA",
 	      knownHostsText: "github.com ssh-ed25519 AAAA",
 	    })

@@ -45,12 +45,10 @@ const add = defineCommand({
     const nextHost: ClawdletsHostConfig = {
       enable: false,
       diskDevice: "/dev/sda",
-      sshAuthorizedKeys: [],
-      sshKnownHosts: [],
       flakeHost: "",
       targetHost: undefined,
       hetzner: { serverType: "cx43", image: "", location: "nbg1" },
-      provisioning: { adminCidr: "", adminCidrAllowWorldOpen: false, sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
+      provisioning: { adminCidr: "", adminCidrAllowWorldOpen: false, sshPubkeyFile: "" },
       sshExposure: { mode: "bootstrap" },
       tailnet: { mode: "tailscale" },
       cache: {
@@ -120,13 +118,13 @@ const set = defineCommand({
     "hetzner-image": { type: "string", description: "Hetzner image ID/name (custom image or snapshot)." },
     "hetzner-location": { type: "string", description: "Hetzner location (e.g. nbg1, fsn1)." },
     "admin-cidr": { type: "string", description: "ADMIN_CIDR (e.g. 1.2.3.4/32)." },
-    "ssh-pubkey-file": { type: "string", description: "SSH_PUBKEY_FILE path (e.g. ~/.ssh/id_ed25519.pub)." },
-    "clear-ssh-keys": { type: "boolean", description: "Clear sshAuthorizedKeys.", default: false },
-    "add-ssh-key": { type: "string", description: "Add SSH public key contents (repeatable).", array: true },
-    "add-ssh-key-file": { type: "string", description: "Add SSH public key from file (repeatable).", array: true },
-    "clear-ssh-known-hosts": { type: "boolean", description: "Clear sshKnownHosts.", default: false },
-    "add-ssh-known-host": { type: "string", description: "Add known_hosts entry (repeatable).", array: true },
-    "add-ssh-known-host-file": { type: "string", description: "Add known_hosts entries from file (repeatable).", array: true },
+    "ssh-pubkey-file": { type: "string", description: "SSH public key file path used for provisioning (e.g. ~/.ssh/id_ed25519.pub)." },
+    "clear-ssh-keys": { type: "boolean", description: "Clear fleet.sshAuthorizedKeys.", default: false },
+    "add-ssh-key": { type: "string", description: "Add SSH public key contents to fleet.sshAuthorizedKeys (repeatable).", array: true },
+    "add-ssh-key-file": { type: "string", description: "Add SSH public key file to fleet.sshAuthorizedKeys (repeatable).", array: true },
+    "clear-ssh-known-hosts": { type: "boolean", description: "Clear fleet.sshKnownHosts.", default: false },
+    "add-ssh-known-host": { type: "string", description: "Add known_hosts entry to fleet.sshKnownHosts (repeatable).", array: true },
+    "add-ssh-known-host-file": { type: "string", description: "Add known_hosts entries from file to fleet.sshKnownHosts (repeatable).", array: true },
   },
   async run({ args }) {
     const repoRoot = findRepoRoot(process.cwd());
@@ -201,9 +199,10 @@ const set = defineCommand({
       next.tailnet.mode = mode;
     }
 
-    if ((args as any)["clear-ssh-keys"]) next.sshAuthorizedKeys = [];
+    const fleetNext = structuredClone(config.fleet);
+    if ((args as any)["clear-ssh-keys"]) fleetNext.sshAuthorizedKeys = [];
     {
-      const keys = new Set<string>(next.sshAuthorizedKeys || []);
+      const keys = new Set<string>(fleetNext.sshAuthorizedKeys || []);
 
       for (const file of toStringArray((args as any)["add-ssh-key-file"])) {
         for (const k of readSshPublicKeysFromFile(file)) keys.add(k);
@@ -219,12 +218,12 @@ const set = defineCommand({
         for (const k of parsed) keys.add(k);
       }
 
-      next.sshAuthorizedKeys = Array.from(keys);
+      fleetNext.sshAuthorizedKeys = Array.from(keys);
     }
 
-    if ((args as any)["clear-ssh-known-hosts"]) next.sshKnownHosts = [];
+    if ((args as any)["clear-ssh-known-hosts"]) fleetNext.sshKnownHosts = [];
     {
-      const knownHosts = new Set<string>(next.sshKnownHosts || []);
+      const knownHosts = new Set<string>(fleetNext.sshKnownHosts || []);
 
       for (const file of toStringArray((args as any)["add-ssh-known-host-file"])) {
         for (const line of readKnownHostsFromFile(file)) knownHosts.add(line);
@@ -237,10 +236,14 @@ const set = defineCommand({
         knownHosts.add(trimmed);
       }
 
-      next.sshKnownHosts = Array.from(knownHosts);
+      fleetNext.sshKnownHosts = Array.from(knownHosts);
     }
 
-    const nextConfig = ClawdletsConfigSchema.parse({ ...config, hosts: { ...config.hosts, [hostName]: next } });
+    const nextConfig = ClawdletsConfigSchema.parse({
+      ...config,
+      fleet: fleetNext,
+      hosts: { ...config.hosts, [hostName]: next },
+    });
     await writeClawdletsConfig({ configPath, config: nextConfig });
     console.log(`ok: updated host ${hostName}`);
   },

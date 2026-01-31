@@ -7,7 +7,7 @@ describe("secrets init template sets", () => {
     const { buildSecretsInitTemplateSets } = await import("../src/lib/secrets-init-template");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 9,
+      schemaVersion: 10,
       fleet: {
         botOrder: ["alpha"],
         secretEnv: {},
@@ -42,7 +42,7 @@ describe("secrets init template sets", () => {
     const { buildSecretsInitTemplateSets } = await import("../src/lib/secrets-init-template");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 9,
+      schemaVersion: 10,
       fleet: {
         botOrder: ["alpha"],
         secretEnv: {},

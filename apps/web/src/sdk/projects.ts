@@ -8,6 +8,7 @@ import { readClawdletsEnvTokens } from "~/server/redaction";
 import { runWithEvents } from "~/server/run-manager";
 import { resolveTemplateSpec } from "~/server/template-spec";
 import { getAdminProjectContext } from "~/sdk/repo-root";
+import { parseProjectIdInput } from "~/sdk/serverfn-validators";
 
 function getHost(input?: unknown): string {
   const raw = typeof input === "string" ? input.trim() : "";
@@ -77,9 +78,12 @@ export const projectCreateExecute = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
     if (!data || typeof data !== "object") throw new Error("invalid input");
     const d = data as Record<string, unknown>;
+    const base = parseProjectIdInput(d);
+    const runIdRaw = d["runId"];
+    if (typeof runIdRaw !== "string" || !runIdRaw.trim()) throw new Error("invalid runId");
     return {
-      projectId: d["projectId"] as Id<"projects">,
-      runId: d["runId"] as Id<"runs">,
+      ...base,
+      runId: runIdRaw.trim() as Id<"runs">,
       host: getHost(d["host"]),
       templateSpec: resolveTemplateSpec(d["templateSpec"]),
       gitInit: d["gitInit"] === undefined ? true : Boolean(d["gitInit"]),

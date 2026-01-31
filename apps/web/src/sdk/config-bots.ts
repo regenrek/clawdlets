@@ -6,17 +6,17 @@ import {
 } from "@clawdlets/core/lib/clawdlets-config"
 import { BotIdSchema } from "@clawdlets/shared/lib/identifiers"
 import { api } from "../../convex/_generated/api"
-import type { Id } from "../../convex/_generated/dataModel"
 import { createConvexClient } from "~/server/convex"
 import { readClawdletsEnvTokens } from "~/server/redaction"
 import { getAdminProjectContext } from "~/sdk/repo-root"
 import { runWithEventsAndStatus } from "~/sdk/run-with-events"
+import { parseProjectIdInput } from "~/sdk/serverfn-validators"
 
 export const addBot = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
+    const base = parseProjectIdInput(data)
     const d = data as Record<string, unknown>
-    return { projectId: d["projectId"] as Id<"projects">, bot: String(d["bot"] || "") }
+    return { ...base, bot: String(d["bot"] || "") }
   })
   .handler(async ({ data }) => {
     const client = createConvexClient()
@@ -56,9 +56,9 @@ export const addBot = createServerFn({ method: "POST" })
 
 export const removeBot = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => {
-    if (!data || typeof data !== "object") throw new Error("invalid input")
+    const base = parseProjectIdInput(data)
     const d = data as Record<string, unknown>
-    return { projectId: d["projectId"] as Id<"projects">, bot: String(d["bot"] || "") }
+    return { ...base, bot: String(d["bot"] || "") }
   })
   .handler(async ({ data }) => {
     const client = createConvexClient()

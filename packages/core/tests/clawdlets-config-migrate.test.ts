@@ -70,5 +70,43 @@ describe("clawdlets config migrate", () => {
     expect(migrated.fleet.bots.maren.profile.secretEnv.DISCORD_BOT_TOKEN).toBe("discord_token_old");
     expect(migrated.fleet.bots.maren.clawdbot.channels.discord.token).toBe("${DISCORD_BOT_TOKEN}");
   });
-});
 
+  it("migrates v9 -> v10 (moves host ssh keys to fleet)", async () => {
+    const { migrateClawdletsConfigToV10 } = await import("../src/lib/clawdlets-config-migrate");
+
+    const raw = {
+      schemaVersion: 9,
+      fleet: {
+        secretEnv: {},
+        secretFiles: {},
+        botOrder: [],
+        bots: {},
+      },
+      hosts: {
+        alpha: {
+          sshAuthorizedKeys: ["ssh-ed25519 AAAATEST alpha"],
+          sshKnownHosts: ["github.com ssh-ed25519 AAAATEST"],
+        },
+        beta: {
+          sshAuthorizedKeys: ["ssh-ed25519 AAAATEST beta"],
+        },
+      },
+    };
+
+    const res = migrateClawdletsConfigToV10(raw);
+    expect(res.ok).toBe(true);
+    expect(res.changed).toBe(true);
+    expect(res.warnings.length).toBeGreaterThan(0);
+
+    const migrated = res.migrated as any;
+    expect(migrated.schemaVersion).toBe(10);
+    expect(migrated.fleet.sshAuthorizedKeys).toEqual(
+      expect.arrayContaining(["ssh-ed25519 AAAATEST alpha", "ssh-ed25519 AAAATEST beta"]),
+    );
+    expect(migrated.fleet.sshKnownHosts).toEqual(
+      expect.arrayContaining(["github.com ssh-ed25519 AAAATEST"]),
+    );
+    expect(migrated.hosts.alpha.sshAuthorizedKeys).toBeUndefined();
+    expect(migrated.hosts.alpha.sshKnownHosts).toBeUndefined();
+  });
+});
