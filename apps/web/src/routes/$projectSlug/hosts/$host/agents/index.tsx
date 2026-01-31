@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "~/components/ui/accordion"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog"
+import { PageHeader } from "~/components/ui/page-header"
 import { StackedField } from "~/components/ui/stacked-field"
 import { useProjectBySlug } from "~/lib/project-data"
 import { BotRoster } from "~/components/fleet/bot-roster"
@@ -105,12 +106,110 @@ function AgentsSetup() {
     },
   })
 
+  const addAgentDialog = (
+    <Dialog
+      open={addOpen}
+      onOpenChange={(next) => {
+        setAddOpen(next)
+        if (!next) {
+          setDisplayName("")
+          setBotIdOverride("")
+          setBotIdOverrideEnabled(false)
+        }
+      }}
+    >
+      <DialogTrigger
+        render={
+          <Button type="button" disabled={!canEdit}>
+            Add agent
+          </Button>
+        }
+      />
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add agent</DialogTitle>
+          <DialogDescription>
+            Pick a display name. We'll generate a safe id you can override in advanced options.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <StackedField id="agentDisplayName" label="Display name">
+            <Input
+              id="agentDisplayName"
+              placeholder="OpenClaw"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              autoFocus
+            />
+          </StackedField>
+
+          <Accordion className="rounded-lg border bg-muted/20">
+            <AccordionItem value="advanced" className="px-4">
+              <AccordionTrigger className="rounded-none border-0 px-0 py-2.5 hover:no-underline">
+                Advanced options
+              </AccordionTrigger>
+              <AccordionContent className="pb-4">
+                <div className="space-y-3">
+                  <StackedField
+                    id="agentId"
+                    label="Agent id"
+                    description="Used in config paths and as a stable identifier. Allowed: [a-z][a-z0-9_-]*."
+                  >
+                    <Input
+                      id="agentId"
+                      placeholder="openclaw"
+                      value={botIdOverrideEnabled ? botIdOverride : suggestedBotId}
+                      onChange={(e) => {
+                        setBotIdOverrideEnabled(true)
+                        setBotIdOverride(e.target.value)
+                      }}
+                    />
+                  </StackedField>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </div>
+
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline">Cancel</Button>} />
+          <Button
+            type="button"
+            disabled={
+              !canEdit ||
+              addBotMutation.isPending ||
+              !effectiveBotId ||
+              !SAFE_BOT_ID_RE.test(effectiveBotId) ||
+              takenIds.has(effectiveBotId)
+            }
+            onClick={() => {
+              if (!effectiveBotId) return
+              if (!SAFE_BOT_ID_RE.test(effectiveBotId)) {
+                toast.error("Invalid agent id (use [a-z][a-z0-9_-]*)")
+                return
+              }
+              if (takenIds.has(effectiveBotId)) {
+                toast.error("That agent id already exists")
+                return
+              }
+              addBotMutation.mutate(effectiveBotId)
+            }}
+          >
+            Add
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-black tracking-tight">Agents</h1>
-      <p className="text-muted-foreground">
-        Add/remove agents and configure per-agent settings.
-      </p>
+      <PageHeader
+        title="Agents"
+        description="Add/remove agents and configure per-agent settings."
+        actions={addAgentDialog}
+      />
 
       {projectQuery.isPending ? (
         <div className="text-muted-foreground">Loading…</div>
@@ -125,148 +224,35 @@ function AgentsSetup() {
       ) : !config ? (
         <div className="text-muted-foreground">Missing config.</div>
       ) : (
-        <div className="space-y-6">
-          <div className="rounded-lg border bg-card p-6 space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="font-medium">Add agent</div>
-                <div className="text-xs text-muted-foreground">
-                  Create a new agent entry. Configure integrations and secrets afterwards.
-                </div>
-              </div>
-
-              <Dialog
-                open={addOpen}
-                onOpenChange={(next) => {
-                  setAddOpen(next)
-                  if (!next) {
-                    setDisplayName("")
-                    setBotIdOverride("")
-                    setBotIdOverrideEnabled(false)
-                  }
-                }}
-              >
-                <DialogTrigger
-                  render={
-                    <Button type="button" disabled={!canEdit}>
-                      Add agent
-                    </Button>
-                  }
+        <div className="rounded-lg border bg-card p-6 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="font-medium">Agent roster</div>
+              <div className="text-xs text-muted-foreground">{bots.length} agents</div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              nativeButton={false}
+              render={
+                <Link
+                  to="/$projectSlug/hosts/$host/secrets"
+                  params={{ projectSlug, host }}
                 />
-                <DialogContent className="sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Add agent</DialogTitle>
-                    <DialogDescription>
-                      Pick a display name. We’ll generate a safe id you can override in advanced options.
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <div className="space-y-4">
-                    <StackedField id="agentDisplayName" label="Display name">
-                      <Input
-                        id="agentDisplayName"
-                        placeholder="OpenClaw"
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
-                        autoFocus
-                      />
-                    </StackedField>
-
-                    <Accordion className="rounded-lg border bg-muted/20">
-                      <AccordionItem value="advanced" className="px-4">
-                        <AccordionTrigger className="rounded-none border-0 px-0 py-2.5 hover:no-underline">
-                          Advanced options
-                        </AccordionTrigger>
-                        <AccordionContent className="pb-4">
-                          <div className="space-y-3">
-                            <StackedField
-                              id="agentId"
-                              label="Agent id"
-                              description="Used in config paths and as a stable identifier. Allowed: [a-z][a-z0-9_-]*."
-                            >
-                              <Input
-                                id="agentId"
-                                placeholder="openclaw"
-                                value={botIdOverrideEnabled ? botIdOverride : suggestedBotId}
-                                onChange={(e) => {
-                                  setBotIdOverrideEnabled(true)
-                                  setBotIdOverride(e.target.value)
-                                }}
-                              />
-                            </StackedField>
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    </Accordion>
-                  </div>
-
-                  <DialogFooter>
-                    <DialogClose render={<Button variant="outline">Cancel</Button>} />
-                    <Button
-                      type="button"
-                      disabled={
-                        !canEdit ||
-                        addBotMutation.isPending ||
-                        !effectiveBotId ||
-                        !SAFE_BOT_ID_RE.test(effectiveBotId) ||
-                        takenIds.has(effectiveBotId)
-                      }
-                      onClick={() => {
-                        if (!effectiveBotId) return
-                        if (!SAFE_BOT_ID_RE.test(effectiveBotId)) {
-                          toast.error("Invalid agent id (use [a-z][a-z0-9_-]*)")
-                          return
-                        }
-                        if (takenIds.has(effectiveBotId)) {
-                          toast.error("That agent id already exists")
-                          return
-                        }
-                        addBotMutation.mutate(effectiveBotId)
-                      }}
-                    >
-                      Add
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-            {!canEdit ? (
-              <div className="text-xs text-muted-foreground">
-                Read-only: project role <code>{project.data?.role || "…"}</code>.
-              </div>
-            ) : null}
+              }
+            >
+              Secrets
+            </Button>
           </div>
 
-          <div className="rounded-lg border bg-card p-6 space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="font-medium">Agent roster</div>
-                <div className="text-xs text-muted-foreground">{bots.length} agents</div>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                nativeButton={false}
-                render={
-                  <Link
-                    to="/$projectSlug/hosts/$host/secrets"
-                    params={{ projectSlug, host }}
-                  />
-                }
-              >
-                Secrets
-              </Button>
-            </div>
-
-            <BotRoster
-              projectSlug={projectSlug}
-              host={host}
-              projectId={projectId}
-              bots={bots}
-              config={config}
-              canEdit={canEdit}
-            />
-          </div>
+          <BotRoster
+            projectSlug={projectSlug}
+            host={host}
+            projectId={projectId}
+            bots={bots}
+            config={config}
+            canEdit={canEdit}
+          />
         </div>
       )}
     </div>

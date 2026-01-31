@@ -9,6 +9,7 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "
 import { Input } from "~/components/ui/input"
 import { HelpTooltip, LabelWithHelp } from "~/components/ui/label-help"
 import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select"
+import { PageHeader } from "~/components/ui/page-header"
 import { SettingsSection } from "~/components/ui/settings-section"
 import { Switch } from "~/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip"
@@ -417,12 +418,10 @@ function HostsSetup() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-black tracking-tight">Host Settings</h1>
-        <p className="text-muted-foreground">
-          Manage hosts, SSH targets, and access settings.
-        </p>
-      </div>
+      <PageHeader
+        title="Host Settings"
+        description="Manage hosts, SSH targets, and access settings."
+      />
 
       {projectQuery.isPending ? (
         <div className="text-muted-foreground">Loading…</div>
