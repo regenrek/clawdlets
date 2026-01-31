@@ -20,7 +20,6 @@ export const TAILNET_MODES = ["none", "tailscale"] as const;
 export const TailnetModeSchema = z.enum(TAILNET_MODES);
 export type TailnetMode = z.infer<typeof TailnetModeSchema>;
 
-<<<<<<< HEAD
 export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 11 as const;
 
 const JsonObjectSchema: z.ZodType<Record<string, unknown>> = z.record(z.string(), z.any());
