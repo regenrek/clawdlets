@@ -1,10 +1,14 @@
-import { useQuery } from "@tanstack/react-query"
+import { convexQuery } from "@convex-dev/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useRouter } from "@tanstack/react-router"
 import * as React from "react"
+import { toast } from "sonner"
 import { useConvexAuth } from "convex/react"
 
 import { api } from "../../../convex/_generated/api"
 import type { Id } from "../../../convex/_generated/dataModel"
+import { getDashboardOverview } from "~/sdk/dashboard"
+import { migrateClawdletsConfigFileToV11 } from "~/sdk/config-migrate"
 import { Badge } from "~/components/ui/badge"
 import {
   Card,
@@ -20,20 +24,30 @@ import { RecentRunsTable, type RunRow } from "~/components/dashboard/recent-runs
 import { RunActivityChart } from "~/components/dashboard/run-activity-chart"
 import { formatShortDateTime, projectStatusBadgeVariant } from "~/components/dashboard/dashboard-utils"
 import { authClient } from "~/lib/auth-client"
-import { dashboardOverviewQueryOptions } from "~/lib/query-options"
+
+function isMigratableConfigError(message: string): boolean {
+  const m = message.toLowerCase()
+  if (m.includes("schemaversion")) return true
+  if (m.includes("was removed; use")) return true
+  if (m.includes("legacy host config key")) return true
+  return false
+}
 
 export function ProjectDashboard(props: {
   projectId: Id<"projects">
   projectSlug: string
 }) {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const convexQueryClient = router.options.context.convexQueryClient
   const { data: session, isPending } = authClient.useSession()
   const { isAuthenticated, isLoading } = useConvexAuth()
   const canQuery = Boolean(session?.user?.id) && isAuthenticated && !isPending && !isLoading
 
   const overview = useQuery({
-    ...dashboardOverviewQueryOptions(),
+    queryKey: ["dashboardOverview"],
+    queryFn: async () => await getDashboardOverview({ data: {} }),
+    gcTime: 5_000,
     enabled: canQuery,
   })
 
@@ -54,9 +68,43 @@ export function ProjectDashboard(props: {
       }
       return await convexQueryClient.convexClient.query(api.runs.listByProjectPage, args)
     },
+    gcTime: 5_000,
   })
 
   const runs = (recentRuns.data?.page ?? []) as RunRow[]
+
+  const projectAccess = useQuery({
+    ...convexQuery(api.projects.get, {
+      projectId: props.projectId,
+    }),
+    gcTime: 5_000,
+    enabled: canQuery,
+  })
+
+  const canWrite = projectAccess.data?.role === "admin"
+  const canMigrate = Boolean(project?.cfg.error && isMigratableConfigError(project.cfg.error))
+
+  const migrate = useMutation({
+    mutationFn: async () => {
+      if (!project) throw new Error("project not loaded")
+      return await migrateClawdletsConfigFileToV11({ data: { projectId: project.projectId } })
+    },
+    onSuccess: (res) => {
+      if (res.ok) {
+        toast.success(res.changed ? "Migrated config" : "Config already schemaVersion 11")
+        void queryClient.invalidateQueries({ queryKey: ["dashboardOverview"] })
+        void queryClient.invalidateQueries({
+          queryKey: ["dashboardRecentRuns", project?.projectId ?? null],
+        })
+      } else {
+        const first = res.issues?.[0]
+        toast.error(first?.message ? `Migration failed: ${first.message}` : "Migration failed")
+      }
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : String(err))
+    },
+  })
 
   if (overview.isPending) {
     return <div className="text-muted-foreground">Loading…</div>
@@ -169,6 +217,20 @@ export function ProjectDashboard(props: {
                 <div className="text-muted-foreground mt-1 break-words">
                   {project.cfg.error}
                 </div>
+                {canMigrate ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      disabled={!canWrite || migrate.isPending}
+                      onClick={() => migrate.mutate()}
+                    >
+                      Migrate to schemaVersion 11
+                    </Button>
+                    <div className="text-muted-foreground text-xs">
+                      CLI: <code>clawdlets config migrate --to v11</code>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="grid gap-3">
@@ -197,78 +259,43 @@ export function ProjectDashboard(props: {
             <Button
               size="sm"
               variant="outline"
-              nativeButton={false}
-              render={
-                <Link
-                  to="/$projectSlug/setup/doctor"
-                  params={{ projectSlug: props.projectSlug }}
-                />
-              }
+              disabled={!project.localPath}
+              onClick={() => {
+                void router.navigate({ to: "/$projectSlug/operations", params: { projectSlug: props.projectSlug } })
+              }}
             >
-              Doctor
+              Operations
             </Button>
             <Button
               size="sm"
               variant="outline"
-              nativeButton={false}
-              render={
-                <Link
-                  to="/$projectSlug/hosts"
-                  params={{ projectSlug: props.projectSlug }}
-                />
-              }
+              disabled={!project.localPath}
+              onClick={() => {
+                void router.navigate({ to: "/$projectSlug/logs", params: { projectSlug: props.projectSlug } })
+              }}
             >
-              Hosts
+              Logs
             </Button>
             <Button
               size="sm"
               variant="outline"
-              nativeButton={false}
-              render={
-                <Link to={defaultHostBase} />
-              }
+              disabled={!project.localPath}
+              onClick={() => {
+                void router.navigate({ to: "/$projectSlug/audit", params: { projectSlug: props.projectSlug } })
+              }}
             >
-              Bootstrap
+              Audit
             </Button>
           </CardFooter>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle>Recent runs</CardTitle>
-            <CardDescription>Latest activity for this project.</CardDescription>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            nativeButton={false}
-            render={
-              <Link
-                to="/$projectSlug/runs"
-                params={{ projectSlug: props.projectSlug }}
-              />
-            }
-          >
-            View all
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {recentRuns.isPending ? (
-            <div className="text-muted-foreground text-sm">Loading…</div>
-          ) : recentRuns.error ? (
-            <div className="text-sm text-destructive">{String(recentRuns.error)}</div>
-          ) : runs.length === 0 ? (
-            <div className="text-muted-foreground text-sm">No runs yet.</div>
-          ) : (
-            <RecentRunsTable
-              runs={runs.slice(0, 10)}
-              projectSlug={props.projectSlug}
-            />
-          )}
-        </CardContent>
-      </Card>
+      <RecentRunsTable
+        runs={runs}
+        projectSlug={props.projectSlug}
+        showProject={false}
+      />
     </div>
   )
 }
+

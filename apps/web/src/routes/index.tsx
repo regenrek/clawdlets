@@ -1,15 +1,13 @@
+import { convexQuery } from "@convex-dev/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import * as React from "react"
 import { useConvexAuth } from "convex/react"
+import { api } from "../../convex/_generated/api"
 import { pickLastActiveProject, readLastProjectSlug, slugifyProjectName, storeLastProjectSlug } from "~/lib/project-routing"
 import { authClient } from "~/lib/auth-client"
-import { projectsListQueryOptions } from "~/lib/query-options"
-import { useQuery } from "@tanstack/react-query"
 
 export const Route = createFileRoute("/")({
-  loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(projectsListQueryOptions())
-  },
   component: RootIndex,
 })
 
@@ -19,7 +17,8 @@ function RootIndex() {
   const { isAuthenticated, isLoading } = useConvexAuth()
   const canQuery = Boolean(session?.user?.id) && isAuthenticated && !isPending && !isLoading
   const projectsQuery = useQuery({
-    ...projectsListQueryOptions(),
+    ...convexQuery(api.projects.list, {}),
+    gcTime: 5_000,
     enabled: canQuery,
   })
 

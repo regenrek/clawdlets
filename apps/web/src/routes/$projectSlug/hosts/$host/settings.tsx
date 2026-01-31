@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import type { Id } from "../../../../../convex/_generated/dataModel"
 import { ArrowPathIcon } from "@heroicons/react/24/outline"
@@ -9,7 +9,6 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "
 import { Input } from "~/components/ui/input"
 import { HelpTooltip, LabelWithHelp } from "~/components/ui/label-help"
 import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select"
-import { PageHeader } from "~/components/ui/page-header"
 import { SettingsSection } from "~/components/ui/settings-section"
 import { Switch } from "~/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip"
@@ -18,43 +17,40 @@ import { singleHostCidrFromIp } from "~/lib/ip-utils"
 import { useProjectBySlug } from "~/lib/project-data"
 import { setupFieldHelp } from "~/lib/setup-field-help"
 import { ConnectivityPanel } from "~/components/hosts/connectivity-panel"
-import { writeClawdletsConfigFile } from "~/sdk/config"
-import { clawdletsConfigQueryOptions, projectsListQueryOptions } from "~/lib/query-options"
-import { slugifyProjectName } from "~/lib/project-routing"
+import { getClawdletsConfig, writeClawdletsConfigFile } from "~/sdk/config"
 
 export const Route = createFileRoute("/$projectSlug/hosts/$host/settings")({
-  loader: async ({ context, params }) => {
-    const projects = await context.queryClient.ensureQueryData(projectsListQueryOptions())
-    const project = projects.find((p) => slugifyProjectName(p.name) === params.projectSlug) ?? null
-    const projectId = (project?._id as Id<"projects"> | null) ?? null
-    if (!projectId) return
-    await context.queryClient.ensureQueryData(clawdletsConfigQueryOptions(projectId))
-  },
   component: HostsSetup,
 })
 
-function HostSettingsForm(props: {
-  projectId: Id<"projects">
-  selectedHost: string
-  config: any
-  hostCfg: any
-}) {
+function HostsSetup() {
+  const { projectSlug, host: selectedHost } = Route.useParams()
+  const projectQuery = useProjectBySlug(projectSlug)
+  const projectId = projectQuery.projectId
   const queryClient = useQueryClient()
 
-  const [enable, setEnable] = useState(Boolean(props.hostCfg.enable))
-  const [diskDevice, setDiskDevice] = useState(props.hostCfg.diskDevice || "/dev/sda")
-  const [targetHost, setTargetHost] = useState(props.hostCfg.targetHost || "")
-  const [adminCidr, setAdminCidr] = useState(props.hostCfg.provisioning?.adminCidr || "")
-  const [sshPubkeyFile, setSshPubkeyFile] = useState(props.hostCfg.provisioning?.sshPubkeyFile || "")
-  const [sshExposure, setSshExposure] = useState<"tailnet" | "bootstrap" | "public">(
-    (props.hostCfg.sshExposure?.mode as any) || "bootstrap",
-  )
-  const [tailnetMode, setTailnetMode] = useState<"tailscale" | "none">((props.hostCfg.tailnet?.mode as any) || "tailscale")
-  const [serverType, setServerType] = useState(props.hostCfg.hetzner?.serverType || "cx43")
-  const [hetznerImage, setHetznerImage] = useState(props.hostCfg.hetzner?.image || "")
-  const [hetznerLocation, setHetznerLocation] = useState(props.hostCfg.hetzner?.location || "nbg1")
-  const [flakeHost, setFlakeHost] = useState(props.hostCfg.flakeHost || "")
-  const [agentModelPrimary, setAgentModelPrimary] = useState((props.hostCfg as any).agentModelPrimary || "")
+  const cfg = useQuery({
+    queryKey: ["clawdletsConfig", projectId],
+    queryFn: async () =>
+      await getClawdletsConfig({ data: { projectId: projectId as Id<"projects"> } }),
+    enabled: Boolean(projectId),
+  })
+
+  const config = cfg.data?.config
+  const hostCfg = selectedHost && config ? config.hosts[selectedHost] : null
+
+  const [enable, setEnable] = useState(false)
+  const [diskDevice, setDiskDevice] = useState("/dev/sda")
+  const [targetHost, setTargetHost] = useState("")
+  const [adminCidr, setAdminCidr] = useState("")
+  const [sshPubkeyFile, setSshPubkeyFile] = useState("")
+  const [sshExposure, setSshExposure] = useState<"tailnet" | "bootstrap" | "public">("bootstrap")
+  const [tailnetMode, setTailnetMode] = useState<"tailscale" | "none">("tailscale")
+  const [serverType, setServerType] = useState("cx43")
+  const [hetznerImage, setHetznerImage] = useState("")
+  const [hetznerLocation, setHetznerLocation] = useState("nbg1")
+  const [flakeHost, setFlakeHost] = useState("")
+  const [agentModelPrimary, setAgentModelPrimary] = useState("")
 
   const [detectingAdminCidr, setDetectingAdminCidr] = useState(false)
 
@@ -84,32 +80,48 @@ function HostSettingsForm(props: {
     }
   }
 
+  useEffect(() => {
+    if (!hostCfg) return
+    setEnable(Boolean(hostCfg.enable))
+    setDiskDevice(hostCfg.diskDevice || "/dev/sda")
+    setTargetHost(hostCfg.targetHost || "")
+    setAdminCidr(hostCfg.provisioning?.adminCidr || "")
+    setSshPubkeyFile(hostCfg.provisioning?.sshPubkeyFile || "")
+    setSshExposure((hostCfg.sshExposure?.mode as any) || "bootstrap")
+    setTailnetMode((hostCfg.tailnet?.mode as any) || "tailscale")
+    setServerType(hostCfg.hetzner?.serverType || "cx43")
+    setHetznerImage(hostCfg.hetzner?.image || "")
+    setHetznerLocation(hostCfg.hetzner?.location || "nbg1")
+    setFlakeHost(hostCfg.flakeHost || "")
+    setAgentModelPrimary((hostCfg as any).agentModelPrimary || "")
+  }, [hostCfg, selectedHost])
+
   const save = useMutation({
     mutationFn: async () => {
+      if (!config || !hostCfg) throw new Error("missing host")
       const sshPubkeyFileTrimmed = sshPubkeyFile.trim()
       if (looksLikeSshPrivateKeyText(sshPubkeyFileTrimmed) || looksLikeSshPublicKeyText(sshPubkeyFileTrimmed)) {
         throw new Error("SSH pubkey file must be a local file path (not key contents). Use Security → SSH Keys to paste keys.")
       }
-
       const next = {
-        ...props.config,
+        ...config,
         hosts: {
-          ...props.config.hosts,
-          [props.selectedHost]: {
-            ...props.hostCfg,
+          ...config.hosts,
+          [selectedHost]: {
+            ...hostCfg,
             enable,
             diskDevice: diskDevice.trim(),
             targetHost: targetHost.trim() || undefined,
             flakeHost: flakeHost.trim(),
             provisioning: {
-              ...props.hostCfg.provisioning,
+              ...hostCfg.provisioning,
               adminCidr: adminCidr.trim(),
               sshPubkeyFile: sshPubkeyFileTrimmed,
             },
-            sshExposure: { ...props.hostCfg.sshExposure, mode: sshExposure },
-            tailnet: { ...props.hostCfg.tailnet, mode: tailnetMode },
+            sshExposure: { ...hostCfg.sshExposure, mode: sshExposure },
+            tailnet: { ...hostCfg.tailnet, mode: tailnetMode },
             hetzner: {
-              ...props.hostCfg.hetzner,
+              ...hostCfg.hetzner,
               serverType: serverType.trim(),
               image: hetznerImage.trim(),
               location: hetznerLocation.trim(),
@@ -119,13 +131,13 @@ function HostSettingsForm(props: {
         },
       }
       return await writeClawdletsConfigFile({
-        data: { projectId: props.projectId, next, title: `Update host ${props.selectedHost}` },
+        data: { projectId: projectId as Id<"projects">, next, title: `Update host ${selectedHost}` },
       })
     },
     onSuccess: (res) => {
       if (res.ok) {
         toast.success("Saved")
-        void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", props.projectId] })
+        void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", projectId] })
       } else toast.error("Validation failed")
     },
     onError: (err) => {
@@ -135,271 +147,12 @@ function HostSettingsForm(props: {
 
   return (
     <div className="space-y-6">
-      {/* Connectivity Panel */}
-      <ConnectivityPanel
-        projectId={props.projectId}
-        host={props.selectedHost}
-        targetHost={targetHost}
-      />
-
-      {/* Host Status */}
-      <SettingsSection
-        title="Host Status"
-        description={<>Stored in <code className="text-xs">hosts.{props.selectedHost}</code></>}
-        actions={
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <span>Enabled</span>
-              <HelpTooltip title="Enabled" side="top">
-                {setupFieldHelp.hosts.enabled}
-              </HelpTooltip>
-            </div>
-            <Switch checked={enable} onCheckedChange={setEnable} />
-          </div>
-        }
-      >
-        <div className="text-lg font-semibold">{props.selectedHost}</div>
-      </SettingsSection>
-
-      {/* Connection */}
-      <SettingsSection
-        title="Connection"
-        description="SSH target and admin access settings."
-        statusText="Used for provisioning access."
-        actions={<Button disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>}
-      >
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <LabelWithHelp htmlFor="target" help={setupFieldHelp.hosts.targetHost}>
-              SSH targetHost
-            </LabelWithHelp>
-            <Input id="target" value={targetHost} onChange={(e) => setTargetHost(e.target.value)} placeholder="ssh-alias or user@host" />
-          </div>
-          <div className="space-y-2">
-            <LabelWithHelp htmlFor="adminCidr" help={setupFieldHelp.hosts.adminCidr}>
-              Admin CIDR
-            </LabelWithHelp>
-            <InputGroup>
-              <InputGroupInput
-                id="adminCidr"
-                value={adminCidr}
-                onChange={(e) => setAdminCidr(e.target.value)}
-                placeholder="203.0.113.10/32"
-              />
-              <InputGroupAddon align="inline-end">
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <InputGroupButton
-                        type="button"
-                        variant="secondary"
-                        disabled={detectingAdminCidr}
-                        onClick={() => void detectAdminCidr()}
-                      >
-                        <ArrowPathIcon className={detectingAdminCidr ? "animate-spin" : ""} />
-                        Detect
-                      </InputGroupButton>
-                    }
-                  />
-                  <TooltipContent side="top" align="end">
-                    Detect from your current public IP (via ipify).
-                  </TooltipContent>
-                </Tooltip>
-              </InputGroupAddon>
-            </InputGroup>
-          </div>
-        </div>
-      </SettingsSection>
-
-      {/* SSH Access */}
-      <SettingsSection
-        title="SSH Connectivity"
-        description="Controls how operators reach this host via SSH (network exposure + which local public key file to use during provisioning)."
-        actions={<Button disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>}
-      >
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <LabelWithHelp htmlFor="sshExposure" help={setupFieldHelp.hosts.sshExposure}>
-              SSH exposure
-            </LabelWithHelp>
-            <NativeSelect id="sshExposure" value={sshExposure} onChange={(e) => setSshExposure(e.target.value as any)}>
-              <NativeSelectOption value="tailnet">tailnet</NativeSelectOption>
-              <NativeSelectOption value="bootstrap">bootstrap</NativeSelectOption>
-              <NativeSelectOption value="public">public</NativeSelectOption>
-            </NativeSelect>
-          </div>
-          <div className="space-y-2">
-            <LabelWithHelp htmlFor="pubkeyFile" help={setupFieldHelp.hosts.sshPubkeyFile}>
-              Operator public key file (local path)
-            </LabelWithHelp>
-            <Input
-              id="pubkeyFile"
-              value={sshPubkeyFile}
-              onChange={(e) => setSshPubkeyFile(e.target.value)}
-              placeholder="~/.ssh/id_ed25519.pub"
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => setSshPubkeyFile("~/.ssh/id_ed25519.pub")}
-              >
-                Use ~/.ssh/id_ed25519.pub
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => setSshPubkeyFile("~/.ssh/id_rsa.pub")}
-              >
-                Use ~/.ssh/id_rsa.pub
-              </Button>
-            </div>
-            {(() => {
-              const v = sshPubkeyFile.trim()
-              if (!v) {
-                return (
-                  <div className="text-xs text-destructive">
-                    Required for provisioning. This is a local path on the machine running bootstrap.
-                  </div>
-                )
-              }
-              if (looksLikeSshPrivateKeyText(v)) {
-                return (
-                  <div className="text-xs text-destructive">
-                    Private key detected. Do not paste secrets here.
-                  </div>
-                )
-              }
-              if (looksLikeSshPublicKeyText(v)) {
-                return (
-                  <div className="text-xs text-destructive">
-                    Looks like SSH key contents. This field expects a file path.
-                  </div>
-                )
-              }
-              if (!v.endsWith(".pub")) {
-                return (
-                  <div className="text-xs text-muted-foreground">
-                    Warning: does not end with <code>.pub</code>. Double-check this is a public key file path.
-                  </div>
-                )
-              }
-              return (
-                <div className="text-xs text-muted-foreground">
-                  The dashboard can’t read your filesystem; the CLI validates this path when you run bootstrap/infra.
-                </div>
-              )
-            })()}
-          </div>
-        </div>
-      </SettingsSection>
-
-      {/* Network */}
-      <SettingsSection
-        title="Network"
-        description="VPN and tailnet configuration."
-        actions={<Button disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>}
-      >
-        <div className="space-y-2 max-w-xs">
-          <LabelWithHelp htmlFor="tailnetMode" help={setupFieldHelp.hosts.tailnet}>
-            Tailnet mode
-          </LabelWithHelp>
-          <NativeSelect id="tailnetMode" value={tailnetMode} onChange={(e) => setTailnetMode(e.target.value as any)}>
-            <NativeSelectOption value="tailscale">tailscale</NativeSelectOption>
-            <NativeSelectOption value="none">none</NativeSelectOption>
-          </NativeSelect>
-        </div>
-      </SettingsSection>
-
-      {/* Hetzner Cloud */}
-      <SettingsSection
-        title="Hetzner Cloud"
-        description="Cloud provider configuration for this host."
-        actions={<Button disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>}
-      >
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <LabelWithHelp htmlFor="serverType" help={setupFieldHelp.hosts.hetznerServerType}>
-              Server type
-            </LabelWithHelp>
-            <Input id="serverType" value={serverType} onChange={(e) => setServerType(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <LabelWithHelp htmlFor="location" help={setupFieldHelp.hosts.hetznerLocation}>
-              Location
-            </LabelWithHelp>
-            <Input id="location" value={hetznerLocation} onChange={(e) => setHetznerLocation(e.target.value)} />
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <LabelWithHelp htmlFor="image" help={setupFieldHelp.hosts.hetznerImage}>
-              Image
-            </LabelWithHelp>
-            <Input id="image" value={hetznerImage} onChange={(e) => setHetznerImage(e.target.value)} />
-          </div>
-        </div>
-      </SettingsSection>
-
-      {/* NixOS Configuration */}
-      <SettingsSection
-        title="NixOS Configuration"
-        description="System-level NixOS settings."
-        actions={<Button disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>}
-      >
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <LabelWithHelp htmlFor="disk" help={setupFieldHelp.hosts.diskDevice}>
-              Disk device
-            </LabelWithHelp>
-            <Input id="disk" value={diskDevice} onChange={(e) => setDiskDevice(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <LabelWithHelp htmlFor="flakeHost" help={setupFieldHelp.hosts.flakeHost}>
-              Flake host override
-            </LabelWithHelp>
-            <Input id="flakeHost" value={flakeHost} onChange={(e) => setFlakeHost(e.target.value)} />
-          </div>
-        </div>
-      </SettingsSection>
-
-      {/* Agent */}
-      <SettingsSection
-        title="Agent"
-        description="AI agent model configuration."
-        statusText="Format: provider/model"
-        actions={<Button disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>}
-      >
-        <div className="space-y-2 max-w-md">
-          <LabelWithHelp htmlFor="model" help={setupFieldHelp.hosts.agentModelPrimary}>
-            Primary model
-          </LabelWithHelp>
-          <Input id="model" value={agentModelPrimary} onChange={(e) => setAgentModelPrimary(e.target.value)} placeholder="provider/model" />
-        </div>
-      </SettingsSection>
-    </div>
-  )
-}
-
-function HostsSetup() {
-  const { projectSlug, host: selectedHost } = Route.useParams()
-  const projectQuery = useProjectBySlug(projectSlug)
-  const projectId = projectQuery.projectId
-
-  const cfg = useQuery({
-    ...clawdletsConfigQueryOptions((projectId as Id<"projects"> | null) ?? null),
-    enabled: Boolean(projectId),
-  })
-
-  const config = cfg.data?.config
-  const hostCfg = selectedHost && config ? config.hosts[selectedHost] : null
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Host Settings"
-        description="Manage hosts, SSH targets, and access settings."
-      />
+      <div>
+        <h1 className="text-2xl font-black tracking-tight">Host Settings</h1>
+        <p className="text-muted-foreground">
+          Manage hosts, SSH targets, and access settings.
+        </p>
+      </div>
 
       {projectQuery.isPending ? (
         <div className="text-muted-foreground">Loading…</div>
@@ -414,27 +167,258 @@ function HostsSetup() {
       ) : !config ? (
         <div className="text-muted-foreground">Missing config.</div>
       ) : hostCfg ? (
-        <HostSettingsForm
-          key={selectedHost}
-          projectId={projectId as Id<"projects">}
-          selectedHost={selectedHost}
-          config={config}
-          hostCfg={hostCfg}
-        />
-      ) : (
-        <div className="flex flex-col gap-3 text-muted-foreground">
-          <div>Select a host from Hosts overview.</div>
-          <Button
-            size="sm"
-            variant="outline"
-            nativeButton={false}
-            render={<Link to="/$projectSlug/hosts" params={{ projectSlug }} />}
-            className="w-fit"
+        <div className="space-y-6">
+          <ConnectivityPanel
+            projectId={projectId as Id<"projects">}
+            host={selectedHost}
+            targetHost={targetHost}
+          />
+
+          <SettingsSection
+            title="Host Status"
+            description={<>Stored in <code className="text-xs">hosts.{selectedHost}</code></>}
+            actions={
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <span>Enabled</span>
+                  <HelpTooltip title="Enabled" side="top">
+                    {setupFieldHelp.hosts.enabled}
+                  </HelpTooltip>
+                </div>
+                <Switch checked={enable} onCheckedChange={setEnable} />
+              </div>
+            }
           >
-            View hosts
+            <div className="text-lg font-semibold">{selectedHost}</div>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Connection"
+            description="SSH target and admin access settings."
+            statusText="Used for provisioning access."
+            actions={<Button disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>}
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <LabelWithHelp htmlFor="target" help={setupFieldHelp.hosts.targetHost}>
+                  SSH targetHost
+                </LabelWithHelp>
+                <Input id="target" value={targetHost} onChange={(e) => setTargetHost(e.target.value)} placeholder="ssh-alias or user@host" />
+              </div>
+              <div className="space-y-2">
+                <LabelWithHelp htmlFor="adminCidr" help={setupFieldHelp.hosts.adminCidr}>
+                  Admin CIDR
+                </LabelWithHelp>
+                <InputGroup>
+                  <InputGroupInput
+                    id="adminCidr"
+                    value={adminCidr}
+                    onChange={(e) => setAdminCidr(e.target.value)}
+                    placeholder="203.0.113.10/32"
+                  />
+                  <InputGroupAddon align="inline-end">
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <InputGroupButton
+                            type="button"
+                            variant="secondary"
+                            disabled={detectingAdminCidr}
+                            onClick={() => void detectAdminCidr()}
+                          >
+                            <ArrowPathIcon className={detectingAdminCidr ? "animate-spin" : ""} />
+                            Detect
+                          </InputGroupButton>
+                        }
+                      />
+                      <TooltipContent side="top" align="end">
+                        Detect from your current public IP (via ipify).
+                      </TooltipContent>
+                    </Tooltip>
+                  </InputGroupAddon>
+                </InputGroup>
+              </div>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            title="SSH Connectivity"
+            description="Controls how operators reach this host via SSH (network exposure + which local public key file to use during provisioning)."
+            actions={<Button disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>}
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <LabelWithHelp htmlFor="sshExposure" help={setupFieldHelp.hosts.sshExposure}>
+                  SSH exposure
+                </LabelWithHelp>
+                <NativeSelect id="sshExposure" value={sshExposure} onChange={(e) => setSshExposure(e.target.value as any)}>
+                  <NativeSelectOption value="tailnet">tailnet</NativeSelectOption>
+                  <NativeSelectOption value="bootstrap">bootstrap</NativeSelectOption>
+                  <NativeSelectOption value="public">public</NativeSelectOption>
+                </NativeSelect>
+              </div>
+              <div className="space-y-2">
+                <LabelWithHelp htmlFor="pubkeyFile" help={setupFieldHelp.hosts.sshPubkeyFile}>
+                  Operator public key file (local path)
+                </LabelWithHelp>
+                <Input
+                  id="pubkeyFile"
+                  value={sshPubkeyFile}
+                  onChange={(e) => setSshPubkeyFile(e.target.value)}
+                  placeholder="~/.ssh/id_ed25519.pub"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setSshPubkeyFile("~/.ssh/id_ed25519.pub")}
+                  >
+                    Use ~/.ssh/id_ed25519.pub
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setSshPubkeyFile("~/.ssh/id_rsa.pub")}
+                  >
+                    Use ~/.ssh/id_rsa.pub
+                  </Button>
+                </div>
+                {(() => {
+                  const v = sshPubkeyFile.trim()
+                  if (!v) {
+                    return (
+                      <div className="text-xs text-destructive">
+                        Required for provisioning. This is a local path on the machine running bootstrap.
+                      </div>
+                    )
+                  }
+                  if (looksLikeSshPrivateKeyText(v)) {
+                    return (
+                      <div className="text-xs text-destructive">
+                        Private key detected. Do not paste secrets here.
+                      </div>
+                    )
+                  }
+                  if (looksLikeSshPublicKeyText(v)) {
+                    return (
+                      <div className="text-xs text-destructive">
+                        Looks like SSH key contents. This field expects a file path.
+                      </div>
+                    )
+                  }
+                  if (!v.endsWith(".pub")) {
+                    return (
+                      <div className="text-xs text-muted-foreground">
+                        Warning: does not end with <code>.pub</code>. Double-check this is a public key file path.
+                      </div>
+                    )
+                  }
+                  return (
+                    <div className="text-xs text-muted-foreground">
+                      The dashboard can’t read your filesystem; the CLI validates this path when you run bootstrap/infra.
+                    </div>
+                  )
+                })()}
+              </div>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Network"
+            description="VPN and tailnet configuration."
+            actions={<Button disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>}
+          >
+            <div className="space-y-2 max-w-xs">
+              <LabelWithHelp htmlFor="tailnetMode" help={setupFieldHelp.hosts.tailnet}>
+                Tailnet mode
+              </LabelWithHelp>
+              <NativeSelect id="tailnetMode" value={tailnetMode} onChange={(e) => setTailnetMode(e.target.value as any)}>
+                <NativeSelectOption value="tailscale">tailscale</NativeSelectOption>
+                <NativeSelectOption value="none">none</NativeSelectOption>
+              </NativeSelect>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Hetzner Cloud"
+            description="Cloud provider configuration for this host."
+            actions={<Button disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>}
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <LabelWithHelp htmlFor="serverType" help={setupFieldHelp.hosts.hetznerServerType}>
+                  Server type
+                </LabelWithHelp>
+                <Input id="serverType" value={serverType} onChange={(e) => setServerType(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <LabelWithHelp htmlFor="location" help={setupFieldHelp.hosts.hetznerLocation}>
+                  Location
+                </LabelWithHelp>
+                <Input id="location" value={hetznerLocation} onChange={(e) => setHetznerLocation(e.target.value)} />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <LabelWithHelp htmlFor="image" help={setupFieldHelp.hosts.hetznerImage}>
+                  Image
+                </LabelWithHelp>
+                <Input id="image" value={hetznerImage} onChange={(e) => setHetznerImage(e.target.value)} />
+              </div>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            title="NixOS Configuration"
+            description="System-level NixOS settings."
+            actions={<Button disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>}
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <LabelWithHelp htmlFor="disk" help={setupFieldHelp.hosts.diskDevice}>
+                  Disk device
+                </LabelWithHelp>
+                <Input id="disk" value={diskDevice} onChange={(e) => setDiskDevice(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <LabelWithHelp htmlFor="flakeHost" help={setupFieldHelp.hosts.flakeHost}>
+                  Flake host override
+                </LabelWithHelp>
+                <Input id="flakeHost" value={flakeHost} onChange={(e) => setFlakeHost(e.target.value)} />
+              </div>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Agent"
+            description="AI agent model configuration."
+            statusText="Format: provider/model"
+            actions={<Button disabled={save.isPending} onClick={() => save.mutate()}>Save</Button>}
+          >
+            <div className="space-y-2 max-w-md">
+              <LabelWithHelp htmlFor="model" help={setupFieldHelp.hosts.agentModelPrimary}>
+                Primary model
+              </LabelWithHelp>
+              <Input id="model" value={agentModelPrimary} onChange={(e) => setAgentModelPrimary(e.target.value)} placeholder="provider/model" />
+            </div>
+          </SettingsSection>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="rounded-lg border bg-card p-4">
+            <div className="text-sm font-medium">Unknown host: {selectedHost}</div>
+            <div className="mt-2 text-sm text-muted-foreground">
+              Add it in the fleet config or go back to hosts.
+            </div>
+          </div>
+          <Button asChild variant="secondary">
+            <Link to="/$projectSlug/hosts" params={{ projectSlug }}>
+              Back to hosts
+            </Link>
           </Button>
         </div>
       )}
     </div>
   )
 }
+

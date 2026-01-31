@@ -7,7 +7,7 @@ describe("secrets init template sets", () => {
     const { buildSecretsInitTemplateSets } = await import("../src/lib/secrets-init-template");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 11,
+      schemaVersion: 10,
       fleet: {
         botOrder: ["alpha"],
         secretEnv: {},
@@ -16,7 +16,7 @@ describe("secrets init template sets", () => {
       hosts: {
         "clawdbot-fleet-host": {
           tailnet: { mode: "tailscale" },
-          cache: { netrc: { enable: true, secretName: "garnix_netrc" } },
+          cache: { garnix: { private: { enable: true, netrcSecret: "garnix_netrc" } } },
           agentModelPrimary: "openai/gpt-4o",
         },
       },
@@ -42,7 +42,7 @@ describe("secrets init template sets", () => {
     const { buildSecretsInitTemplateSets } = await import("../src/lib/secrets-init-template");
 
     const cfg = ClawdletsConfigSchema.parse({
-      schemaVersion: 11,
+      schemaVersion: 10,
       fleet: {
         botOrder: ["alpha"],
         secretEnv: {},
@@ -61,3 +61,4 @@ describe("secrets init template sets", () => {
     expect(sets.templateSecrets["garnix_netrc"]).toBeUndefined();
   });
 });
+

@@ -2,25 +2,14 @@ import { describe, expect, it } from "vitest"
 
 import {
 	  parseBotClawdbotConfigInput,
-    parseBotCapabilityPresetInput,
-    parseBotCapabilityPresetPreviewInput,
 	  parseProjectSshKeysInput,
 	  parseProjectIdInput,
 	  parseProjectBotInput,
 	  parseProjectHostInput,
 	  parseProjectHostRequiredInput,
 	  parseProjectRunHostInput,
-    parseProjectHostTargetInput,
-    parseProjectRunHostConfirmInput,
   parseServerChannelsExecuteInput,
   parseServerChannelsStartInput,
-  parseServerDeployStartInput,
-  parseServerDeployExecuteInput,
-  parseServerStatusStartInput,
-  parseServerStatusExecuteInput,
-  parseServerAuditStartInput,
-  parseServerAuditExecuteInput,
-  parseServerLogsStartInput,
   parseServerLogsExecuteInput,
   parseServerRestartExecuteInput,
   parseServerRestartStartInput,
@@ -299,109 +288,4 @@ describe("serverfn validators", () => {
 	      knownHostsText: "github.com ssh-ed25519 AAAA",
 	    })
 	  })
-
-    it("parses capability preset inputs (schemaMode + kind)", () => {
-      expect(
-        parseBotCapabilityPresetInput({
-          projectId: "p1",
-          botId: "maren",
-          host: "alpha",
-          kind: "model",
-          presetId: "openai/gpt-4o-mini",
-        }),
-      ).toMatchObject({ schemaMode: "pinned", kind: "model" })
-
-      expect(
-        parseBotCapabilityPresetInput({
-          projectId: "p1",
-          botId: "maren",
-          host: "alpha",
-          kind: "security",
-          presetId: "strict",
-          schemaMode: "live",
-        }),
-      ).toMatchObject({ schemaMode: "live", kind: "security" })
-
-      expect(() =>
-        parseBotCapabilityPresetInput({
-          projectId: "p1",
-          botId: "maren",
-          host: "alpha",
-          kind: "nope",
-          presetId: "x",
-        } as any),
-      ).toThrow(/invalid preset kind/i)
-
-      expect(() =>
-        parseBotCapabilityPresetInput({
-          projectId: "p1",
-          botId: "maren",
-          host: "alpha",
-          kind: "model",
-          presetId: "",
-        }),
-      ).toThrow(/invalid presetId/i)
-    })
-
-    it("parses capability preset preview input", () => {
-      expect(
-        parseBotCapabilityPresetPreviewInput({
-          projectId: "p1",
-          botId: "maren",
-          kind: "plugin",
-          presetId: "xyz",
-        }),
-      ).toMatchObject({ kind: "plugin", presetId: "xyz" })
-    })
-
-    it("parses project+host target inputs and confirm inputs", () => {
-      expect(parseProjectHostTargetInput({ projectId: "p1", host: "alpha", targetHost: "root@1.2.3.4" })).toEqual({
-        projectId: "p1",
-        host: "alpha",
-        targetHost: "root@1.2.3.4",
-      })
-
-      expect(parseProjectRunHostConfirmInput({ projectId: "p1", runId: "r1", host: "alpha", confirm: 123 } as any)).toEqual({
-        projectId: "p1",
-        runId: "r1",
-        host: "alpha",
-        confirm: "",
-      })
-    })
-
-    it("parses deploy/status/audit/logs inputs", () => {
-      expect(parseServerDeployStartInput({ projectId: "p1", host: "alpha", manifestPath: "" })).toEqual({
-        projectId: "p1",
-        host: "alpha",
-        manifestPath: "",
-      })
-
-      expect(
-        parseServerDeployExecuteInput({
-          projectId: "p1",
-          runId: "r1",
-          host: "alpha",
-          manifestPath: "fleet/deploy.json",
-          rev: "",
-          targetHost: "",
-          confirm: 123,
-        } as any),
-      ).toMatchObject({ confirm: "" })
-
-      expect(parseServerStatusStartInput({ projectId: "p1", host: "alpha" })).toEqual({ projectId: "p1", host: "alpha" })
-      expect(
-        parseServerStatusExecuteInput({ projectId: "p1", runId: "r1", host: "alpha", targetHost: "" }),
-      ).toMatchObject({ targetHost: "" })
-
-      expect(parseServerAuditStartInput({ projectId: "p1", host: "alpha" })).toEqual({ projectId: "p1", host: "alpha" })
-      expect(
-        parseServerAuditExecuteInput({ projectId: "p1", runId: "r1", host: "alpha", targetHost: "" }),
-      ).toMatchObject({ targetHost: "" })
-
-      expect(parseServerLogsStartInput({ projectId: "p1", host: "alpha", unit: "" })).toEqual({
-        projectId: "p1",
-        host: "alpha",
-        unit: "",
-      })
-    })
 	})

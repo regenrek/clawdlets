@@ -15,6 +15,7 @@ import {
   resolveHostName,
   writeClawdletsConfig,
 } from "@clawdlets/core/lib/clawdlets-config";
+import { migrateClawdletsConfigToV11 } from "@clawdlets/core/lib/clawdlets-config-migrate";
 import { validateClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config-validate";
 import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets-plan";
 import { applySecretsAutowire, planSecretsAutowire, type SecretsAutowireScope } from "@clawdlets/core/lib/secrets-autowire";
@@ -314,7 +315,50 @@ const set = defineCommand({
   },
 });
 
+const migrate = defineCommand({
+  meta: { name: "migrate", description: "Migrate fleet/clawdlets.json to a new schema version." },
+  args: {
+    to: { type: "string", description: "Target schema version (only v11 supported).", default: "v11" },
+    "dry-run": { type: "boolean", description: "Print planned write without writing.", default: false },
+  },
+  async run({ args }) {
+    const repoRoot = findRepoRoot(process.cwd());
+    const configPath = getRepoLayout(repoRoot).clawdletsConfigPath;
+    if (!fs.existsSync(configPath)) throw new Error(`missing config: ${configPath}`);
+
+    const rawText = fs.readFileSync(configPath, "utf8");
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      throw new Error(`invalid JSON: ${configPath}`);
+    }
+
+    const to = String((args as any).to || "v11").trim().toLowerCase();
+    if (to !== "v11" && to !== "11") throw new Error(`unsupported --to: ${to} (expected v11)`);
+
+    const res = migrateClawdletsConfigToV11(parsed);
+    if (!res.changed) {
+      console.log("ok: already schemaVersion 11");
+      return;
+    }
+
+    const validated = ClawdletsConfigSchema.parse(res.migrated);
+
+    if ((args as any)["dry-run"]) {
+      console.log(`planned: write ${path.relative(repoRoot, configPath)}`);
+      for (const w of res.warnings) console.log(`warn: ${w}`);
+      return;
+    }
+
+    await ensureDir(path.dirname(configPath));
+    await writeClawdletsConfig({ configPath, config: validated });
+    console.log(`ok: migrated to schemaVersion 11: ${path.relative(repoRoot, configPath)}`);
+    for (const w of res.warnings) console.log(`warn: ${w}`);
+  },
+});
+
 export const config = defineCommand({
   meta: { name: "config", description: "Canonical config (fleet/clawdlets.json)." },
-  subCommands: { init, show, validate, get, set, "wire-secrets": wireSecrets, "derive-allowlist": deriveAllowlist },
+  subCommands: { init, show, validate, get, set, migrate, "wire-secrets": wireSecrets, "derive-allowlist": deriveAllowlist },
 });

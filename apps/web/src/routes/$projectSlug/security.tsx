@@ -23,9 +23,6 @@ export const Route = createFileRoute("/$projectSlug/security")({
         params: { projectSlug: params.projectSlug },
       })
     }
-    // Note: this route is also a layout for child routes; when we don't
-    // redirect, we intentionally "do nothing".
-    return undefined as never
   },
   component: ProjectSecurityLayout,
 })
@@ -64,3 +61,4 @@ function ProjectSecurityLayout() {
     </div>
   )
 }
+

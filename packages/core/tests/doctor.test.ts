@@ -108,7 +108,7 @@ describe("doctor", () => {
     await writeFile(operatorKey, "AGE-SECRET-KEY-TEST\n", "utf8");
 
     const clawdletsConfig = {
-      schemaVersion: 11,
+      schemaVersion: 10,
       defaultHost: "clawdbot-fleet-host",
       baseFlake: "",
       fleet: {
@@ -438,13 +438,13 @@ describe("doctor", () => {
     await writeFile(configPath, original, "utf8");
   });
 
-  it("requires garnix_netrc when cache.netrc enabled", async () => {
+  it("requires garnix_netrc when private Garnix cache enabled", async () => {
     const configPath = path.join(repoRoot, "fleet", "clawdlets.json");
     const original = await readFile(configPath, "utf8");
 
     const raw = JSON.parse(original) as any;
     raw.hosts["clawdbot-fleet-host"].cache = {
-      netrc: { enable: true, secretName: "garnix_netrc" },
+      garnix: { private: { enable: true, netrcSecret: "garnix_netrc" } },
     };
     await writeFile(configPath, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
 

@@ -1,5 +1,5 @@
 import { convexQuery } from "@convex-dev/react-query"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { useConvexAuth } from "convex/react"
 import * as React from "react"
@@ -17,13 +17,11 @@ export const Route = createFileRoute("/settings/account")({
 
 function AccountSettings() {
   const router = useRouter()
-  const queryClient = useQueryClient()
   const { data: session, isPending } = authClient.useSession()
   const { isAuthenticated, isLoading } = useConvexAuth()
   const canQuery = Boolean(session?.user?.id) && isAuthenticated && !isPending && !isLoading
-  const currentUserQuery = convexQuery(api.users.getCurrent, {})
   const currentUser = useQuery({
-    ...currentUserQuery,
+    ...convexQuery(api.users.getCurrent, {}),
     enabled: canQuery,
     gcTime: 60_000,
   })
@@ -32,6 +30,8 @@ function AccountSettings() {
   const email = user?.email || session?.user?.email || ""
   const role = user?.role || "viewer"
 
+  const [displayName, setDisplayName] = React.useState(name)
+  const [newEmail, setNewEmail] = React.useState(email)
   const [currentPassword, setCurrentPassword] = React.useState("")
   const [nextPassword, setNextPassword] = React.useState("")
   const [confirmPassword, setConfirmPassword] = React.useState("")
@@ -39,12 +39,19 @@ function AccountSettings() {
   const [error, setError] = React.useState<string | null>(null)
   const [success, setSuccess] = React.useState<string | null>(null)
 
+  React.useEffect(() => {
+    setDisplayName(name)
+  }, [name])
+
+  React.useEffect(() => {
+    setNewEmail(email)
+  }, [email])
+
   async function onUpdateName(event: React.FormEvent) {
     event.preventDefault()
     setError(null)
     setSuccess(null)
-    const form = event.currentTarget as HTMLFormElement
-    const nextName = String(new FormData(form).get("displayName") || "").trim()
+    const nextName = displayName.trim()
     if (!nextName) {
       setError("Display name is required.")
       return
@@ -52,7 +59,7 @@ function AccountSettings() {
     setBusy(true)
     try {
       await authClient.updateUser({ name: nextName })
-      await queryClient.invalidateQueries({ queryKey: currentUserQuery.queryKey })
+      await currentUser.refetch()
       setSuccess("Display name updated.")
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -65,8 +72,7 @@ function AccountSettings() {
     event.preventDefault()
     setError(null)
     setSuccess(null)
-    const form = event.currentTarget as HTMLFormElement
-    const next = String(new FormData(form).get("email") || "").trim()
+    const next = newEmail.trim()
     if (!next) {
       setError("Email is required.")
       return
@@ -75,7 +81,7 @@ function AccountSettings() {
     try {
       const callbackURL = `${window.location.origin}/settings/account`
       await authClient.changeEmail({ newEmail: next, callbackURL })
-      await queryClient.invalidateQueries({ queryKey: currentUserQuery.queryKey })
+      await currentUser.refetch()
       setSuccess("Email change requested.")
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -148,8 +154,8 @@ function AccountSettings() {
             <Label htmlFor="displayName">Name</Label>
             <Input
               id="displayName"
-              name="displayName"
-              defaultValue={name}
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
               placeholder="Your name"
             />
           </div>
@@ -165,8 +171,8 @@ function AccountSettings() {
             <Input
               id="email"
               type="email"
-              name="email"
-              defaultValue={email}
+              value={newEmail}
+              onChange={(event) => setNewEmail(event.target.value)}
               placeholder="you@example.com"
             />
           </div>
