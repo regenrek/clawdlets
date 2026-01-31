@@ -3,12 +3,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import type { Id } from "../../../convex/_generated/dataModel"
 import { findEnvVarRefs } from "@clawdlets/core/lib/env-var-refs"
+import { suggestSecretNameForEnvVar } from "@clawdlets/core/lib/fleet-secrets-plan-helpers"
 import { getKnownLlmProviders, getProviderRequiredEnvVars } from "@clawdlets/shared/lib/llm-provider-env"
 import { RunLogTail } from "~/components/run-log-tail"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
-import { applyBotChannelPreset } from "~/sdk/bots"
 import { configDotSet } from "~/sdk/config"
 import { serverChannelsExecute, serverChannelsStart } from "~/sdk/server-channels"
 
@@ -31,14 +31,6 @@ function getEnvMapping(params: {
     if (typeof v === "string" && v.trim()) return { secretName: v.trim(), scope: "fleet" }
   }
   return null
-}
-
-function suggestedSecretName(envVar: string, botId: string): string {
-  if (envVar === "DISCORD_BOT_TOKEN") return `discord_token_${botId}`
-  if (envVar === "TELEGRAM_BOT_TOKEN") return `telegram_bot_token_${botId}`
-  if (envVar === "SLACK_BOT_TOKEN") return `slack_bot_token_${botId}`
-  if (envVar === "SLACK_APP_TOKEN") return `slack_app_token_${botId}`
-  return envVar.toLowerCase()
 }
 
 const SHAREABLE_ENV_VARS = (() => {
@@ -90,11 +82,6 @@ function listEnabledChannels(clawdbot: any): string[] {
     .sort()
 }
 
-function formatMapping(mapping: { secretName: string; scope: "bot" | "fleet" } | null): string {
-  if (!mapping) return "unwired"
-  return `${mapping.secretName} (${mapping.scope})`
-}
-
 export function BotIntegrations(props: {
   projectId: string
   botId: string
@@ -116,27 +103,12 @@ export function BotIntegrations(props: {
     setDraftSecretByEnvVar((prev) => {
       const next = { ...prev }
       for (const envVar of envRefs.vars) {
-        if (!next[envVar]) next[envVar] = suggestedSecretName(envVar, props.botId)
+        if (!next[envVar]) next[envVar] = suggestSecretNameForEnvVar(envVar, props.botId)
       }
       return next
     })
   }, [envRefs.vars, props.botId])
 
-  const applyPreset = useMutation({
-    mutationFn: async (preset: "discord" | "telegram" | "slack" | "whatsapp") =>
-      await applyBotChannelPreset({
-        data: { projectId: props.projectId as Id<"projects">, botId: props.botId, preset },
-      }),
-    onSuccess: (res) => {
-      if (!res.ok) {
-        toast.error("Failed to apply preset")
-        return
-      }
-      toast.success("Preset applied")
-      void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", props.projectId] })
-    },
-    onError: (err) => toast.error(String(err)),
-  })
 
   const [runId, setRunId] = useState<Id<"runs"> | null>(null)
   const runChannels = useMutation({
@@ -255,22 +227,13 @@ export function BotIntegrations(props: {
     onError: (err) => toast.error(String(err)),
   })
 
-  const hasDiscord = enabledChannels.includes("discord")
-  const hasTelegram = enabledChannels.includes("telegram")
-  const hasSlack = enabledChannels.includes("slack")
   const hasWhatsApp = enabledChannels.includes("whatsapp")
-  const discordMapping = getEnvMapping({ envVar: "DISCORD_BOT_TOKEN", fleetSecretEnv: props.fleetSecretEnv, botSecretEnv })
-  const telegramMapping = getEnvMapping({ envVar: "TELEGRAM_BOT_TOKEN", fleetSecretEnv: props.fleetSecretEnv, botSecretEnv })
-  const slackBotMapping = getEnvMapping({ envVar: "SLACK_BOT_TOKEN", fleetSecretEnv: props.fleetSecretEnv, botSecretEnv })
-  const slackAppMapping = getEnvMapping({ envVar: "SLACK_APP_TOKEN", fleetSecretEnv: props.fleetSecretEnv, botSecretEnv })
 
   return (
     <div className="space-y-4">
       <div>
-        <div className="font-medium">Integrations / Channels</div>
-        <div className="text-xs text-muted-foreground">
-          Driven by <code>fleet.bots.{props.botId}.clawdbot.channels</code>. Secrets are wired via env vars (no inline tokens).
-        </div>
+        <div className="font-medium">Channels runtime</div>
+        <div className="text-xs text-muted-foreground">Run status/login/logout for gateway channels.</div>
       </div>
 
       {tokenWarnings.length > 0 ? (
@@ -284,99 +247,6 @@ export function BotIntegrations(props: {
         </div>
       ) : null}
 
-      <div className="grid gap-2 md:grid-cols-2">
-        <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2">
-          <div className="min-w-0">
-            <div className="text-sm font-medium flex items-center gap-2">
-              Discord
-              {hasDiscord ? <Badge variant="secondary">enabled</Badge> : <Badge variant="outline">off</Badge>}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              <code>DISCORD_BOT_TOKEN</code> → {formatMapping(discordMapping)}
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!props.canEdit || applyPreset.isPending}
-            onClick={() => applyPreset.mutate("discord")}
-          >
-            Enable + wire
-          </Button>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2">
-          <div className="min-w-0">
-            <div className="text-sm font-medium flex items-center gap-2">
-              Telegram
-              {hasTelegram ? <Badge variant="secondary">enabled</Badge> : <Badge variant="outline">off</Badge>}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              <code>TELEGRAM_BOT_TOKEN</code> → {formatMapping(telegramMapping)}
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!props.canEdit || applyPreset.isPending}
-            onClick={() => applyPreset.mutate("telegram")}
-          >
-            Enable + wire
-          </Button>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2">
-          <div className="min-w-0">
-            <div className="text-sm font-medium flex items-center gap-2">
-              Slack
-              {hasSlack ? <Badge variant="secondary">enabled</Badge> : <Badge variant="outline">off</Badge>}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              <code>SLACK_BOT_TOKEN</code> → {formatMapping(slackBotMapping)}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              <code>SLACK_APP_TOKEN</code> → {formatMapping(slackAppMapping)}
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!props.canEdit || applyPreset.isPending}
-            onClick={() => applyPreset.mutate("slack")}
-          >
-            Enable + wire
-          </Button>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2">
-          <div className="min-w-0">
-            <div className="text-sm font-medium flex items-center gap-2">
-              WhatsApp
-              {hasWhatsApp ? <Badge variant="secondary">enabled</Badge> : <Badge variant="outline">off</Badge>}
-            </div>
-            <div className="text-xs text-muted-foreground">Requires login on the gateway host.</div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!props.canEdit || applyPreset.isPending}
-              onClick={() => applyPreset.mutate("whatsapp")}
-            >
-              Enable
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!props.canEdit || runChannels.isPending || !hasWhatsApp || !props.host.trim()}
-              onClick={() => runChannels.mutate({ op: "login", channel: "whatsapp", verbose: true })}
-            >
-              Login
-            </Button>
-          </div>
-        </div>
-      </div>
-
       <div className="flex flex-wrap items-center gap-2">
         <Button
           size="sm"
@@ -385,6 +255,14 @@ export function BotIntegrations(props: {
           onClick={() => runChannels.mutate({ op: "status", probe: true })}
         >
           Channels status
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!props.canEdit || runChannels.isPending || !hasWhatsApp || !props.host.trim()}
+          onClick={() => runChannels.mutate({ op: "login", channel: "whatsapp", verbose: true })}
+        >
+          WhatsApp login
         </Button>
         <Button
           size="sm"

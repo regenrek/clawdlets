@@ -10,7 +10,7 @@ import { Button } from "~/components/ui/button"
 import { Switch } from "~/components/ui/switch"
 import { Badge } from "~/components/ui/badge"
 import { MonacoJsonEditor, type JsonEditorDiagnostic } from "~/components/editor/monaco-json-editor"
-import { hardenBotClawdbotConfig, setBotClawdbotConfig } from "~/sdk/bots"
+import { hardenBotClawdbotConfig, setBotClawdbotConfig, verifyBotClawdbotSchema } from "~/sdk/bots"
 import { getClawdbotSchemaLive, getClawdbotSchemaStatus, type ClawdbotSchemaLiveResult } from "~/sdk/clawdbot-schema"
 import { createClawdbotParseScheduler, parseClawdbotConfigText } from "~/lib/clawdbot-parse"
 
@@ -42,6 +42,9 @@ export function BotClawdbotEditor(props: {
   const [schemaMode, setSchemaMode] = useState<"pinned" | "live">("pinned")
   const [liveSchema, setLiveSchema] = useState<ClawdbotSchemaArtifact | null>(null)
   const [schemaError, setSchemaError] = useState("")
+  const [liveIssues, setLiveIssues] = useState<Array<{ path: string; message: string }> | null>(null)
+  const [schemaDiff, setSchemaDiff] = useState<null | { added: string[]; removed: string[]; changed: Array<{ path: string; oldType: string; newType: string }> }>(null)
+  const [liveVerifyError, setLiveVerifyError] = useState("")
   const parseRunnerRef = useRef<ReturnType<typeof createClawdbotParseScheduler> | null>(null)
   const textRef = useRef(text)
   const botIdRef = useRef(props.botId)
@@ -65,6 +68,9 @@ export function BotClawdbotEditor(props: {
     setSchemaMode("pinned")
     setLiveSchema(null)
     setSchemaError("")
+    setLiveIssues(null)
+    setSchemaDiff(null)
+    setLiveVerifyError("")
   }, [initialText, props.botId])
 
   useEffect(() => {
@@ -172,6 +178,39 @@ export function BotClawdbotEditor(props: {
     },
   })
 
+  const liveVerify = useMutation({
+    mutationFn: async () =>
+      await verifyBotClawdbotSchema({
+        data: {
+          projectId: props.projectId as Id<"projects">,
+          host: props.host,
+          botId: props.botId,
+        },
+      }),
+    onSuccess: (res) => {
+      if (!res.ok) {
+        const msg = res.issues?.[0]?.message || "Verification failed"
+        setLiveVerifyError(msg)
+        setLiveIssues(null)
+        setSchemaDiff(null)
+        return
+      }
+      setLiveVerifyError("")
+      setLiveIssues(
+        (res.issues || []).map((i) => ({
+          path: (i.path || []).map(String).join(".") || "(root)",
+          message: i.message,
+        })),
+      )
+      setSchemaDiff(res.schemaDiff || null)
+    },
+    onError: (err) => {
+      setLiveVerifyError(String(err))
+      setLiveIssues(null)
+      setSchemaDiff(null)
+    },
+  })
+
   const format = () => {
     try {
       const value = JSON.parse(text)
@@ -236,25 +275,36 @@ export function BotClawdbotEditor(props: {
               {liveSchema ? ` · Live v${liveVersion}` : ""}
             </div>
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Use live schema (advanced)</span>
-            <Switch
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span>Use live schema (advanced)</span>
+              <Switch
+                size="sm"
+                checked={schemaMode === "live"}
+                disabled={!canUseLive || liveSchemaFetch.isPending}
+                onCheckedChange={(checked) => {
+                  if (!checked) {
+                    setSchemaMode("pinned")
+                    return
+                  }
+                  if (!canUseLive) return
+                  if (liveSchema) {
+                    setSchemaMode("live")
+                    return
+                  }
+                  liveSchemaFetch.mutate()
+                }}
+              />
+            </div>
+            <Button
+              type="button"
               size="sm"
-              checked={schemaMode === "live"}
-              disabled={!canUseLive || liveSchemaFetch.isPending}
-              onCheckedChange={(checked) => {
-                if (!checked) {
-                  setSchemaMode("pinned")
-                  return
-                }
-                if (!canUseLive) return
-                if (liveSchema) {
-                  setSchemaMode("live")
-                  return
-                }
-                liveSchemaFetch.mutate()
-              }}
-            />
+              variant="outline"
+              disabled={!canUseLive || liveVerify.isPending}
+              onClick={() => liveVerify.mutate()}
+            >
+              Verify vs live schema
+            </Button>
           </div>
         </div>
         {!canUseLive ? (
@@ -296,6 +346,7 @@ export function BotClawdbotEditor(props: {
           <div className="text-xs text-destructive">{schemaStatus.data.message}</div>
         ) : null}
         {schemaError ? <div className="text-xs text-destructive">{schemaError}</div> : null}
+        {liveVerifyError ? <div className="text-xs text-destructive">{liveVerifyError}</div> : null}
       </div>
 
       <div className="rounded-md border bg-background/50 p-2">
@@ -323,6 +374,42 @@ export function BotClawdbotEditor(props: {
                   {i.line}:{i.column}
                 </code>{" "}
                 {i.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {schemaDiff && (schemaDiff.added.length + schemaDiff.removed.length + schemaDiff.changed.length > 0) ? (
+        <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+          <div className="text-sm font-medium">Schema changes (pinned vs live)</div>
+          <ul className="text-xs text-muted-foreground space-y-1">
+            {schemaDiff.added.slice(0, 10).map((path) => (
+              <li key={`add-${path}`}>
+                <code>+ {path}</code>
+              </li>
+            ))}
+            {schemaDiff.removed.slice(0, 10).map((path) => (
+              <li key={`rm-${path}`}>
+                <code>- {path}</code>
+              </li>
+            ))}
+            {schemaDiff.changed.slice(0, 10).map((entry) => (
+              <li key={`chg-${entry.path}`}>
+                <code>~ {entry.path}</code> ({entry.oldType} → {entry.newType})
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {liveIssues && liveIssues.length > 0 ? (
+        <div className="rounded-lg border bg-muted/30 p-3">
+          <div className="text-sm font-medium">Live schema issues</div>
+          <ul className="mt-2 list-disc pl-5 text-sm text-muted-foreground">
+            {liveIssues.map((i, idx) => (
+              <li key={`${idx}-${i.path}`}>
+                <code>{i.path}</code>: {i.message}
               </li>
             ))}
           </ul>

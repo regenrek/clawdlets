@@ -5,6 +5,7 @@ import { getRepoLayout } from "@clawdlets/core/repo-layout";
 const applyOpenTofuVarsMock = vi.fn().mockResolvedValue(undefined);
 const runMock = vi.fn().mockResolvedValue(undefined);
 const captureMock = vi.fn().mockResolvedValue("46.0.0.1");
+const sshCaptureMock = vi.fn().mockResolvedValue("100.64.0.10\n");
 const resolveGitRevMock = vi.fn().mockResolvedValue("deadbeef");
 const checkGithubRepoVisibilityMock = vi.fn().mockResolvedValue({ ok: true, status: "public" });
 const tryParseGithubFlakeUriMock = vi.fn().mockReturnValue(null);
@@ -15,6 +16,7 @@ const evalFleetConfigMock = vi.fn().mockResolvedValue({ bots: [] });
 const withFlakesEnvMock = vi.fn((env: NodeJS.ProcessEnv) => env);
 const resolveBaseFlakeMock = vi.fn().mockResolvedValue({ flake: "" });
 const loadClawdletsConfigMock = vi.fn();
+const writeClawdletsConfigMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("@clawdlets/core/lib/opentofu", () => ({
   applyOpenTofuVars: applyOpenTofuVarsMock,
@@ -28,6 +30,16 @@ vi.mock("@clawdlets/core/lib/run", () => ({
   run: runMock,
   capture: captureMock,
 }));
+
+vi.mock("@clawdlets/core/lib/ssh-remote", async () => {
+  const actual = await vi.importActual<typeof import("@clawdlets/core/lib/ssh-remote")>(
+    "@clawdlets/core/lib/ssh-remote",
+  );
+  return {
+    ...actual,
+    sshCapture: sshCaptureMock,
+  };
+});
 
 vi.mock("@clawdlets/core/lib/github", () => ({
   checkGithubRepoVisibility: checkGithubRepoVisibilityMock,
@@ -65,6 +77,7 @@ vi.mock("@clawdlets/core/lib/clawdlets-config", async () => {
   return {
     ...actual,
     loadClawdletsConfig: loadClawdletsConfigMock,
+    writeClawdletsConfig: writeClawdletsConfigMock,
   };
 });
 
@@ -86,7 +99,7 @@ function setConfig(hostOverrides: Partial<typeof baseHost>) {
     layout: getRepoLayout("/repo"),
     configPath: "/repo/fleet/clawdlets.json",
     config: {
-      schemaVersion: 8,
+      schemaVersion: 9,
       fleet: {},
       hosts: {
         [hostName]: { ...baseHost, ...hostOverrides },
@@ -153,6 +166,54 @@ describe("bootstrap command", () => {
     expect(output).toMatch(/SSH WILL REMAIN OPEN/i);
     expect(output).toMatch(/--ssh-exposure tailnet/i);
     expect(output).toMatch(/clawdlets lockdown/i);
+  });
+
+  it("runs auto-lockdown when --lockdown-after is set", async () => {
+    setConfig({ sshExposure: { mode: "bootstrap" }, tailnet: { mode: "tailscale" } });
+    const { bootstrap } = await import("../src/commands/bootstrap.ts");
+    await bootstrap.run({
+      args: {
+        host: hostName,
+        flake: "github:owner/repo",
+        rev: "",
+        ref: "",
+        force: true,
+        dryRun: false,
+        lockdownAfter: true,
+      } as any,
+    });
+
+    expect(sshCaptureMock).toHaveBeenCalled();
+    expect(writeClawdletsConfigMock).toHaveBeenCalled();
+    const written = writeClawdletsConfigMock.mock.calls[0]?.[0];
+    expect(written?.configPath).toBe("/repo/fleet/clawdlets.json");
+    expect(written?.config?.hosts?.[hostName]?.sshExposure?.mode).toBe("tailnet");
+    expect(written?.config?.hosts?.[hostName]?.targetHost).toBe("admin@100.64.0.10");
+
+    expect(applyOpenTofuVarsMock).toHaveBeenCalledTimes(2);
+    const first = applyOpenTofuVarsMock.mock.calls[0]?.[0];
+    const second = applyOpenTofuVarsMock.mock.calls[1]?.[0];
+    expect(first?.vars?.sshExposureMode).toBe("bootstrap");
+    expect(second?.vars?.sshExposureMode).toBe("tailnet");
+  });
+
+  it("rejects --lockdown-after when tailnet.mode is not tailscale", async () => {
+    setConfig({ sshExposure: { mode: "bootstrap" }, tailnet: { mode: "none" } });
+    const { bootstrap } = await import("../src/commands/bootstrap.ts");
+    await expect(
+      bootstrap.run({
+        args: {
+          host: hostName,
+          flake: "github:owner/repo",
+          rev: "",
+          ref: "",
+          force: true,
+          dryRun: true,
+          lockdownAfter: true,
+        } as any,
+      }),
+    ).rejects.toThrow(/--lockdown-after requires tailnet\.mode=tailscale/i);
+    expect(applyOpenTofuVarsMock).not.toHaveBeenCalled();
   });
 
   it("rejects invalid bootstrap mode", async () => {

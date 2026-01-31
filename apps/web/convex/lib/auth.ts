@@ -1,6 +1,5 @@
 import type { UserIdentity } from "convex/server";
 
-import { isAuthDisabled } from "./env";
 import { fail } from "./errors";
 import type { QueryCtx, MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -9,30 +8,6 @@ export type Authed = {
   identity: UserIdentity | null;
   user: Doc<"users">;
 };
-
-const DEV_TOKEN_IDENTIFIER = "dev";
-
-async function ensureDevUser(ctx: MutationCtx): Promise<Authed> {
-  const now = Date.now();
-  const tokenIdentifier = DEV_TOKEN_IDENTIFIER;
-  const existing = await ctx.db
-    .query("users")
-    .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
-    .unique();
-  if (existing) return { identity: null, user: existing };
-
-  const userId = await ctx.db.insert("users", {
-    tokenIdentifier,
-    name: "Dev User",
-    email: "dev@local",
-    role: "admin",
-    createdAt: now,
-    updatedAt: now,
-  });
-  const user = await ctx.db.get(userId);
-  if (!user) fail("not_found", "failed to create dev user");
-  return { identity: null, user };
-}
 
 async function getUserByTokenIdentifier(ctx: QueryCtx, tokenIdentifier: string): Promise<Doc<"users"> | null> {
   return await ctx.db
@@ -44,16 +19,23 @@ async function getUserByTokenIdentifier(ctx: QueryCtx, tokenIdentifier: string):
 async function ensureUserByIdentity(ctx: MutationCtx, identity: UserIdentity): Promise<Authed> {
   const now = Date.now();
   const tokenIdentifier = identity.tokenIdentifier;
+  const adminUsers = await ctx.db
+    .query("users")
+    .filter((q) => q.eq(q.field("role"), "admin"))
+    .collect();
+  const hasRealAdmin = adminUsers.some((user) => user.tokenIdentifier !== "dev");
   const existing = await ctx.db
     .query("users")
     .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
     .unique();
 
   if (existing) {
+    const nextRole = !hasRealAdmin ? "admin" : existing.role;
     await ctx.db.patch(existing._id, {
       name: identity.name,
       email: identity.email,
       pictureUrl: identity.pictureUrl,
+      role: nextRole,
       updatedAt: now,
     });
     const patched = await ctx.db.get(existing._id);
@@ -62,12 +44,13 @@ async function ensureUserByIdentity(ctx: MutationCtx, identity: UserIdentity): P
   }
 
   const isFirstUser = (await ctx.db.query("users").take(1)).length === 0;
+  const shouldPromote = isFirstUser || !hasRealAdmin;
   const userId = await ctx.db.insert("users", {
     tokenIdentifier,
     name: identity.name,
     email: identity.email,
     pictureUrl: identity.pictureUrl,
-    role: isFirstUser ? "admin" : "viewer",
+    role: shouldPromote ? "admin" : "viewer",
     createdAt: now,
     updatedAt: now,
   });
@@ -77,12 +60,6 @@ async function ensureUserByIdentity(ctx: MutationCtx, identity: UserIdentity): P
 }
 
 export async function requireAuthQuery(ctx: QueryCtx): Promise<Authed> {
-  if (isAuthDisabled()) {
-    const user = await getUserByTokenIdentifier(ctx, DEV_TOKEN_IDENTIFIER);
-    if (!user) fail("unauthorized", "dev user missing (run users.ensureCurrent)");
-    return { identity: null, user };
-  }
-
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) fail("unauthorized", "sign-in required");
   const user = await getUserByTokenIdentifier(ctx, identity.tokenIdentifier);
@@ -91,7 +68,6 @@ export async function requireAuthQuery(ctx: QueryCtx): Promise<Authed> {
 }
 
 export async function requireAuthMutation(ctx: MutationCtx): Promise<Authed> {
-  if (isAuthDisabled()) return await ensureDevUser(ctx);
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) fail("unauthorized", "sign-in required");
   return await ensureUserByIdentity(ctx, identity);

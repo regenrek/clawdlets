@@ -43,13 +43,15 @@ pnpm dev
 
 Project scaffolding defaults to `config/template-source.json` (pinned commit). Override with `CLAWDLETS_TEMPLATE_SPEC`.
 
-### Dev mode (no auth)
+### Auth config
 
-Set `VITE_CLAWDLETS_AUTH_DISABLED=true` and `CLAWDLETS_AUTH_DISABLED=true` in `apps/web/.env.local`, and also set the Convex env var:
+Auth is always enabled. Configure Better Auth env vars for both the web app and Convex:
 
 ```sh
-cd apps/web
-npx convex env set CLAWDLETS_AUTH_DISABLED true
+SITE_URL=http://localhost:3000
+BETTER_AUTH_SECRET=... # 32+ chars
+VITE_CONVEX_URL=https://<deployment>.convex.cloud
+VITE_CONVEX_SITE_URL=https://<deployment>.convex.site
 ```
 
 ## Build

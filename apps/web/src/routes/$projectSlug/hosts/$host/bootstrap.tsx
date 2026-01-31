@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
@@ -9,9 +9,6 @@ import { Button } from "~/components/ui/button"
 import { HelpTooltip, LabelWithHelp } from "~/components/ui/label-help"
 import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select"
 import { Switch } from "~/components/ui/switch"
-import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from "~/components/ui/field"
-import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group"
-import { Spinner } from "~/components/ui/spinner"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +28,7 @@ import { getDeployCredsStatus } from "~/sdk/deploy-creds"
 import { gitPushExecute, gitRepoStatus } from "~/sdk/git"
 import { bootstrapExecute, bootstrapStart, runDoctor } from "~/sdk/operations"
 import { BootstrapChecklist } from "~/components/hosts/bootstrap-checklist"
+import { BootstrapDeploySourceSection } from "~/components/hosts/bootstrap-deploy-source"
 
 export const Route = createFileRoute("/$projectSlug/hosts/$host/bootstrap")({
   component: BootstrapSetup,
@@ -40,6 +38,7 @@ function BootstrapSetup() {
   const { projectSlug, host } = Route.useParams()
   const projectQuery = useProjectBySlug(projectSlug)
   const projectId = projectQuery.projectId
+  const queryClient = useQueryClient()
   const cfg = useQuery({
     queryKey: ["clawdletsConfig", projectId],
     queryFn: async () =>
@@ -53,10 +52,13 @@ function BootstrapSetup() {
     enabled: Boolean(projectId),
   })
   const config = cfg.data?.config as any
+  const hostCfg = host && config?.hosts ? config.hosts[host] : null
+  const tailnetMode = String(hostCfg?.tailnet?.mode || "none")
   const [mode, setMode] = useState<"nixos-anywhere" | "image">("nixos-anywhere")
-  const [bootstrapSource, setBootstrapSource] = useState<"workstation" | "github">("workstation")
   const [force, setForce] = useState(false)
   const [dryRun, setDryRun] = useState(false)
+  const [deploySource, setDeploySource] = useState<"local" | "remote">("remote")
+  const [lockdownAfterByHost, setLockdownAfterByHost] = useState<Record<string, boolean>>({})
 
   const [doctor, setDoctor] = useState<null | { ok: boolean; checks: any[]; runId: Id<"runs"> }>(null)
 
@@ -110,7 +112,8 @@ function BootstrapSetup() {
           mode,
           force,
           dryRun,
-          rev: mode === "nixos-anywhere" ? (bootstrapSource === "workstation" ? repoStatus.data?.localHead : repoStatus.data?.originHead) : undefined,
+          lockdownAfter,
+          rev: mode === "nixos-anywhere" ? selectedRev : undefined,
         },
       })
       toast.info("Bootstrap started")
@@ -119,14 +122,21 @@ function BootstrapSetup() {
 
   const requiresFlake = mode === "nixos-anywhere"
   const repo = repoStatus.data
-  const selectedRev = requiresFlake
-    ? (bootstrapSource === "workstation" ? repo?.localHead : repo?.originHead)
-    : null
-  const missingGithubRev = requiresFlake && bootstrapSource === "github" && !repo?.originHead
-  const needsPush = requiresFlake && bootstrapSource === "workstation" && Boolean(repo?.needsPush)
+  const localSelected = deploySource === "local"
+  const selectedRev = requiresFlake ? (localSelected ? repo?.localHead : repo?.originHead) : null
+  const missingRev = requiresFlake && (localSelected ? !repo?.localHead : !repo?.originHead)
+  const needsPush = requiresFlake && localSelected && Boolean(repo?.needsPush)
   const pushBlocked = needsPush && !repo?.canPush
   const repoGateBlocked = requiresFlake
-    && (repoStatus.isPending || needsPush || missingGithubRev || pushBlocked || Boolean(repoStatus.error))
+    && (repoStatus.isPending || missingRev || needsPush || pushBlocked || Boolean(repoStatus.error))
+
+  const canAutoLockdown = mode === "nixos-anywhere" && tailnetMode === "tailscale"
+  const lockdownAfterRequested = host
+    ? (Object.prototype.hasOwnProperty.call(lockdownAfterByHost, host)
+      ? Boolean(lockdownAfterByHost[host])
+      : tailnetMode === "tailscale")
+    : false
+  const lockdownAfter = canAutoLockdown && lockdownAfterRequested
 
   const doctorGateOk = canBootstrapFromDoctorGate({ host, force, doctor })
   const canBootstrap = doctorGateOk && !repoGateBlocked
@@ -134,10 +144,11 @@ function BootstrapSetup() {
     if (!host) return ""
     const parts = ["clawdlets", "bootstrap", "--host", host, "--mode", mode]
     if (selectedRev) parts.push("--rev", selectedRev)
+    if (lockdownAfter) parts.push("--lockdown-after")
     if (force) parts.push("--force")
     if (dryRun) parts.push("--dry-run")
     return parts.join(" ")
-  }, [dryRun, force, host, mode, selectedRev])
+  }, [dryRun, force, host, lockdownAfter, mode, selectedRev])
 
   const formatSha = (sha?: string | null) => (sha ? sha.slice(0, 7) : "unknown")
 
@@ -173,11 +184,6 @@ function BootstrapSetup() {
         <div className="text-muted-foreground">Missing config.</div>
       ) : (
         <div className="space-y-6">
-          {host ? (
-            <div id="lockdown">
-              <BootstrapChecklist projectId={projectId as Id<"projects">} host={host} config={config} />
-            </div>
-          ) : null}
           <div className="rounded-lg border bg-card p-6 space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -200,145 +206,26 @@ function BootstrapSetup() {
             </div>
 
             <div className="space-y-2">
-              <LabelWithHelp help={setupFieldHelp.bootstrap.source}>
-                Bootstrap source
-              </LabelWithHelp>
-              <RadioGroup value={bootstrapSource} onValueChange={(value) => setBootstrapSource(value as any)}>
-                <FieldLabel htmlFor="bootstrap-source-workstation">
-                  <Field orientation="horizontal">
-                    <FieldContent>
-                      <FieldTitle>Workstation (Local HEAD)</FieldTitle>
-                      <FieldDescription>
-                        Uses your current local commit SHA. Requires the SHA to exist on GitHub (push).
-                      </FieldDescription>
-                    </FieldContent>
-                    <RadioGroupItem value="workstation" id="bootstrap-source-workstation" />
-                  </Field>
-                </FieldLabel>
-                <FieldLabel htmlFor="bootstrap-source-github">
-                  <Field orientation="horizontal">
-                    <FieldContent>
-                      <FieldTitle>GitHub (Last pushed origin default)</FieldTitle>
-                      <FieldDescription>
-                        Uses the latest pushed commit on GitHub. Local changes are ignored until pushed.
-                      </FieldDescription>
-                    </FieldContent>
-                    <RadioGroupItem value="github" id="bootstrap-source-github" />
-                  </Field>
-                </FieldLabel>
-              </RadioGroup>
-              {mode === "image" ? (
-                <div className="text-xs text-muted-foreground">
-                  Image bootstrap ignores git rev selection.
-                </div>
-              ) : null}
-
-              <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="font-medium">Repo sync / push check</div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={repoStatus.isFetching}
-                    onClick={() => void repoStatus.refetch()}
-                  >
-                    {repoStatus.isFetching ? "Refreshing…" : "Refresh"}
-                  </Button>
-                </div>
-                {repoStatus.isPending ? (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Spinner className="size-3" />
-                    Checking repo…
-                  </div>
-                ) : repoStatus.error ? (
-                  <div className="text-sm text-destructive">{String(repoStatus.error)}</div>
-                ) : repo ? (
-                  <div className="grid gap-1 text-muted-foreground">
-                    <div className="flex items-center justify-between gap-3">
-                      <span>local HEAD</span>
-                      <code>{formatSha(repo.localHead)}</code>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>origin HEAD</span>
-                      <code>{formatSha(repo.originHead)}</code>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>branch</span>
-                      <span>{repo.branch || "unknown"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>upstream</span>
-                      <span>{repo.upstream || "unset"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>dirty</span>
-                      <span>{repo.dirty ? "yes" : "no"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>ahead/behind</span>
-                      <span>{repo.ahead ?? 0} / {repo.behind ?? 0}</span>
-                    </div>
-                  </div>
-                ) : null}
-
-                {requiresFlake && bootstrapSource === "workstation" && repo?.dirty ? (
-                  <div className="text-xs text-muted-foreground">
-                    Uncommitted changes are not included in bootstrap.
-                  </div>
-                ) : null}
-
-                {requiresFlake && bootstrapSource === "github" && missingGithubRev ? (
-                  <div className="text-xs text-destructive">
-                    Origin HEAD unknown. Refresh, or run <code>git fetch --all</code>.
-                  </div>
-                ) : null}
-
-                {requiresFlake && bootstrapSource === "workstation" && needsPush ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="text-xs text-destructive">
-                      Push required: local HEAD not on origin.
-                    </div>
-                    {repo?.canPush ? (
-                      <AlertDialog>
-                        <AlertDialogTrigger
-                          render={
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={pushNow.isPending}
-                            >
-                              {pushNow.isPending ? "Pushing…" : "Push now"}
-                            </Button>
-                          }
-                        />
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Push this branch to origin?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This runs <code>git push</code> in your local repo. Make sure the current branch is ready to publish.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => pushNow.mutate()}>
-                              {pushNow.isPending ? "Pushing…" : "Push now"}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    ) : (
-                      <div className="text-xs text-destructive">
-                        {repo?.pushBlockedReason || "Push blocked."}
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
+              <BootstrapDeploySourceSection
+                help={setupFieldHelp.bootstrap.source}
+                mode={mode}
+                deploySource={deploySource}
+                onDeploySourceChange={setDeploySource}
+                requiresFlake={requiresFlake}
+                repoStatus={{
+                  isPending: repoStatus.isPending,
+                  isFetching: repoStatus.isFetching,
+                  error: repoStatus.error,
+                  data: repoStatus.data,
+                }}
+                formatSha={formatSha}
+                onRefresh={() => void repoStatus.refetch()}
+                onPushNow={() => pushNow.mutate()}
+                isPushing={pushNow.isPending}
+              />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
               <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-1 text-sm font-medium">
@@ -367,6 +254,28 @@ function BootstrapSetup() {
                 </div>
                 <Switch checked={dryRun} onCheckedChange={setDryRun} />
               </div>
+              <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1 text-sm font-medium">
+                    <span>Auto-lockdown</span>
+                    <HelpTooltip title="Auto-lockdown" side="top">
+                      {setupFieldHelp.bootstrap.lockdownAfter}
+                    </HelpTooltip>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Waits for tailnet to come up, then locks down public SSH.
+                    {!canAutoLockdown ? " (requires nixos-anywhere + tailscale tailnet)" : ""}
+                  </div>
+                </div>
+                <Switch
+                  checked={lockdownAfterRequested && canAutoLockdown}
+                  disabled={!canAutoLockdown}
+                  onCheckedChange={(value) => {
+                    if (!host) return
+                    setLockdownAfterByHost((prev) => ({ ...prev, [host]: value }))
+                  }}
+                />
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -379,7 +288,9 @@ function BootstrapSetup() {
               {!canBootstrap ? (
                 <div className="text-xs text-muted-foreground">
                   {repoGateBlocked
-                    ? "Resolve repo gate above."
+                    ? (localSelected
+                      ? "Push your local commit (Local deploy), or switch to Remote deploy."
+                      : "Configure a git remote and push at least once, then refresh.")
                     : doctorGateOk || force
                       ? "Waiting for requirements."
                       : "Run doctor first (or enable force)."}
@@ -460,7 +371,18 @@ function BootstrapSetup() {
             </div>
           ) : null}
 
-          {runId ? <RunLogTail runId={runId} /> : null}
+          {runId ? (
+            <RunLogTail
+              runId={runId}
+              onDone={() => void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", projectId] })}
+            />
+          ) : null}
+
+          {host ? (
+            <div id="lockdown">
+              <BootstrapChecklist projectId={projectId as Id<"projects">} host={host} config={config} />
+            </div>
+          ) : null}
         </div>
       )}
     </div>

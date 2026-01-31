@@ -12,7 +12,6 @@ import * as React from "react"
 import type { QueryClient } from "@tanstack/react-query"
 import type { ConvexQueryClient } from "@convex-dev/react-query"
 import { useConvexMutation } from "@convex-dev/react-query"
-import { ConvexProvider, useConvexAuth } from "convex/react"
 import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react"
 import { DefaultCatchBoundary } from "~/components/DefaultCatchBoundary"
 import { NotFound } from "~/components/NotFound"
@@ -24,9 +23,9 @@ import { seo } from "~/utils/seo"
 import { AppShell } from "~/components/layout/app-shell"
 import { Toaster } from "~/components/ui/sonner"
 import { api } from "../../convex/_generated/api"
+import { useConvexAuth } from "convex/react"
 import { getAuthBootstrap } from "~/sdk/auth"
 import { authClient } from "~/lib/auth-client"
-import { AuthStateProvider } from "~/lib/auth-state"
 import { parseProjectSlug } from "~/lib/project-routing"
 
 export const Route = createRootRouteWithContext<{
@@ -34,21 +33,19 @@ export const Route = createRootRouteWithContext<{
   convexQueryClient: ConvexQueryClient
 }>()({
   beforeLoad: async ({ location, context }) => {
-    const { authDisabled, token } = await getAuthBootstrap()
+    const { token } = await getAuthBootstrap()
 
     if (token && context.convexQueryClient.serverHttpClient) {
       context.convexQueryClient.serverHttpClient.setAuth(token)
     }
 
-    if (!authDisabled) {
-      const pathname = location.pathname
-      const isAuthRoute = pathname === "/sign-in" || pathname.startsWith("/api/auth/")
-      if (!isAuthRoute && !token) {
-        throw redirect({ to: "/sign-in" })
-      }
+    const pathname = location.pathname
+    const isAuthRoute = pathname === "/sign-in" || pathname.startsWith("/api/auth/")
+    if (!isAuthRoute && !token) {
+      throw redirect({ to: "/sign-in" })
     }
 
-    return { authDisabled, token }
+    return { token }
   },
   loader: () => getTheme(),
   head: () => ({
@@ -97,7 +94,7 @@ export const Route = createRootRouteWithContext<{
         sizes: "16x16",
         href: "/favicon-16x16.png",
       },
-      { rel: "manifest", href: "/site.webmanifest", color: "#fffff" },
+      { rel: "manifest", href: "/site.webmanifest", color: "#ffffff" },
       { rel: "icon", href: "/favicon.ico" },
     ],
   }),
@@ -113,10 +110,11 @@ export const Route = createRootRouteWithContext<{
 })
 
 function RootComponent() {
-  const { authDisabled, token } = Route.useRouteContext()
+  const { token } = Route.useRouteContext()
   const router = useRouter()
   const convexQueryClient = router.options.context.convexQueryClient
   const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const isAuthRoute = pathname === "/sign-in" || pathname.startsWith("/api/auth/")
   const showShell = pathname !== "/sign-in"
   const projectSlug = parseProjectSlug(pathname)
   const showSidebar = Boolean(projectSlug)
@@ -129,26 +127,16 @@ function RootComponent() {
     <Outlet />
   )
 
-  return authDisabled ? (
-    <RootDocument>
-      <ConvexProvider client={convexQueryClient.convexClient}>
-        <AuthStateProvider value={{ authDisabled: true }}>
-          <EnsureDevUser />
-          {app}
-        </AuthStateProvider>
-      </ConvexProvider>
-    </RootDocument>
-  ) : (
+  return (
     <RootDocument>
       <ConvexBetterAuthProvider
         client={convexQueryClient.convexClient}
         authClient={authClient}
         initialToken={token}
       >
-        <AuthStateProvider value={{ authDisabled: false }}>
-          <EnsureAuthedUser />
-          {app}
-        </AuthStateProvider>
+        <RequireSignIn />
+        <EnsureAuthedUser />
+        <AuthGate app={app} />
       </ConvexBetterAuthProvider>
     </RootDocument>
   )
@@ -173,22 +161,58 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   )
 }
 
-function EnsureDevUser() {
-  const ensureCurrent = useConvexMutation(api.users.ensureCurrent)
-  React.useEffect(() => {
-    void ensureCurrent({})
-  }, [ensureCurrent])
-  return null
-}
-
 function EnsureAuthedUser() {
   const ensureCurrent = useConvexMutation(api.users.ensureCurrent)
   const { isAuthenticated, isLoading } = useConvexAuth()
+  const { data: session, isPending } = authClient.useSession()
+  const hasSession = Boolean(session?.session?.id)
 
   React.useEffect(() => {
-    if (isLoading || !isAuthenticated) return
-    void ensureCurrent({})
-  }, [ensureCurrent, isAuthenticated, isLoading])
+    if (isPending || isLoading || !isAuthenticated || !hasSession) return
+    void ensureCurrent({}).catch(() => null)
+  }, [ensureCurrent, hasSession, isAuthenticated, isLoading, isPending])
 
   return null
+}
+
+function RequireSignIn() {
+  const router = useRouter()
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const { data: session, isPending } = authClient.useSession()
+  const { isAuthenticated, isLoading } = useConvexAuth()
+
+  React.useEffect(() => {
+    if (isPending || isLoading) return
+    if (pathname === "/sign-in" || pathname.startsWith("/api/auth/")) return
+    if (isAuthenticated || session?.session?.id) return
+    void router.navigate({ to: "/sign-in" })
+  }, [isAuthenticated, isLoading, isPending, pathname, router, session?.session?.id])
+
+  return null
+}
+
+function AuthGate({ app }: { app: React.ReactNode }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const { data: session, isPending } = authClient.useSession()
+  const { isAuthenticated, isLoading } = useConvexAuth()
+  const isAuthRoute = pathname === "/sign-in" || pathname.startsWith("/api/auth/")
+  const hasSession = Boolean(session?.session?.id)
+
+  if (isAuthRoute) return <>{app}</>
+  if (isPending || isLoading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-muted-foreground">
+        Checking session…
+      </div>
+    )
+  }
+  if (!isAuthenticated || !hasSession) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-muted-foreground">
+        Redirecting to sign-in…
+      </div>
+    )
+  }
+
+  return <>{app}</>
 }

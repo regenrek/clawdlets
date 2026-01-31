@@ -5,17 +5,74 @@ import { defineCommand } from "citty";
 import { applyOpenTofuVars } from "@clawdlets/core/lib/opentofu";
 import { resolveGitRev } from "@clawdlets/core/lib/git";
 import { capture, run } from "@clawdlets/core/lib/run";
+import { sshCapture } from "@clawdlets/core/lib/ssh-remote";
 import { checkGithubRepoVisibility, tryParseGithubFlakeUri } from "@clawdlets/core/lib/github";
 import { loadDeployCreds } from "@clawdlets/core/lib/deploy-creds";
 import { expandPath } from "@clawdlets/core/lib/path-expand";
 import { findRepoRoot } from "@clawdlets/core/lib/repo";
 import { buildFleetSecretsPlan } from "@clawdlets/core/lib/fleet-secrets-plan";
 import { withFlakesEnv } from "@clawdlets/core/lib/nix-flakes";
-import { getSshExposureMode, getTailnetMode, loadClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config";
+import { ClawdletsConfigSchema, getSshExposureMode, getTailnetMode, loadClawdletsConfig, writeClawdletsConfig } from "@clawdlets/core/lib/clawdlets-config";
 import { resolveBaseFlake } from "@clawdlets/core/lib/base-flake";
 import { getHostExtraFilesDir, getHostExtraFilesKeyPath, getHostExtraFilesSecretsDir, getHostOpenTofuDir } from "@clawdlets/core/repo-layout";
 import { requireDeployGate } from "../lib/deploy-gate.js";
 import { resolveHostNameOrExit } from "@clawdlets/core/lib/host-resolve";
+import { extractFirstIpv4, isTailscaleIpv4, normalizeSingleLineOutput } from "@clawdlets/core/lib/host-connectivity";
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseDurationToMs(raw: string): number | null {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  const m = s.match(/^(\d+)\s*([smhd])$/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const unit = String(m[2]).toLowerCase();
+  const seconds =
+    unit === "s" ? n :
+    unit === "m" ? n * 60 :
+    unit === "h" ? n * 60 * 60 :
+    unit === "d" ? n * 60 * 60 * 24 :
+    null;
+  if (seconds == null) return null;
+  const ms = seconds * 1000;
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  return ms;
+}
+
+async function waitForTailscaleIpv4ViaSsh(params: {
+  ipv4: string;
+  timeoutMs: number;
+  pollMs: number;
+  repoRoot: string;
+}): Promise<string> {
+  const startedAt = Date.now();
+  const deadline = startedAt + params.timeoutMs;
+  let lastError = "";
+
+  while (Date.now() < deadline) {
+    try {
+      const raw = await sshCapture(
+        `admin@${params.ipv4}`,
+        "sh -lc 'command -v tailscale >/dev/null 2>&1 && tailscale ip -4 || true'",
+        { cwd: params.repoRoot, timeoutMs: 8_000, maxOutputBytes: 8 * 1024 },
+      );
+      const normalized = normalizeSingleLineOutput(raw || "");
+      const candidate = extractFirstIpv4(normalized || raw || "");
+      if (candidate && isTailscaleIpv4(candidate)) return candidate;
+      lastError = candidate ? `unexpected IPv4 ${candidate}` : "tailscale ip missing";
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+    }
+    await sleep(params.pollMs);
+  }
+
+  const waited = Math.max(0, Date.now() - startedAt);
+  throw new Error(`timed out waiting for tailscale ipv4 after ${waited}ms (last error: ${lastError || "unknown"})`);
+}
 
 async function purgeKnownHosts(ipv4: string, opts: { dryRun: boolean }) {
   const rm = async (host: string) => {
@@ -49,6 +106,9 @@ export const bootstrap = defineCommand({
 	    flake: { type: "string", description: "Override base flake (default: clawdlets.json baseFlake or git origin)." },
 	    rev: { type: "string", description: "Git rev to pin (HEAD/sha/tag).", default: "HEAD" },
 	    ref: { type: "string", description: "Git ref to pin (branch or tag)." },
+	    lockdownAfter: { type: "boolean", description: "After bootstrap, wait for tailnet and remove public SSH (updates config + runs OpenTofu apply).", default: false },
+	    lockdownTimeout: { type: "string", description: "Max wait for tailnet health (<n><s|m|h|d>, default 10m).", default: "10m" },
+	    lockdownPoll: { type: "string", description: "Tailnet poll interval (<n><s|m|h|d>, default 5s).", default: "5s" },
 	    force: { type: "boolean", description: "Skip doctor gate (not recommended).", default: false },
 	    dryRun: { type: "boolean", description: "Print commands without executing.", default: false },
 	  },
@@ -57,16 +117,29 @@ export const bootstrap = defineCommand({
 	    const repoRoot = findRepoRoot(cwd);
 	    const hostName = resolveHostNameOrExit({ cwd, runtimeDir: (args as any).runtimeDir, hostArg: args.host });
 	    if (!hostName) return;
-	    const { layout, config: clawdletsConfig } = loadClawdletsConfig({ repoRoot, runtimeDir: (args as any).runtimeDir });
+	    const { layout, configPath, config: clawdletsConfig } = loadClawdletsConfig({ repoRoot, runtimeDir: (args as any).runtimeDir });
 	    const hostCfg = clawdletsConfig.hosts[hostName];
 	    if (!hostCfg) throw new Error(`missing host in fleet/clawdlets.json: ${hostName}`);
 	    const sshExposureMode = getSshExposureMode(hostCfg);
 	    const tailnetMode = getTailnetMode(hostCfg);
+	    const lockdownAfter = Boolean((args as any).lockdownAfter);
+	    const lockdownTimeoutRaw = String((args as any).lockdownTimeout || "10m").trim() || "10m";
+	    const lockdownPollRaw = String((args as any).lockdownPoll || "5s").trim() || "5s";
+	    const lockdownTimeoutMs = parseDurationToMs(lockdownTimeoutRaw);
+	    if (!lockdownTimeoutMs) throw new Error(`invalid --lockdown-timeout: ${lockdownTimeoutRaw} (expected <n><s|m|h|d>, e.g. 10m)`);
+	    const lockdownPollMs = parseDurationToMs(lockdownPollRaw);
+	    if (!lockdownPollMs) throw new Error(`invalid --lockdown-poll: ${lockdownPollRaw} (expected <n><s|m|h|d>, e.g. 5s)`);
 	    const modeRaw = String((args as any).mode || "nixos-anywhere").trim();
 	    if (modeRaw !== "nixos-anywhere" && modeRaw !== "image") {
 	      throw new Error(`invalid --mode: ${modeRaw} (expected nixos-anywhere|image)`);
 	    }
 	    const mode = modeRaw as "nixos-anywhere" | "image";
+	    if (lockdownAfter && mode !== "nixos-anywhere") {
+	      throw new Error(`--lockdown-after is only supported with --mode nixos-anywhere`);
+	    }
+	    if (lockdownAfter && tailnetMode !== "tailscale") {
+	      throw new Error(`--lockdown-after requires tailnet.mode=tailscale (current: ${tailnetMode})`);
+	    }
 
 	    if (Boolean((args as any).force)) {
 	      console.error("warn: skipping doctor gate (--force)");
@@ -299,33 +372,99 @@ export const bootstrap = defineCommand({
 
     await purgeKnownHosts(ipv4, { dryRun: args.dryRun });
 
-    const publicSshStatus = "OPEN";
+	    let publicSshStatus = "OPEN";
+
+	    if (lockdownAfter) {
+	      if (args.dryRun) {
+	        console.log("");
+	        console.log("dry-run: would wait for tailscale + apply lockdown:");
+        console.log(`  ssh admin@${ipv4} 'tailscale ip -4'  # wait for 100.x`);
+        console.log(`  set hosts.${hostName}.targetHost = admin@<tailscale-ip>`);
+        console.log(`  set hosts.${hostName}.sshExposure.mode = tailnet`);
+        console.log(`  clawdlets lockdown --host ${hostName}`);
+      } else {
+        console.log("");
+        console.log(`Waiting for tailnet (timeout ${lockdownTimeoutRaw}, poll ${lockdownPollRaw})...`);
+        const tailscaleIpv4 = await waitForTailscaleIpv4ViaSsh({
+          ipv4,
+          timeoutMs: lockdownTimeoutMs,
+          pollMs: lockdownPollMs,
+          repoRoot,
+        });
+        console.log(`Tailnet IPv4: ${tailscaleIpv4}`);
+
+        const nextHostCfg = structuredClone(hostCfg) as any;
+        nextHostCfg.targetHost = `admin@${tailscaleIpv4}`;
+        nextHostCfg.sshExposure = { ...(nextHostCfg.sshExposure || {}), mode: "tailnet" };
+        nextHostCfg.tailnet = { ...(nextHostCfg.tailnet || {}), mode: "tailscale" };
+        const nextConfig = ClawdletsConfigSchema.parse({
+          ...clawdletsConfig,
+          hosts: { ...clawdletsConfig.hosts, [hostName]: nextHostCfg },
+        });
+        await writeClawdletsConfig({ configPath, config: nextConfig });
+        console.log(`ok: updated fleet/clawdlets.json (targetHost + sshExposure=tailnet)`);
+
+        await applyOpenTofuVars({
+          opentofuDir,
+          vars: {
+            hostName,
+            hcloudToken,
+            adminCidr,
+            adminCidrIsWorldOpen: Boolean(hostCfg.provisioning.adminCidrAllowWorldOpen),
+            sshPubkeyFile,
+            serverType,
+            image,
+            location,
+            sshExposureMode: "tailnet",
+            tailnetMode,
+          },
+          nixBin,
+          dryRun: args.dryRun,
+          redact: [hcloudToken, githubToken].filter(Boolean) as string[],
+        });
+
+        publicSshStatus = "LOCKED DOWN";
+      }
+    }
+
+    const effectiveSshExposureMode = lockdownAfter && !args.dryRun ? "tailnet" : sshExposureMode;
 
     console.log("🎉 Bootstrap complete.");
     console.log(`Host: ${hostName}`);
     console.log(`IPv4: ${ipv4}`);
-    console.log(`SSH exposure: ${sshExposureMode}`);
+    console.log(`SSH exposure: ${effectiveSshExposureMode}`);
     console.log(`Public SSH (22): ${publicSshStatus}`);
 
-    console.log("");
-    console.log("⚠ SSH WILL REMAIN OPEN until you switch to tailnet and run lockdown:");
-    console.log(`  clawdlets host set --host ${hostName} --ssh-exposure tailnet`);
-    console.log(`  clawdlets lockdown --host ${hostName}`);
+    if (!lockdownAfter) {
+      console.log("");
+      console.log("⚠ SSH WILL REMAIN OPEN until you switch to tailnet and run lockdown:");
+      console.log(`  clawdlets host set --host ${hostName} --ssh-exposure tailnet`);
+      console.log(`  clawdlets lockdown --host ${hostName}`);
+    }
 
     if (tailnetMode === "tailscale") {
       console.log("");
       console.log("Next (tailscale):");
-      console.log(`1) Wait for the host to appear in Tailscale, then copy its 100.x IP.`);
-      console.log("   tailscale status  # look for the 100.x address");
-	      console.log(`2) Set future SSH target to tailnet:`);
-	      console.log(`   clawdlets host set --host ${hostName} --target-host admin@<tailscale-ip>`);
-	      console.log("3) Verify access:");
-	      console.log("   ssh admin@<tailscale-ip> 'hostname; uptime'");
-	      console.log("4) Switch SSH exposure to tailnet and lock down:");
-	      console.log(`   clawdlets host set --host ${hostName} --ssh-exposure tailnet`);
-	      console.log(`   clawdlets lockdown --host ${hostName}`);
-	      console.log("5) Optional checks:");
-	      console.log("   clawdlets server audit --host " + hostName);
+      if (lockdownAfter) {
+        console.log(`1) Verify access via tailnet (targetHost updated):`);
+        console.log(`   ssh admin@<tailscale-ip> 'hostname; uptime'`);
+        console.log("2) Redeploy so NixOS firewall also becomes tailnet-only:");
+        console.log(`   clawdlets server deploy --host ${hostName}`);
+        console.log("3) Optional checks:");
+        console.log("   clawdlets server audit --host " + hostName);
+      } else {
+        console.log(`1) Wait for the host to appear in Tailscale, then copy its 100.x IP.`);
+        console.log("   tailscale status  # look for the 100.x address");
+        console.log(`2) Set future SSH target to tailnet:`);
+        console.log(`   clawdlets host set --host ${hostName} --target-host admin@<tailscale-ip>`);
+        console.log("3) Verify access:");
+        console.log("   ssh admin@<tailscale-ip> 'hostname; uptime'");
+        console.log("4) Switch SSH exposure to tailnet and lock down:");
+        console.log(`   clawdlets host set --host ${hostName} --ssh-exposure tailnet`);
+        console.log(`   clawdlets lockdown --host ${hostName}`);
+        console.log("5) Optional checks:");
+        console.log("   clawdlets server audit --host " + hostName);
+      }
 	    } else {
       console.log("");
       console.log("Notes:");

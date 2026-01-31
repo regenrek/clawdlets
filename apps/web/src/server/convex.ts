@@ -1,7 +1,6 @@
 import { ConvexHttpClient } from "convex/browser";
 import type { FunctionReference, FunctionReturnType, OptionalRestArgs } from "convex/server";
 
-import { isAuthDisabled } from "./env";
 
 export type ConvexClient = {
   query: <Query extends FunctionReference<"query">>(
@@ -24,13 +23,7 @@ function getConvexUrl(): string {
   return url;
 }
 
-function createAuthDisabledClient(): ConvexHttpClient {
-  return new ConvexHttpClient(getConvexUrl(), { skipConvexDeploymentUrlCheck: true });
-}
-
 export function createConvexClient(): ConvexClient {
-  if (isAuthDisabled()) return createAuthDisabledClient();
-
   return {
     query: async (query, ...args) => {
       const { fetchAuthQuery } = await import("~/server/better-auth");
@@ -46,4 +39,3 @@ export function createConvexClient(): ConvexClient {
     },
   };
 }
-

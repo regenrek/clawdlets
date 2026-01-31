@@ -47,6 +47,7 @@ export const setupFieldHelp = {
     host: "Host entry to bootstrap/provision.",
     mode: "`nixos-anywhere` provisions a fresh server; `image` uses an existing image flow.",
     source: "Pins which git revision nixos-anywhere installs. Workstation uses local HEAD; GitHub uses the last pushed origin default.",
+    lockdownAfter: "After bootstrap, waits for the host to join the tailnet and then runs lockdown (removes public SSH in Hetzner firewall). Recommended when using Tailscale.",
     force: "Skip doctor gate checks. Risky; prefer fixing doctor findings first.",
     dryRun: "Show commands without executing (safe preview).",
   },

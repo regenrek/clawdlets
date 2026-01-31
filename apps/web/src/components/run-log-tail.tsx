@@ -7,7 +7,7 @@ import { api } from "../../convex/_generated/api";
 import { Button } from "~/components/ui/button";
 import { cancelRun } from "~/sdk/runs";
 
-export function RunLogTail({ runId }: { runId: Id<"runs"> }) {
+export function RunLogTail({ runId, onDone }: { runId: Id<"runs">; onDone?: (status: string) => void }) {
   const router = useRouter();
   const convexQueryClient = router.options.context.convexQueryClient;
 
@@ -20,11 +20,13 @@ export function RunLogTail({ runId }: { runId: Id<"runs"> }) {
   const [olderPages, setOlderPages] = React.useState<any[]>([]);
   const [cursor, setCursor] = React.useState<string | null>(null);
   const [isDone, setIsDone] = React.useState(false);
+  const lastDoneStatus = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     setOlderPages([]);
     setCursor(null);
     setIsDone(false);
+    lastDoneStatus.current = null;
   }, [runId]);
 
   React.useEffect(() => {
@@ -66,6 +68,16 @@ export function RunLogTail({ runId }: { runId: Id<"runs"> }) {
       return true;
     });
   const run = runQuery.data?.run;
+  const runStatus = run?.status;
+
+  React.useEffect(() => {
+    if (!onDone) return;
+    if (!runStatus) return;
+    if (runStatus === lastDoneStatus.current) return;
+    if (runStatus !== "succeeded" && runStatus !== "failed" && runStatus !== "canceled") return;
+    lastDoneStatus.current = runStatus;
+    onDone(runStatus);
+  }, [onDone, runStatus]);
 
   return (
     <div className="rounded-lg border bg-card">

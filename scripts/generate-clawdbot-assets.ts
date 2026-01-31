@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -148,6 +149,17 @@ const writeJson = (outPath: string, payload: unknown) => {
 
 const ensureDir = (p: string) => fs.mkdirSync(p, { recursive: true });
 
+const ensureOpenclawConfigPath = () => {
+  if (process.env.OPENCLAW_CONFIG_PATH) return;
+  const tmpDir = path.join(os.tmpdir(), "clawdlets-openclaw");
+  const configPath = path.join(tmpDir, "openclaw.json");
+  ensureDir(tmpDir);
+  if (!fs.existsSync(configPath)) {
+    fs.writeFileSync(configPath, "{}\n", "utf8");
+  }
+  process.env.OPENCLAW_CONFIG_PATH = configPath;
+};
+
 const getGitRev = (repo: string): string => {
   try {
     return execSync(`git -C ${JSON.stringify(repo)} rev-parse HEAD`, { encoding: "utf8" }).trim();
@@ -221,6 +233,7 @@ const main = async () => {
 
   ensureDir(path.dirname(schemaOut));
   ensureDir(path.dirname(providersOut));
+  ensureOpenclawConfigPath();
 
   ensureClawdbotDeps(src);
 
@@ -230,7 +243,77 @@ const main = async () => {
     console.error(`error: buildConfigSchema not found in ${schemaModuleUrl}`);
     process.exit(1);
   }
-  const schemaRes = schemaMod.buildConfigSchema();
+  const channelsModuleUrl = pathToFileURL(path.join(src, "src", "channels", "plugins", "index.ts")).href;
+  const channelsMod = await import(channelsModuleUrl);
+  if (typeof channelsMod.listChannelPlugins !== "function") {
+    console.error(`error: listChannelPlugins not found in ${channelsModuleUrl}`);
+    process.exit(1);
+  }
+  const pluginsModuleUrl = pathToFileURL(path.join(src, "src", "plugins", "loader.ts")).href;
+  const pluginsMod = await import(pluginsModuleUrl);
+  const loadPlugins =
+    typeof pluginsMod.loadOpenClawPlugins === "function"
+      ? pluginsMod.loadOpenClawPlugins
+      : typeof pluginsMod.loadMoltbotPlugins === "function"
+        ? pluginsMod.loadMoltbotPlugins
+        : null;
+  if (!loadPlugins) {
+    console.error(`error: loadOpenClawPlugins/loadMoltbotPlugins not found in ${pluginsModuleUrl}`);
+    process.exit(1);
+  }
+  const manifestsModuleUrl = pathToFileURL(
+    path.join(src, "src", "plugins", "manifest-registry.ts"),
+  ).href;
+  const manifestsMod = await import(manifestsModuleUrl);
+  if (typeof manifestsMod.loadPluginManifestRegistry !== "function") {
+    console.error(`error: loadPluginManifestRegistry not found in ${manifestsModuleUrl}`);
+    process.exit(1);
+  }
+  const manifestRegistry = manifestsMod.loadPluginManifestRegistry({
+    config: {},
+    workspaceDir: src,
+    cache: false,
+  }) as { plugins: Array<{ id?: string | null }> };
+  const pluginIds = Array.from(
+    new Set(
+      manifestRegistry.plugins
+        .map((plugin) => String(plugin.id ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+  const entries = Object.fromEntries(pluginIds.map((id) => [id, { enabled: true }]));
+  let pluginRegistry: { plugins: Array<any> };
+  try {
+    pluginRegistry = loadPlugins({
+      config: pluginIds.length > 0 ? { plugins: { entries } } : {},
+      workspaceDir: src,
+      logger: {
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+        debug: () => {},
+      },
+    });
+  } catch (err) {
+    console.error(`error: failed to load clawdbot plugins for schema: ${String((err as Error)?.message || err)}`);
+    process.exit(1);
+  }
+  const schemaRes = schemaMod.buildConfigSchema({
+    plugins: pluginRegistry.plugins.map((plugin: any) => ({
+      id: plugin.id,
+      name: plugin.name,
+      description: plugin.description,
+      configUiHints: plugin.configUiHints,
+      configSchema: plugin.configJsonSchema,
+    })),
+    channels: channelsMod.listChannelPlugins().map((entry: any) => ({
+      id: entry.id,
+      label: entry.meta?.label,
+      description: entry.meta?.blurb,
+      configSchema: entry.configSchema?.schema,
+      configUiHints: entry.configSchema?.uiHints,
+    })),
+  });
   const generatedAt = getGitCommitTimeIso(src, rev) || new Date(0).toISOString();
   const schemaPayload = {
     schema: schemaRes.schema ?? {},

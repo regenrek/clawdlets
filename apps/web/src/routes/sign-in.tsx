@@ -1,7 +1,6 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import * as React from "react";
 import { authClient } from "~/lib/auth-client";
-import { useAuthState } from "~/lib/auth-state";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
@@ -12,32 +11,7 @@ export const Route = createFileRoute("/sign-in")({
 });
 
 function SignIn() {
-  const { authDisabled } = useAuthState();
-  return authDisabled ? <AuthDisabled /> : <AuthEnabledSignIn />;
-}
-
-function AuthDisabled() {
-  return (
-    <div className="min-h-[80vh] flex items-center justify-center">
-      <Card className="w-full max-w-md p-6">
-        <div className="space-y-2">
-          <div className="text-2xl font-black tracking-tight">Auth disabled</div>
-          <div className="text-muted-foreground text-sm">
-            Dev mode enabled. Remove <code>CLAWDLETS_AUTH_DISABLED</code> to use sign-in.
-          </div>
-        </div>
-        <div className="mt-6 flex items-center justify-between">
-          <Button
-            nativeButton={false}
-            render={<Link to="/" />}
-            className="w-full"
-          >
-            Continue
-          </Button>
-        </div>
-      </Card>
-    </div>
-  );
+  return <AuthEnabledSignIn />;
 }
 
 function AuthEnabledSignIn() {
@@ -150,9 +124,6 @@ function AuthEnabledSignIn() {
           >
             {mode === "sign-in" ? "Create an account" : "Have an account? Sign in"}
           </button>
-          <Link to="/" className="text-muted-foreground hover:text-foreground">
-            Back
-          </Link>
         </div>
       </Card>
     </div>

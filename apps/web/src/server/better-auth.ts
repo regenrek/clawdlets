@@ -1,7 +1,7 @@
 import { convexBetterAuthReactStart } from "@convex-dev/better-auth/react-start";
 
 import { isAuthError } from "~/lib/auth-utils";
-import { assertAuthNotDisabledInProd } from "./env";
+import { assertAuthEnv } from "./env";
 
 function getConvexUrl(): string {
   const url = String(process.env["VITE_CONVEX_URL"] || process.env["CONVEX_URL"] || "").trim();
@@ -21,7 +21,7 @@ function getConvexSiteUrl(): string {
   return url;
 }
 
-assertAuthNotDisabledInProd();
+assertAuthEnv();
 
 const start = convexBetterAuthReactStart({
   convexUrl: getConvexUrl(),
@@ -34,4 +34,3 @@ export const handler = start.handler;
 export const fetchAuthQuery = start.fetchAuthQuery;
 export const fetchAuthMutation = start.fetchAuthMutation;
 export const fetchAuthAction = start.fetchAuthAction;
-
