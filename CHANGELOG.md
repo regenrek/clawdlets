@@ -11,7 +11,7 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 
 ### Changed
 - Replace default favicons with Clawdlets branding (generated from `clawdlets-icon.png`).
-- Refine host settings UX by splitting into smaller “settings sections” (Vercel-style cards) and clarifying SSH connectivity vs SSH key management.
+- Refine host settings UX by splitting into smaller “settings sections” and clarifying SSH connectivity vs SSH key management.
 - Bootstrap UI: move post-bootstrap checklist below the bootstrap flow; simplify “deploy source” with Local vs Remote options and hide verbose git info behind a “Show details” toggle.
 - Default web auth to Better Auth (remove legacy auth-disabled path) and enforce sign-in redirect.
 - Regenerate pinned OpenClaw schema to include channel plugin schemas for capability selection.

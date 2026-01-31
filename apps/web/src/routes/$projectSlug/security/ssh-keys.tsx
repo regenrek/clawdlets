@@ -6,6 +6,7 @@ import type { Id } from "../../../../convex/_generated/dataModel"
 import { Button } from "~/components/ui/button"
 import { NativeSelect, NativeSelectOption } from "~/components/ui/native-select"
 import { Label } from "~/components/ui/label"
+import { LabelWithHelp } from "~/components/ui/label-help"
 import { Input } from "~/components/ui/input"
 import { Textarea } from "~/components/ui/textarea"
 import { SettingsSection } from "~/components/ui/settings-section"
@@ -302,4 +303,3 @@ function SecuritySshKeys() {
     </div>
   )
 }
-

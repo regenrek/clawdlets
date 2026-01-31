@@ -50,7 +50,7 @@ const add = defineCommand({
       flakeHost: "",
       targetHost: undefined,
       hetzner: { serverType: "cx43", image: "", location: "nbg1" },
-      provisioning: { adminCidr: "", adminCidrAllowWorldOpen: false, sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
+      provisioning: { adminCidr: "", adminCidrAllowWorldOpen: false, sshPubkeyFile: "" },
       sshExposure: { mode: "bootstrap" },
       tailnet: { mode: "tailscale" },
       cache: {
@@ -120,7 +120,7 @@ const set = defineCommand({
     "hetzner-image": { type: "string", description: "Hetzner image ID/name (custom image or snapshot)." },
     "hetzner-location": { type: "string", description: "Hetzner location (e.g. nbg1, fsn1)." },
     "admin-cidr": { type: "string", description: "ADMIN_CIDR (e.g. 1.2.3.4/32)." },
-    "ssh-pubkey-file": { type: "string", description: "SSH_PUBKEY_FILE path (e.g. ~/.ssh/id_ed25519.pub)." },
+    "ssh-pubkey-file": { type: "string", description: "SSH public key file path used for provisioning (e.g. ~/.ssh/id_ed25519.pub)." },
     "clear-ssh-keys": { type: "boolean", description: "Clear sshAuthorizedKeys.", default: false },
     "add-ssh-key": { type: "string", description: "Add SSH public key contents (repeatable).", array: true },
     "add-ssh-key-file": { type: "string", description: "Add SSH public key from file (repeatable).", array: true },

@@ -22,6 +22,30 @@ export const Route = createFileRoute("/$projectSlug/hosts/$host/settings")({
   component: HostsSetup,
 })
 
+function looksLikeSshPublicKeyText(value: string): boolean {
+  const s = String(value || "").trim()
+  if (!s) return false
+  const firstLine = s.split(/\r?\n/)[0] || ""
+  const tokens = firstLine.trim().split(/\s+/)
+  if (tokens.length < 2) return false
+  const [type, base64] = tokens
+  if (!type) return false
+  if (!type.startsWith("ssh-") && !type.includes("ssh")) return false
+  if (!base64) return false
+  if (!/^[A-Za-z0-9+/]+={0,3}$/.test(base64)) return false
+  return true
+}
+
+function looksLikeSshPrivateKeyText(value: string): boolean {
+  const s = String(value || "").trimStart()
+  if (!s.startsWith("-----BEGIN ")) return false
+  return (
+    s.startsWith("-----BEGIN OPENSSH PRIVATE KEY-----")
+    || s.startsWith("-----BEGIN RSA PRIVATE KEY-----")
+    || s.startsWith("-----BEGIN PRIVATE KEY-----")
+  )
+}
+
 function HostsSetup() {
   const { projectSlug, host: selectedHost } = Route.useParams()
   const projectQuery = useProjectBySlug(projectSlug)
@@ -42,7 +66,7 @@ function HostsSetup() {
   const [diskDevice, setDiskDevice] = useState("/dev/sda")
   const [targetHost, setTargetHost] = useState("")
   const [adminCidr, setAdminCidr] = useState("")
-  const [sshPubkeyFile, setSshPubkeyFile] = useState("~/.ssh/id_ed25519.pub")
+  const [sshPubkeyFile, setSshPubkeyFile] = useState("")
   const [sshExposure, setSshExposure] = useState<"tailnet" | "bootstrap" | "public">("bootstrap")
   const [tailnetMode, setTailnetMode] = useState<"tailscale" | "none">("tailscale")
   const [serverType, setServerType] = useState("cx43")
@@ -85,7 +109,7 @@ function HostsSetup() {
     setDiskDevice(hostCfg.diskDevice || "/dev/sda")
     setTargetHost(hostCfg.targetHost || "")
     setAdminCidr(hostCfg.provisioning?.adminCidr || "")
-    setSshPubkeyFile(hostCfg.provisioning?.sshPubkeyFile || "~/.ssh/id_ed25519.pub")
+    setSshPubkeyFile(hostCfg.provisioning?.sshPubkeyFile || "")
     setSshExposure((hostCfg.sshExposure?.mode as any) || "bootstrap")
     setTailnetMode((hostCfg.tailnet?.mode as any) || "tailscale")
     setServerType(hostCfg.hetzner?.serverType || "cx43")
@@ -98,6 +122,10 @@ function HostsSetup() {
   const save = useMutation({
     mutationFn: async () => {
       if (!config || !hostCfg) throw new Error("missing host")
+      const sshPubkeyFileTrimmed = sshPubkeyFile.trim()
+      if (looksLikeSshPrivateKeyText(sshPubkeyFileTrimmed) || looksLikeSshPublicKeyText(sshPubkeyFileTrimmed)) {
+        throw new Error("SSH pubkey file must be a local file path (not key contents). Use the SSH Keys section to paste keys.")
+      }
       const next = {
         ...config,
         hosts: {
@@ -111,7 +139,7 @@ function HostsSetup() {
             provisioning: {
               ...hostCfg.provisioning,
               adminCidr: adminCidr.trim(),
-              sshPubkeyFile: sshPubkeyFile.trim(),
+              sshPubkeyFile: sshPubkeyFileTrimmed,
             },
             sshExposure: { ...hostCfg.sshExposure, mode: sshExposure },
             tailnet: { ...hostCfg.tailnet, mode: tailnetMode },
@@ -134,6 +162,9 @@ function HostsSetup() {
         toast.success("Saved")
         void queryClient.invalidateQueries({ queryKey: ["clawdletsConfig", projectId] })
       } else toast.error("Validation failed")
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : String(err))
     },
   })
 
@@ -257,7 +288,66 @@ function HostsSetup() {
                 <LabelWithHelp htmlFor="pubkeyFile" help={setupFieldHelp.hosts.sshPubkeyFile}>
                   Operator public key file (local path)
                 </LabelWithHelp>
-                <Input id="pubkeyFile" value={sshPubkeyFile} onChange={(e) => setSshPubkeyFile(e.target.value)} />
+                <Input
+                  id="pubkeyFile"
+                  value={sshPubkeyFile}
+                  onChange={(e) => setSshPubkeyFile(e.target.value)}
+                  placeholder="~/.ssh/id_ed25519.pub"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setSshPubkeyFile("~/.ssh/id_ed25519.pub")}
+                  >
+                    Use ~/.ssh/id_ed25519.pub
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setSshPubkeyFile("~/.ssh/id_rsa.pub")}
+                  >
+                    Use ~/.ssh/id_rsa.pub
+                  </Button>
+                </div>
+                {(() => {
+                  const v = sshPubkeyFile.trim()
+                  if (!v) {
+                    return (
+                      <div className="text-xs text-destructive">
+                        Required for provisioning. This is a local path on the machine running bootstrap.
+                      </div>
+                    )
+                  }
+                  if (looksLikeSshPrivateKeyText(v)) {
+                    return (
+                      <div className="text-xs text-destructive">
+                        Private key detected. Do not paste secrets here.
+                      </div>
+                    )
+                  }
+                  if (looksLikeSshPublicKeyText(v)) {
+                    return (
+                      <div className="text-xs text-destructive">
+                        Looks like SSH key contents. This field expects a file path.
+                      </div>
+                    )
+                  }
+                  if (!v.endsWith(".pub")) {
+                    return (
+                      <div className="text-xs text-muted-foreground">
+                        Warning: does not end with <code>.pub</code>. Double-check this is a public key file path.
+                      </div>
+                    )
+                  }
+                  return (
+                    <div className="text-xs text-muted-foreground">
+                      The dashboard can’t read your filesystem; the CLI validates this path when you run bootstrap/infra.
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           </SettingsSection>

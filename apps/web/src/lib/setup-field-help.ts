@@ -7,7 +7,7 @@ export const setupFieldHelp = {
     diskDevice: "Block device to install NixOS onto (usually `/dev/sda` on Hetzner). Must start with `/dev/`.",
     targetHost: "SSH destination used for deploy/ops + live schema. Optional until you run server ops; set in Hosts → Settings → Target host (ssh alias or `user@host`).",
     adminCidr: "CIDR allowed to reach admin SSH during bootstrap (recommend your current IP `/32`). Use Detect to autofill from your public IP.",
-    sshPubkeyFile: "Local `.pub` file to authorize on the host during provisioning.",
+    sshPubkeyFile: "Local path to an SSH public key file used during provisioning (Hetzner). The dashboard can’t read your filesystem; the CLI will validate it when you run bootstrap/infra.",
     sshExposure: "How SSH is exposed: `bootstrap` (temporary), `tailnet` (recommended), or `public` (risky).",
     tailnet: "Tailnet integration mode. `tailscale` enables Tailscale-based access; `none` disables it.",
     hetznerServerType: "Hetzner server type (e.g. `cx43`). Used by provisioning.",

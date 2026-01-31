@@ -142,7 +142,9 @@ const HostSchema = z.object({
     .object({
       adminCidr: z.string().trim().default(""),
       adminCidrAllowWorldOpen: z.boolean().default(false),
-      sshPubkeyFile: z.string().trim().default("~/.ssh/id_ed25519.pub"),
+      // Local path on the operator machine that runs provisioning.
+      // Intentionally default empty to avoid silently persisting a guessed path in shared config.
+      sshPubkeyFile: z.string().trim().default(""),
     })
     .superRefine((value, ctx) => {
       const adminCidr = value.adminCidr.trim();
@@ -164,7 +166,7 @@ const HostSchema = z.object({
         });
       }
     })
-    .default(() => ({ adminCidr: "", adminCidrAllowWorldOpen: false, sshPubkeyFile: "~/.ssh/id_ed25519.pub" })),
+    .default(() => ({ adminCidr: "", adminCidrAllowWorldOpen: false, sshPubkeyFile: "" })),
   sshExposure: z
     .object({
       mode: SshExposureModeSchema.default("bootstrap"),
@@ -384,7 +386,7 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
         sshKnownHosts: [],
         flakeHost: "",
         hetzner: { serverType: "cx43", image: "", location: "nbg1" },
-        provisioning: { adminCidr: "", adminCidrAllowWorldOpen: false, sshPubkeyFile: "~/.ssh/id_ed25519.pub" },
+        provisioning: { adminCidr: "", adminCidrAllowWorldOpen: false, sshPubkeyFile: "" },
         sshExposure: { mode: "bootstrap" },
         tailnet: { mode: "tailscale" },
         cache: {
