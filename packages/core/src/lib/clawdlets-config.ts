@@ -226,12 +226,39 @@ const HostSchema = z.object({
   selfUpdate: z
     .object({
       enable: z.boolean().default(false),
-      manifestUrl: z.string().trim().default(""),
       interval: z.string().trim().default("30min"),
-      publicKey: z.string().trim().default(""),
-      signatureUrl: z.string().trim().default(""),
+      baseUrl: z.string().trim().default(""),
+      channel: z
+        .string()
+        .trim()
+        .default("prod")
+        .refine((v) => /^[a-z][a-z0-9-]*$/.test(v), { message: "invalid selfUpdate.channel (use [a-z][a-z0-9-]*)" }),
+      publicKeys: z.array(z.string().trim().min(1)).default([]),
+      allowUnsigned: z.boolean().default(false),
+      allowRollback: z.boolean().default(false),
+      healthCheckUnit: z.string().trim().default(""),
     })
-    .default(() => ({ enable: false, manifestUrl: "", interval: "30min", publicKey: "", signatureUrl: "" })),
+    .superRefine((v, ctx) => {
+      if (v.enable && !v.baseUrl) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["baseUrl"], message: "selfUpdate.baseUrl must be set when enabled" });
+      }
+      if (v.enable && !v.allowUnsigned && v.publicKeys.length === 0) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["publicKeys"], message: "selfUpdate.publicKeys must be set when enabled (or enable allowUnsigned for dev)" });
+      }
+      if (v.healthCheckUnit && !/^[A-Za-z0-9@._:-]+(\.service)?$/.test(v.healthCheckUnit)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["healthCheckUnit"], message: "invalid selfUpdate.healthCheckUnit" });
+      }
+    })
+    .default(() => ({
+      enable: false,
+      interval: "30min",
+      baseUrl: "",
+      channel: "prod",
+      publicKeys: [],
+      allowUnsigned: false,
+      allowRollback: false,
+      healthCheckUnit: "",
+    })),
   agentModelPrimary: z.string().trim().default("anthropic/claude-opus-4-5"),
 });
 
@@ -344,18 +371,7 @@ export function getTailnetMode(hostCfg: ClawdletsHostConfig | null | undefined):
 export function createDefaultClawdletsConfig(params: { host: string; bots?: string[] }): ClawdletsConfig {
   const host = params.host.trim() || "clawdbot-fleet-host";
   const bots = (params.bots || ["maren", "sonja", "gunnar", "melinda"]).map((b) => b.trim()).filter(Boolean);
-  const botsRecord = Object.fromEntries(
-    bots.map((b) => [
-      b,
-      {
-        profile: {
-          secretEnv: {
-            DISCORD_BOT_TOKEN: `discord_token_${b}`,
-          },
-        },
-      },
-    ]),
-  );
+  const botsRecord = Object.fromEntries(bots.map((b) => [b, {}]));
   return ClawdletsConfigSchema.parse({
     schemaVersion: CLAWDLETS_CONFIG_SCHEMA_VERSION,
     defaultHost: host,
@@ -402,7 +418,16 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
           },
         },
         operator: { deploy: { enable: false } },
-        selfUpdate: { enable: false, manifestUrl: "", interval: "30min", publicKey: "", signatureUrl: "" },
+        selfUpdate: {
+          enable: false,
+          interval: "30min",
+          baseUrl: "",
+          channel: "prod",
+          publicKeys: [],
+          allowUnsigned: false,
+          allowRollback: false,
+          healthCheckUnit: "",
+        },
         agentModelPrimary: "zai/glm-4.7",
       },
     },

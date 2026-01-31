@@ -18,7 +18,7 @@ This file is **committed to git**. Secrets are not stored here (see `docs/secret
 
 Top-level:
 
-- `schemaVersion`: currently `9`
+- `schemaVersion`: currently `10`
 - `defaultHost` (optional): used when `--host` is omitted
 - `baseFlake` (optional): flake URI for remote builds (e.g. `github:<owner>/<repo>`)
   - if empty, CLI falls back to `git remote origin` (recommended)
@@ -54,18 +54,21 @@ Host entry (`hosts.<host>`):
 - `provisioning.adminCidr`: CIDR allowed to SSH during bootstrap (e.g. `203.0.113.10/32`)
 - `provisioning.adminCidrAllowWorldOpen`: allow `0.0.0.0/0` or `::/0` (default: `false`)
 - `provisioning.sshPubkeyFile`: local path to `.pub` used for provisioning
-- `operator.deploy.enable`: allow `admin` to run constrained deploy entrypoints (switch-system/install-secrets). Default: `false`.
+- `operator.deploy.enable`: allow `admin` to run constrained deploy entrypoints (install-secrets + updater apply trigger). Default: `false`.
 - `sshExposure.mode`: `tailnet|bootstrap|public` (single SSH exposure policy)
 - `tailnet.mode`: `tailscale` or `none` (tailscale mode opens UDP/41641 at the provider firewall for direct tailnet connectivity)
 - `cache.garnix.private.enable`: enable private Garnix cache access (requires netrc secret)
 - `cache.garnix.private.netrcSecret`: sops secret name containing `/etc/nix/netrc`
 - `cache.garnix.private.netrcPath`: path for the netrc file (default: `/etc/nix/netrc`)
 - `cache.garnix.private.narinfoCachePositiveTtl`: TTL for private Garnix cache (default: `3600`)
-- `selfUpdate.enable`: enable pull-based self-updates from a manifest URL
-- `selfUpdate.manifestUrl`: URL to the per-host deploy manifest
+- `selfUpdate.enable`: enable pull-based self-updates from signed desired-state manifests
+- `selfUpdate.baseUrl`: base URL that contains `latest.json` pointer + `<releaseId>.json` manifests
 - `selfUpdate.interval`: systemd timer cadence (e.g. `30min`)
-- `selfUpdate.publicKey`: minisign public key (optional)
-- `selfUpdate.signatureUrl`: minisign signature URL (required if publicKey is set)
+- `selfUpdate.channel`: `staging|prod|...` (host policy; manifest must match)
+- `selfUpdate.publicKeys`: minisign public keys (list)
+- `selfUpdate.allowUnsigned`: dev-only escape hatch (skip signature verification)
+- `selfUpdate.allowRollback`: break-glass (accept lower releaseId)
+- `selfUpdate.healthCheckUnit`: optional systemd unit name to require active after switch (record-only)
 
 Cattle (`cattle.*`):
 
@@ -124,9 +127,6 @@ Default autowire scope:
 - `clawdlets doctor --scope server-deploy --strict`: deploy gate; fails on warn.
 
 ## Migration notes
-
-- v10: SSH keys are project-scoped under `fleet.sshAuthorizedKeys`/`fleet.sshKnownHosts` (no longer per-host).
-- v9: inline secrets are deprecated; move tokens/api keys to `${ENV_VAR}` wiring and secretEnv mappings (hooks/skills included).
 
 ## Example
 
@@ -197,10 +197,13 @@ Default autowire scope:
       "tailnet": { "mode": "tailscale" },
       "selfUpdate": {
         "enable": false,
-        "manifestUrl": "",
         "interval": "30min",
-        "publicKey": "",
-        "signatureUrl": ""
+        "baseUrl": "",
+        "channel": "prod",
+        "publicKeys": [],
+        "allowUnsigned": false,
+        "allowRollback": false,
+        "healthCheckUnit": ""
       },
       "agentModelPrimary": "zai/glm-4.7"
     }

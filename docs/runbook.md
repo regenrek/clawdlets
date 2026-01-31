@@ -28,7 +28,7 @@ If/when you want required status checks, re-run with explicit contexts:
 8) Switch admin access to VPN + close public SSH:
    - `clawdlets host set --target-host admin@<vpn-ip>`
    - `clawdlets host set --ssh-exposure tailnet`
-   - `clawdlets server deploy --manifest deploy-manifest.<host>.json`
+   - `clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json`
    - `clawdlets lockdown`
 9) `clawdlets server audit --target-host admin@<vpn-ip>`
 
@@ -36,8 +36,7 @@ If/when you want required status checks, re-run with explicit contexts:
 
 Pinned deploys:
 
-- `clawdlets server deploy --target-host admin@<vpn-ip> --toplevel /nix/store/... --rev HEAD`
-- `clawdlets server deploy --manifest deploy-manifest.<host>.json`
+- `clawdlets server deploy --target-host admin@<vpn-ip> --manifest deploy/<host>/prod/<releaseId>.json`
 
 Orchestrator (if cattle enabled):
 

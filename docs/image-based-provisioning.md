@@ -46,7 +46,7 @@ clawdlets bootstrap --mode image
 6) **Deploy secrets + system** (same as normal deploy):
 
 ```bash
-clawdlets server deploy --host <host> --target-host admin@<ipv4> --manifest deploy-manifest.<host>.json
+clawdlets server deploy --host <host> --target-host admin@<ipv4> --manifest deploy/<host>/prod/<releaseId>.json
 ```
 
 ## Alternate POC (snapshot)

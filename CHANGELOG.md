@@ -128,13 +128,13 @@ The format is based on Keep a Changelog and this project follows SemVer for npm 
 - `clawdlets bootstrap --force` skips doctor preflight gate (advanced usage).
 - Destroy command: `clawdlets infra destroy` (with `--force` for non-interactive automation).
 - Local deploy creds: `clawdlets env init` + `clawdlets env show` (default env file: `.clawdlets/env`).
-- Cache-only deploy flow: `clawdlets server deploy` (switch by store path + secrets install) with optional deploy manifest.
+- Cache-only deploy flow: `clawdlets server deploy` (secrets + desired-state apply) via signed release manifest.
 - Host deploy entrypoints: `/etc/clawdlets/bin/install-secrets` + `/etc/clawdlets/bin/switch-system` (sudo allowlist via `clawdlets.operator.deploy`).
 - Private Garnix cache support: `clawdlets.cache.garnix.private.*` (netrc + narinfo TTL).
-- CI workflows: `deploy-manifest` (build + publish per-host manifests) and `deploy` (GitOps tailnet deploy).
+- CI workflows: build+publish signed release manifests and `deploy` (GitOps tailnet deploy).
 - Manifest signing support in CI (minisign) + self-update signature verification.
-- `clawdlets server manifest` command (pins rev + toplevel + secretsDigest).
-- Self-update module: `clawdlets.selfUpdate.*` (manifest URL + timer).
+- Release manifest commands: `clawdlets release manifest build|sign|verify`.
+- Self-update module: `clawdlets.selfUpdate.*` (baseUrl + keys + timer).
 - Image pipeline: `nixos-generators` outputs (`<host>-image`), `clawdlets image build|upload`, and `bootstrap --mode image`.
 - Hetzner image/location config fields (`hosts.<host>.hetzner.image/location`).
 - Separate template repo (`regenrek/clawdlets-template`) with CI checks for generated projects.

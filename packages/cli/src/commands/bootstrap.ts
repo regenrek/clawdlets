@@ -232,7 +232,7 @@ export const bootstrap = defineCommand({
       console.log(`1) Set targetHost for deploys:`);
       console.log(`   clawdlets host set --host ${hostName} --target-host admin@${ipv4}`);
       console.log("2) Deploy secrets + system:");
-      console.log(`   clawdlets server deploy --host ${hostName} --target-host admin@${ipv4} --manifest deploy-manifest.${hostName}.json`);
+      console.log(`   clawdlets server deploy --host ${hostName} --target-host admin@${ipv4} --manifest deploy/${hostName}/prod/<releaseId>.json`);
       console.log("");
       console.log("After tailnet is healthy, lock down SSH:");
       console.log(`  clawdlets host set --host ${hostName} --ssh-exposure tailnet`);

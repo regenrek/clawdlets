@@ -5,7 +5,7 @@ Goal: zero drift. Project repo + `.clawdlets/` are the only sources of truth.
 ## Deploy-only
 
 - Any persistent change must be done by editing the project repo (or `.clawdlets/`) and deploying.
-- Prefer pinned deploys: `clawdlets server deploy --manifest deploy-manifest.<host>.json`.
+- Prefer pinned deploys: `clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json`.
 - Assume the box is disposable. Reinstall beats debugging a snowflake.
 
 ## Cache-only
@@ -45,7 +45,7 @@ Default breakglass path:
 ## Deploy privilege model
 
 - Default: `admin` cannot run `nixos-rebuild` (breakglass required).
-- Recommended: enable `clawdlets.operator.deploy.enable` to allow `admin` to run constrained deploy entrypoints (`/etc/clawdlets/bin/switch-system` + `install-secrets`).
+- Recommended: enable `clawdlets.operator.deploy.enable` to allow `admin` to run constrained deploy entrypoints (`/etc/clawdlets/bin/install-secrets`, `/etc/clawdlets/bin/update-ingest`, `systemctl start clawdlets-update-apply.service`).
 
 ## Egress posture (honesty)
 

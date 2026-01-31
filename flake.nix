@@ -25,17 +25,106 @@
 
   outputs = { self, nixpkgs, nix-clawdbot, clawdbot-src, ... }:
     let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; };
-      dev = import ./devenv.nix { inherit pkgs; };
+      systemLinux = "x86_64-linux";
+      pkgsLinux = import nixpkgs { system = systemLinux; };
+      dev = import ./devenv.nix { pkgs = pkgsLinux; };
       clawdbotSourceInfo = import "${nix-clawdbot}/nix/sources/moltbot-source.nix";
+
+      mkCliPackages = (system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+          lib = pkgs.lib;
+          rootSrc = lib.cleanSource ./.;
+
+          pnpm = pkgs.pnpm_10;
+          nodejs = pkgs.nodejs_22;
+
+          pnpmWorkspacesCli = [
+            "@clawdlets/shared"
+            "@clawdlets/cattle-core"
+            "@clawdlets/core"
+            "clawdlets"
+          ];
+
+          pnpmDepsCli = pkgs.fetchPnpmDeps {
+            pname = "clawdlets-cli";
+            version = "0.4.3";
+            src = rootSrc;
+            inherit pnpm;
+            fetcherVersion = 3;
+            pnpmWorkspaces = pnpmWorkspacesCli;
+            # Update this when pnpm-lock.yaml changes
+            hash = "sha256-A3izetIxONv5hwMCrqqaE4WcJE9RkkSKrSLSGjYyZ9Q=";
+          };
+
+          clawdletsCli = pkgs.buildNpmPackage {
+            pname = "clawdlets";
+            version = "0.4.3";
+            src = rootSrc;
+
+            inherit nodejs;
+
+            npmDeps = null;
+            inherit pnpmDepsCli;
+            pnpmDeps = pnpmDepsCli;
+            nativeBuildInputs = [ pnpm pkgs.makeWrapper ];
+            npmConfigHook = pkgs.pnpmConfigHook;
+            inherit pnpmWorkspacesCli;
+            pnpmWorkspaces = pnpmWorkspacesCli;
+
+            dontNpmBuild = true;
+            dontNpmInstall = true;
+            dontNpmPrune = true;
+
+            buildPhase = ''
+              runHook preBuild
+
+              # Dependencies are installed by pnpmConfigHook (offline, workspace-scoped).
+              pnpm --filter=@clawdlets/shared build
+              pnpm --filter=@clawdlets/cattle-core build
+              pnpm --filter=@clawdlets/core build
+              pnpm --filter=clawdlets build
+
+              runHook postBuild
+            '';
+
+            installPhase = ''
+              runHook preInstall
+
+              mkdir -p $out/lib/clawdlets
+              mkdir -p $out/bin
+
+              cp -r node_modules $out/lib/clawdlets/node_modules
+              cp -r packages $out/lib/clawdlets/packages
+
+              makeWrapper ${nodejs}/bin/node $out/bin/clawdlets \
+                --add-flags "$out/lib/clawdlets/packages/cli/dist/main.mjs" \
+                --prefix PATH : ${pkgs.minisign}/bin
+
+              runHook postInstall
+            '';
+
+            meta = {
+              description = "clawdlets CLI";
+              mainProgram = "clawdlets";
+            };
+          };
+        in
+          {
+            clawdlets = clawdletsCli;
+            default = clawdletsCli;
+          }
+      );
     in {
-      devShells.${system}.default = pkgs.mkShell {
+      devShells.${systemLinux}.default = pkgsLinux.mkShell {
         packages = dev.packages or [ ];
       };
 
-      checks.${system} = {
-        clawdbot-pin-align = pkgs.runCommand "clawdbot-pin-align" {} ''
+      packages.${systemLinux} = mkCliPackages systemLinux;
+      packages.aarch64-darwin = mkCliPackages "aarch64-darwin";
+
+      checks.${systemLinux} = {
+        clawdbot-pin-align = pkgsLinux.runCommand "clawdbot-pin-align" {} ''
           set -euo pipefail
           pinned_rev="${clawdbotSourceInfo.rev or ""}"
           src_rev="${clawdbot-src.rev or ""}"

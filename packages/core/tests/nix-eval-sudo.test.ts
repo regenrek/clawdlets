@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { withFlakesEnv } from "../src/lib/nix-flakes";
 
 const NIX_EVAL_TIMEOUT_MS = 120_000;
 
@@ -52,7 +53,7 @@ in cfg.security.sudo.extraConfig
 
   return execFileSync("nix", ["eval", "--impure", "--raw", "--expr", expr], {
     cwd: resolveRepoRoot(),
-    env: process.env,
+    env: withFlakesEnv(process.env),
     encoding: "utf8",
   }).trim();
 }

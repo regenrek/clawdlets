@@ -10,9 +10,18 @@ import { Textarea } from "~/components/ui/textarea"
 import { SettingsSection } from "~/components/ui/settings-section"
 import { useProjectBySlug } from "~/lib/project-data"
 import { setupFieldHelp } from "~/lib/setup-field-help"
-import { addProjectSshKeys, getClawdletsConfig, removeProjectSshAuthorizedKey, removeProjectSshKnownHost } from "~/sdk/config"
+import { addProjectSshKeys, removeProjectSshAuthorizedKey, removeProjectSshKnownHost } from "~/sdk/config"
+import { clawdletsConfigQueryOptions, projectsListQueryOptions } from "~/lib/query-options"
+import { slugifyProjectName } from "~/lib/project-routing"
 
 export const Route = createFileRoute("/$projectSlug/security/ssh-keys")({
+  loader: async ({ context, params }) => {
+    const projects = await context.queryClient.ensureQueryData(projectsListQueryOptions())
+    const project = projects.find((p) => slugifyProjectName(p.name) === params.projectSlug) ?? null
+    const projectId = (project?._id as Id<"projects"> | null) ?? null
+    if (!projectId) return
+    await context.queryClient.ensureQueryData(clawdletsConfigQueryOptions(projectId))
+  },
   component: SecuritySshKeys,
 })
 
@@ -23,9 +32,7 @@ function SecuritySshKeys() {
   const queryClient = useQueryClient()
 
   const cfg = useQuery({
-    queryKey: ["clawdletsConfig", projectId],
-    queryFn: async () =>
-      await getClawdletsConfig({ data: { projectId: projectId as Id<"projects"> } }),
+    ...clawdletsConfigQueryOptions(projectId as Id<"projects"> | null),
     enabled: Boolean(projectId),
   })
 

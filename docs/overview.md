@@ -85,14 +85,14 @@ clawdlets bootstrap --mode image
 ```bash
 clawdlets host set --target-host admin@<tailscale-ip>
 clawdlets host set --ssh-exposure tailnet
-clawdlets server deploy --manifest deploy-manifest.<host>.json
+clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json
 clawdlets lockdown
 ```
 
 6) **Operate**
 - status: `clawdlets server status`
 - logs: `clawdlets server logs --unit clawdbot-melinda.service --follow`
-- deploy pinned: `clawdlets server deploy --manifest deploy-manifest.<host>.json`
+- deploy pinned: `clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json`
 
 ## Secrets model (important)
 

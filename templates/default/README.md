@@ -14,12 +14,17 @@ Quickstart
 5) `clawdlets secrets init --host <host> --from-json .clawdlets/secrets.json --yes`
 6) `clawdlets doctor --scope bootstrap`
 7) `clawdlets bootstrap`
-8) join tailnet, then: `clawdlets host set --target-host admin@<tailscale-ip>` then `clawdlets server deploy --manifest deploy-manifest.<host>.json` and `clawdlets lockdown`
+8) join tailnet, then: `clawdlets host set --target-host admin@<tailscale-ip>` then `clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json` and `clawdlets lockdown`
 
 Docs: see the clawdlets repo `docs/README.md`
 
 Updates
 - `flake.lock` pins `clawdlets` and `nix-clawdbot`; use the repo’s `bump-clawdlets` and `bump-nix-clawdbot` PRs to stay current.
+- Recommended (Path 1): publish signed desired-state manifests to GitHub Pages (gh-pages branch):
+  - enable Pages: Settings → Pages → Deploy from branch → `gh-pages` / root
+  - add Actions secret: `MINISIGN_PRIVATE_KEY` (contents of `minisign.key`, generated via `minisign -G -n`)
+  - run workflow: `updates: publish` (writes `deploy/<host>/<channel>/<releaseId>.json` + `latest.json`)
+  - promote workflow: `updates: promote` (staging → prod, no rebuild; new `releaseId`)
 
 Safety
 - `clawdlets project init` installs git hooks to block plaintext secrets.

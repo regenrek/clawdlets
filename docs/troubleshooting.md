@@ -70,7 +70,7 @@ clawdlets server restart --target-host <host> --unit clawdbot-melinda.service
 
 ## Self-update: minisign verification failed
 
-- Confirm `clawdlets.selfUpdate.publicKey` matches the key used in CI.
+- Confirm `clawdlets.selfUpdate.publicKeys` includes the key used in CI.
 - Ensure `.minisig` exists at `.../latest.json.minisig`.
 - Re-run the manifest workflow to republish signatures.
 

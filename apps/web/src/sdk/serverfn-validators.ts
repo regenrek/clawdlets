@@ -400,6 +400,48 @@ export function parseServerLogsExecuteInput(data: unknown): {
   }
 }
 
+export function parseServerUpdateStatusStartInput(data: unknown): { projectId: Id<"projects">; host: string } {
+  return parseProjectHostRequiredInput(data)
+}
+
+export function parseServerUpdateStatusExecuteInput(data: unknown): {
+  projectId: Id<"projects">
+  runId: Id<"runs">
+  host: string
+  targetHost: string
+} {
+  const base = parseProjectRunHostInput(data)
+  const d = requireObject(data)
+  return {
+    ...base,
+    targetHost: parseOptionalString(d["targetHost"], 512),
+  }
+}
+
+export function parseServerUpdateLogsStartInput(data: unknown): { projectId: Id<"projects">; host: string } {
+  return parseProjectHostRequiredInput(data)
+}
+
+export function parseServerUpdateLogsExecuteInput(data: unknown): {
+  projectId: Id<"projects">
+  runId: Id<"runs">
+  host: string
+  lines: string
+  since: string
+  follow: boolean
+  targetHost: string
+} {
+  const base = parseProjectRunHostInput(data)
+  const d = requireObject(data)
+  return {
+    ...base,
+    lines: parseLines(d["lines"]),
+    since: parseOptionalString(d["since"], 256),
+    follow: Boolean(d["follow"]),
+    targetHost: parseOptionalString(d["targetHost"], 512),
+  }
+}
+
 export function parseServerRestartStartInput(data: unknown): {
   projectId: Id<"projects">
   host: string

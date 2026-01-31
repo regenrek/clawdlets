@@ -4,8 +4,8 @@ export function linuxBuildRequiredError(params: { command: string }): Error {
     [
       `${cmd}: local NixOS builds require Linux.`,
       "Use one of:",
-      "- CI: deploy-manifest.yml publishes signed deploy manifests, then deploy.yml (or selfUpdate) deploys by manifest over tailnet",
-      "- Linux builder: build the system on Linux and deploy with --manifest or --toplevel",
+      "- CI: build systems + publish signed release manifests, then deploy by manifest (or enable pull selfUpdate)",
+      "- Linux builder: build the system on Linux and deploy with --manifest",
     ].join("\n"),
   );
 }
@@ -14,4 +14,3 @@ export function requireLinuxForLocalNixosBuild(params: { platform: string; comma
   if (params.platform === "linux") return;
   throw linuxBuildRequiredError({ command: params.command });
 }
-

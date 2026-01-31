@@ -83,6 +83,8 @@ export function BootstrapChecklist({
   const tailnetMode = String(hostCfg?.tailnet?.mode || "tailscale")
   const enabled = Boolean(hostCfg?.enable)
   const tailscaleRequired = tailnetMode === "tailscale"
+  const deployChannel = String(hostCfg?.selfUpdate?.channel || "prod")
+  const deployManifestPath = `deploy/${host}/${deployChannel}/1.json`
 
   const setConfig = useMutation({
     mutationFn: async (payload: { path: string; value?: string; valueJson?: string }) =>
@@ -147,7 +149,7 @@ export function BootstrapChecklist({
 
   const deployStart = useMutation({
     mutationFn: async () =>
-      await serverDeployStart({ data: { projectId, host, manifestPath: `deploy-manifest.${host}.json` } }),
+      await serverDeployStart({ data: { projectId, host, manifestPath: deployManifestPath } }),
     onSuccess: (res) => {
       setDeployRunId(res.runId)
       void serverDeployExecute({
@@ -155,7 +157,7 @@ export function BootstrapChecklist({
           projectId,
           runId: res.runId,
           host,
-          manifestPath: `deploy-manifest.${host}.json`,
+          manifestPath: deployManifestPath,
           rev: "HEAD",
           targetHost,
           confirm: `deploy ${host}`,
@@ -238,7 +240,7 @@ export function BootstrapChecklist({
           statusVariant={targetHost.trim() ? "secondary" : "destructive"}
           description={
             <span>
-              Manifest: <code>deploy-manifest.{host}.json</code> · Target: <code>{targetHost || "<unset>"}</code>
+              Manifest: <code>deploy/{host}/{deployChannel}/1.json</code> · Target: <code>{targetHost || "<unset>"}</code>
             </span>
           }
           actionLabel="Deploy now"

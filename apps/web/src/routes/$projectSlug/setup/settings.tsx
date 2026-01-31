@@ -8,8 +8,12 @@ import { Button } from "~/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
 import { authClient } from "~/lib/auth-client"
 import { useProjectBySlug } from "~/lib/project-data"
+import { projectsListQueryOptions } from "~/lib/query-options"
 
 export const Route = createFileRoute("/$projectSlug/setup/settings")({
+  loader: async ({ context }) => {
+    await context.queryClient.ensureQueryData(projectsListQueryOptions())
+  },
   component: ProjectSettings,
 })
 
@@ -22,7 +26,6 @@ function ProjectSettings() {
   const canQuery = Boolean(session?.user?.id) && isAuthenticated && !isPending && !isLoading
   const project = useQuery({
     ...convexQuery(api.projects.get, { projectId: projectId as Id<"projects"> }),
-    gcTime: 5_000,
     enabled: Boolean(projectId) && canQuery,
   })
 

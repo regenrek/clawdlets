@@ -2,6 +2,7 @@
 
 import { createFileRoute, Outlet, redirect, useNavigate, useRouterState } from "@tanstack/react-router"
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
+import { projectsListQueryOptions } from "~/lib/query-options"
 
 const TABS = ["api-keys", "ssh-keys"] as const
 type TabKey = (typeof TABS)[number]
@@ -12,6 +13,9 @@ function resolveTab(pathname: string): TabKey {
 }
 
 export const Route = createFileRoute("/$projectSlug/security")({
+  loader: async ({ context }) => {
+    await context.queryClient.ensureQueryData(projectsListQueryOptions())
+  },
   beforeLoad: ({ location, params }) => {
     if (location.pathname.endsWith(`/${params.projectSlug}/security`)) {
       throw redirect({
@@ -19,6 +23,9 @@ export const Route = createFileRoute("/$projectSlug/security")({
         params: { projectSlug: params.projectSlug },
       })
     }
+    // Note: this route is also a layout for child routes; when we don't
+    // redirect, we intentionally "do nothing".
+    return undefined as never
   },
   component: ProjectSecurityLayout,
 })

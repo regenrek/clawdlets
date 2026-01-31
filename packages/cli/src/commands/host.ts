@@ -62,7 +62,16 @@ const add = defineCommand({
         },
       },
       operator: { deploy: { enable: false } },
-      selfUpdate: { enable: false, manifestUrl: "", interval: "30min", publicKey: "", signatureUrl: "" },
+      selfUpdate: {
+        enable: false,
+        interval: "30min",
+        baseUrl: "",
+        channel: "prod",
+        publicKeys: [],
+        allowUnsigned: false,
+        allowRollback: false,
+        healthCheckUnit: "",
+      },
       agentModelPrimary: "zai/glm-4.7",
     };
 

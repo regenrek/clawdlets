@@ -5,11 +5,14 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
 import { useConvexAuth } from "convex/react"
 import { Button } from "~/components/ui/button"
 import { ProjectsTable } from "~/components/dashboard/projects-table"
-import { getDashboardOverview } from "~/sdk/dashboard"
 import { slugifyProjectName, storeLastProjectSlug } from "~/lib/project-routing"
 import { authClient } from "~/lib/auth-client"
+import { dashboardOverviewQueryOptions } from "~/lib/query-options"
 
 export const Route = createFileRoute("/projects/")({
+  loader: async ({ context }) => {
+    await context.queryClient.ensureQueryData(dashboardOverviewQueryOptions())
+  },
   component: ProjectsIndex,
 })
 
@@ -19,9 +22,7 @@ function ProjectsIndex() {
   const { isAuthenticated, isLoading } = useConvexAuth()
   const canQuery = Boolean(session?.user?.id) && isAuthenticated && !isPending && !isLoading
   const overview = useQuery({
-    queryKey: ["dashboardOverview"],
-    queryFn: async () => await getDashboardOverview({ data: {} }),
-    gcTime: 5_000,
+    ...dashboardOverviewQueryOptions(),
     enabled: canQuery,
   })
   const projects = overview.data?.projects ?? []

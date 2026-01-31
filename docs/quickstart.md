@@ -98,13 +98,13 @@ clawdlets bootstrap --mode image
 ```bash
 clawdlets host set --target-host admin@<tailscale-ip>
 clawdlets host set --ssh-exposure tailnet
-clawdlets server deploy --manifest deploy-manifest.<host>.json
+clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json
 clawdlets lockdown
 ```
 
 6) Deploy (pinned to a full commit SHA):
 ```bash
-clawdlets server deploy --manifest deploy-manifest.<host>.json
+clawdlets server deploy --manifest deploy/<host>/prod/<releaseId>.json
 ```
 
 Manifest pins the full 40-hex SHA.
@@ -112,10 +112,11 @@ Manifest pins the full 40-hex SHA.
 If you don’t have CI manifests yet, generate one locally:
 
 ```bash
-clawdlets server manifest --host <host> --out deploy-manifest.<host>.json
+clawdlets release manifest build --host <host> --channel prod --system x86_64-linux --release-id <releaseId> --out deploy/<host>/prod/<releaseId>.json
+clawdlets release manifest sign --in deploy/<host>/prod/<releaseId>.json
 ```
 
-Note: building NixOS system artifacts requires Linux. On macOS, use CI (`deploy-manifest.yml`) or a Linux builder and then deploy by `--manifest`/`--toplevel`.
+Note: building NixOS system artifacts requires Linux. On macOS, use CI (`updates-publish.yml`) or a Linux builder and then deploy by `--manifest`.
 
 ## Server checks
 

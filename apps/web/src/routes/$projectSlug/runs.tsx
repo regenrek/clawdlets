@@ -4,8 +4,12 @@ import { api } from "../../../convex/_generated/api"
 import type { Id } from "../../../convex/_generated/dataModel"
 import { Button } from "~/components/ui/button"
 import { useProjectBySlug } from "~/lib/project-data"
+import { projectsListQueryOptions } from "~/lib/query-options"
 
 export const Route = createFileRoute("/$projectSlug/runs")({
+  loader: async ({ context }) => {
+    await context.queryClient.ensureQueryData(projectsListQueryOptions())
+  },
   component: RunsPage,
 })
 
@@ -32,7 +36,6 @@ function RunsPage() {
     },
     getNextPageParam: (lastPage) => (lastPage.isDone ? undefined : lastPage.continueCursor),
     enabled: Boolean(projectId),
-    gcTime: 5_000,
   })
 
   const allRuns = runs.data?.pages.flatMap((p) => p.page) ?? []

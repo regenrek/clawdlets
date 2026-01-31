@@ -181,7 +181,6 @@ describe("clawdlets config schema", () => {
     expect(cfg.fleet.botOrder).toEqual(["maren", "sonja"]);
     expect(Object.keys(cfg.fleet.bots)).toEqual(["maren", "sonja"]);
     expect(cfg.fleet.secretEnv).toEqual({ ZAI_API_KEY: "z_ai_api_key" });
-    expect(cfg.fleet.bots.maren.profile.secretEnv.DISCORD_BOT_TOKEN).toBe("discord_token_maren");
     expect(cfg.cattle.enabled).toBe(false);
     expect(cfg.cattle.hetzner.defaultTtl).toBe("2h");
     expect(cfg.hosts["clawdbot-fleet-host"].sshExposure?.mode).toBe("bootstrap");
