@@ -59,7 +59,7 @@ Enable on the host:
 
 ```nix
 clawdlets.selfUpdate.enable = true;
-clawdlets.selfUpdate.baseUrl = "https://<pages>/deploy/<host>/prod";
+clawdlets.selfUpdate.baseUrls = [ "https://<pages>/deploy/<host>/prod" ];
 clawdlets.selfUpdate.channel = "prod";
 clawdlets.selfUpdate.publicKeys = [ "<minisign-pubkey>" ];
 ```

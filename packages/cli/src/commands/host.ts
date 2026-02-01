@@ -66,7 +66,7 @@ const add = defineCommand({
       selfUpdate: {
         enable: false,
         interval: "30min",
-        baseUrl: "",
+        baseUrls: [],
         channel: "prod",
         publicKeys: [],
         allowUnsigned: false,
@@ -124,6 +124,13 @@ const set = defineCommand({
     "cache-netrc-secret-name": { type: "string", description: "Sops secret name containing the netrc file (default: garnix_netrc).", },
     "cache-netrc-path": { type: "string", description: "Filesystem path for netrc on host (default: /etc/nix/netrc).", },
     "cache-narinfo-cache-positive-ttl": { type: "string", description: "narinfo-cache-positive-ttl when netrc enabled (default: 3600).", },
+    "self-update-enable": { type: "string", description: "Enable pull self-updates (true/false)." },
+    "self-update-base-url": { type: "string", description: "Self-update mirror base URL (repeatable; replaces list).", array: true },
+    "self-update-channel": { type: "string", description: "Self-update channel (e.g. staging/prod)." },
+    "self-update-public-key": { type: "string", description: "Minisign public key (repeatable; replaces list).", array: true },
+    "self-update-allow-unsigned": { type: "string", description: "Dev-only: skip signature verification (true/false)." },
+    "self-update-allow-rollback": { type: "string", description: "Break-glass: accept lower releaseId (true/false)." },
+    "self-update-healthcheck-unit": { type: "string", description: "Optional health check systemd unit (record-only)." },
     "flake-host": { type: "string", description: "Flake output host name override (default: same as host name)." },
     "target-host": { type: "string", description: "SSH target (ssh config alias or user@host)." },
     "server-type": { type: "string", description: "Hetzner server type (e.g. cx43)." },
@@ -194,6 +201,29 @@ const set = defineCommand({
         if (!Number.isInteger(n) || n <= 0) throw new Error("invalid --cache-narinfo-cache-positive-ttl (expected positive integer)");
         next.cache.netrc.narinfoCachePositiveTtl = n;
       }
+    }
+
+    if ((args as any)["self-update-enable"] !== undefined) {
+      const v = parseBoolOrUndefined((args as any)["self-update-enable"]);
+      if (v !== undefined) next.selfUpdate.enable = v;
+    }
+    if (Array.isArray((args as any)["self-update-base-url"])) {
+      next.selfUpdate.baseUrls = (args as any)["self-update-base-url"].map((x: unknown) => String(x).trim()).filter(Boolean);
+    }
+    if ((args as any)["self-update-channel"] !== undefined) next.selfUpdate.channel = String((args as any)["self-update-channel"]).trim();
+    if (Array.isArray((args as any)["self-update-public-key"])) {
+      next.selfUpdate.publicKeys = (args as any)["self-update-public-key"].map((x: unknown) => String(x).trim()).filter(Boolean);
+    }
+    if ((args as any)["self-update-allow-unsigned"] !== undefined) {
+      const v = parseBoolOrUndefined((args as any)["self-update-allow-unsigned"]);
+      if (v !== undefined) next.selfUpdate.allowUnsigned = v;
+    }
+    if ((args as any)["self-update-allow-rollback"] !== undefined) {
+      const v = parseBoolOrUndefined((args as any)["self-update-allow-rollback"]);
+      if (v !== undefined) next.selfUpdate.allowRollback = v;
+    }
+    if ((args as any)["self-update-healthcheck-unit"] !== undefined) {
+      next.selfUpdate.healthCheckUnit = String((args as any)["self-update-healthcheck-unit"]).trim();
     }
 
     if ((args as any)["flake-host"] !== undefined) next.flakeHost = String((args as any)["flake-host"]).trim();

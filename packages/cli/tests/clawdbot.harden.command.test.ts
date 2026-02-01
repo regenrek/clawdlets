@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 
 function baseConfig(host: string) {
   return {
-    schemaVersion: 11,
+    schemaVersion: 12,
     defaultHost: host,
     baseFlake: "",
     fleet: {
@@ -65,7 +65,7 @@ function baseConfig(host: string) {
         selfUpdate: {
           enable: false,
           interval: "30min",
-          baseUrl: "",
+          baseUrls: [],
           channel: "prod",
           publicKeys: [],
           allowUnsigned: false,

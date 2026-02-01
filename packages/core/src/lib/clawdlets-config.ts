@@ -19,7 +19,7 @@ export type SshExposureMode = z.infer<typeof SshExposureModeSchema>;
 export const TAILNET_MODES = ["none", "tailscale"] as const;
 export const TailnetModeSchema = z.enum(TAILNET_MODES);
 export type TailnetMode = z.infer<typeof TailnetModeSchema>;
-export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 11 as const;
+export const CLAWDLETS_CONFIG_SCHEMA_VERSION = 12 as const;
 
 const JsonObjectSchema: z.ZodType<Record<string, unknown>> = z.record(z.string(), z.any());
 
@@ -240,7 +240,7 @@ const HostSchema = z.object({
     .object({
       enable: z.boolean().default(false),
       interval: z.string().trim().default("30min"),
-      baseUrl: z.string().trim().default(""),
+      baseUrls: z.array(z.string().trim().min(1)).default([]),
       channel: z
         .string()
         .trim()
@@ -252,8 +252,12 @@ const HostSchema = z.object({
       healthCheckUnit: z.string().trim().default(""),
     })
     .superRefine((v, ctx) => {
-      if (v.enable && !v.baseUrl) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["baseUrl"], message: "selfUpdate.baseUrl must be set when enabled" });
+      if (v.enable && v.baseUrls.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["baseUrls"],
+          message: "selfUpdate.baseUrls must be set when enabled",
+        });
       }
       if (v.enable && !v.allowUnsigned && v.publicKeys.length === 0) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["publicKeys"], message: "selfUpdate.publicKeys must be set when enabled (or enable allowUnsigned for dev)" });
@@ -265,7 +269,7 @@ const HostSchema = z.object({
     .default(() => ({
       enable: false,
       interval: "30min",
-      baseUrl: "",
+      baseUrls: [],
       channel: "prod",
       publicKeys: [],
       allowUnsigned: false,
@@ -434,7 +438,7 @@ export function createDefaultClawdletsConfig(params: { host: string; bots?: stri
         selfUpdate: {
           enable: false,
           interval: "30min",
-          baseUrl: "",
+          baseUrls: [],
           channel: "prod",
           publicKeys: [],
           allowUnsigned: false,

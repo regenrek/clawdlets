@@ -100,6 +100,13 @@ export type MigrateToV11Result = {
   migrated: unknown;
 };
 
+export type MigrateToV12Result = {
+  ok: true;
+  changed: boolean;
+  warnings: string[];
+  migrated: unknown;
+};
+
 export function migrateClawdletsConfigToV9(raw: unknown): MigrateToV9Result {
   if (!isPlainObject(raw)) throw new Error("invalid config (expected JSON object)");
 
@@ -335,6 +342,74 @@ export function migrateClawdletsConfigToV11(raw: unknown): MigrateToV11Result {
       const hostCfg = hostCfgRaw as Record<string, unknown>;
       if (migrateHostCacheToV11({ host, hostCfg, warnings })) changed = true;
       if (migrateHostSelfUpdateToV11({ host, hostCfg, warnings })) changed = true;
+    }
+  }
+
+  return { ok: true, changed, warnings, migrated: next };
+}
+
+function migrateHostSelfUpdateToV12(params: {
+  host: string;
+  hostCfg: Record<string, unknown>;
+  warnings: string[];
+}): boolean {
+  const selfUpdate = params.hostCfg["selfUpdate"];
+  if (!isPlainObject(selfUpdate)) return false;
+
+  const baseUrl = typeof selfUpdate["baseUrl"] === "string" ? String(selfUpdate["baseUrl"]).trim() : "";
+  const baseUrls = toStringArray(selfUpdate["baseUrls"]);
+
+  const hasLegacy = "baseUrl" in selfUpdate;
+  const hasNext = "baseUrls" in selfUpdate;
+  if (!hasLegacy && !hasNext) return false;
+
+  if (baseUrls.length > 0) {
+    selfUpdate["baseUrls"] = baseUrls;
+  } else if (baseUrl) {
+    selfUpdate["baseUrls"] = [baseUrl];
+  } else {
+    selfUpdate["baseUrls"] = [];
+  }
+
+  if ("baseUrl" in selfUpdate) delete (selfUpdate as any).baseUrl;
+
+  params.warnings.push(`host ${params.host}: migrated selfUpdate.baseUrl -> selfUpdate.baseUrls`);
+  return true;
+}
+
+export function migrateClawdletsConfigToV12(raw: unknown): MigrateToV12Result {
+  if (!isPlainObject(raw)) throw new Error("invalid config (expected JSON object)");
+
+  let next = structuredClone(raw) as Record<string, unknown>;
+  const warnings: string[] = [];
+
+  const schemaVersion = Number(next["schemaVersion"] ?? 0);
+  if (schemaVersion === 12) return { ok: true, changed: false, warnings, migrated: next };
+
+  let changed = false;
+  if (schemaVersion === 8 || schemaVersion === 9 || schemaVersion === 10) {
+    const res = migrateClawdletsConfigToV11(next);
+    warnings.push(...res.warnings);
+    next = structuredClone(res.migrated) as Record<string, unknown>;
+    changed = res.changed;
+  } else if (schemaVersion !== 11) {
+    throw new Error(`unsupported schemaVersion: ${schemaVersion} (expected 8, 9, 10, or 11)`);
+  }
+
+  if (Number(next["schemaVersion"] ?? 0) === 12) return { ok: true, changed, warnings, migrated: next };
+  if (Number(next["schemaVersion"] ?? 0) !== 11) {
+    throw new Error(`internal error: expected schemaVersion 11 before v12 migration`);
+  }
+
+  next["schemaVersion"] = 12;
+  changed = true;
+
+  const hosts = next["hosts"];
+  if (isPlainObject(hosts)) {
+    for (const [host, hostCfgRaw] of Object.entries(hosts)) {
+      if (!isPlainObject(hostCfgRaw)) continue;
+      const hostCfg = hostCfgRaw as Record<string, unknown>;
+      if (migrateHostSelfUpdateToV12({ host, hostCfg, warnings })) changed = true;
     }
   }
 

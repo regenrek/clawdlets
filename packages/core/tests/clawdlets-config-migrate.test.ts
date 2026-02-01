@@ -110,8 +110,8 @@ describe("clawdlets config migrate", () => {
     expect(migrated.hosts.alpha.sshKnownHosts).toBeUndefined();
   });
 
-  it("migrates v10 -> v11 (cache + selfUpdate)", async () => {
-    const { migrateClawdletsConfigToV11 } = await import("../src/lib/clawdlets-config-migrate");
+  it("migrates v10 -> v12 (cache + selfUpdate mirrors)", async () => {
+    const { migrateClawdletsConfigToV12 } = await import("../src/lib/clawdlets-config-migrate");
 
     const raw = {
       schemaVersion: 10,
@@ -144,13 +144,13 @@ describe("clawdlets config migrate", () => {
       },
     };
 
-    const res = migrateClawdletsConfigToV11(raw);
+    const res = migrateClawdletsConfigToV12(raw);
     expect(res.ok).toBe(true);
     expect(res.changed).toBe(true);
     expect(res.warnings.length).toBeGreaterThan(0);
 
     const migrated = res.migrated as any;
-    expect(migrated.schemaVersion).toBe(11);
+    expect(migrated.schemaVersion).toBe(12);
 
     expect(migrated.hosts.alpha.cache.garnix).toBeUndefined();
     expect(migrated.hosts.alpha.cache.substituters).toEqual(expect.any(Array));
@@ -168,7 +168,8 @@ describe("clawdlets config migrate", () => {
 
     expect(migrated.hosts.alpha.selfUpdate.enable).toBe(true);
     expect(migrated.hosts.alpha.selfUpdate.interval).toBe("30min");
-    expect(migrated.hosts.alpha.selfUpdate.baseUrl).toBe("https://example.com/deploy/alpha/prod");
+    expect(migrated.hosts.alpha.selfUpdate.baseUrl).toBeUndefined();
+    expect(migrated.hosts.alpha.selfUpdate.baseUrls).toEqual(["https://example.com/deploy/alpha/prod"]);
     expect(migrated.hosts.alpha.selfUpdate.channel).toBe("prod");
     expect(migrated.hosts.alpha.selfUpdate.publicKeys).toEqual(["key1"]);
     expect(migrated.hosts.alpha.selfUpdate.allowUnsigned).toBe(false);

@@ -21,7 +21,7 @@ export const baseHost = {
   selfUpdate: {
     enable: false,
     interval: "30min",
-    baseUrl: "",
+    baseUrls: [],
     channel: "prod",
     publicKeys: [],
     allowUnsigned: false,
@@ -50,7 +50,7 @@ export function makeConfig(params?: {
     ...(params?.fleetOverrides ?? {}),
   };
   return {
-    schemaVersion: 11,
+    schemaVersion: 12,
     defaultHost: hostName,
     fleet,
     hosts: { [hostName]: host } as Record<string, typeof host>,

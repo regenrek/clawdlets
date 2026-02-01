@@ -93,7 +93,7 @@ Enable on a host to pull a manifest and switch by store path:
 
 ```nix
 clawdlets.selfUpdate.enable = true;
-clawdlets.selfUpdate.baseUrl = "https://<pages>/deploy/<host>/prod";
+clawdlets.selfUpdate.baseUrls = [ "https://<pages>/deploy/<host>/prod" ];
 clawdlets.selfUpdate.channel = "prod";
 clawdlets.selfUpdate.publicKeys = [ "<minisign-pubkey>" ];
 ```
@@ -102,7 +102,7 @@ Secrets behavior:
 
 - `secrets.digest` is the sha256 of the published secrets bundle bytes (the bundle contains **sops-encrypted** `.yaml` files).
 - If `secrets.url` is set and installed secrets don't match `secrets.digest`, the updater downloads the bundle, verifies sha256, installs it, then proceeds.
-- `secrets.url` may be an absolute `https://...` URL or a relative path (resolved against `selfUpdate.baseUrl`).
+- `secrets.url` may be an absolute `https://...` URL or a relative path (resolved against `selfUpdate.baseUrls`; first success wins).
 - Secrets are never placed in the Nix store (downloaded to `/var/lib/clawdlets/updates/`, installed into `/var/lib/clawdlets/secrets/hosts/<host>`).
 
 Signature workflow:

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 11,
+  "schemaVersion": 12,
   "defaultHost": "clawdbot-fleet-host",
   "baseFlake": "",
   "fleet": {

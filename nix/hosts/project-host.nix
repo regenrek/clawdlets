@@ -50,7 +50,7 @@ in {
 
   clawdlets.selfUpdate.enable = (selfUpdate.enable or false);
   clawdlets.selfUpdate.interval = (selfUpdate.interval or "30min");
-  clawdlets.selfUpdate.baseUrl = (selfUpdate.baseUrl or "");
+  clawdlets.selfUpdate.baseUrls = (selfUpdate.baseUrls or [ ]);
   clawdlets.selfUpdate.channel = (selfUpdate.channel or "prod");
   clawdlets.selfUpdate.publicKeys = (selfUpdate.publicKeys or [ ]);
   clawdlets.selfUpdate.allowUnsigned = (selfUpdate.allowUnsigned or false);

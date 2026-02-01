@@ -10,10 +10,10 @@ in {
       description = "Enable pull-based updates from a signed desired-state release manifest (pointer + immutable manifest).";
     };
 
-    baseUrl = lib.mkOption {
-      type = lib.types.str;
-      default = "";
-      description = "Base URL for this host+channel (must contain latest.json and <releaseId>.json).";
+    baseUrls = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "Mirror base URLs for this host+channel (must contain latest.json and <releaseId>.json). First success wins.";
     };
 
     interval = lib.mkOption {
@@ -56,8 +56,8 @@ in {
   config = {
     assertions = [
       {
-        assertion = (!cfg.selfUpdate.enable) || (cfg.selfUpdate.baseUrl != "");
-        message = "clawdlets.selfUpdate.baseUrl must be set when self-update is enabled.";
+        assertion = (!cfg.selfUpdate.enable) || (cfg.selfUpdate.baseUrls != [ ]);
+        message = "clawdlets.selfUpdate.baseUrls must be set when self-update is enabled.";
       }
     ];
 
@@ -92,7 +92,7 @@ in {
       wants = [ "network-online.target" ];
       path = [ pkgs.bash pkgs.curl pkgs.jq pkgs.coreutils pkgs.minisign pkgs.util-linux ];
       environment = {
-        CLAWDLETS_UPDATER_BASE_URL = cfg.selfUpdate.baseUrl;
+        CLAWDLETS_UPDATER_BASE_URLS = lib.concatStringsSep " " cfg.selfUpdate.baseUrls;
         CLAWDLETS_UPDATER_STATE_DIR = "/var/lib/clawdlets/updates";
         CLAWDLETS_UPDATER_KEYS_FILE = "/etc/clawdlets/updater/manifest.keys";
         CLAWDLETS_UPDATER_ALLOW_UNSIGNED = if cfg.selfUpdate.allowUnsigned then "true" else "false";
@@ -124,7 +124,7 @@ in {
       wants = [ "network-online.target" ];
       path = [ pkgs.bash pkgs.curl pkgs.jq pkgs.coreutils pkgs.minisign pkgs.util-linux pkgs.nix ];
       environment = {
-        CLAWDLETS_UPDATER_BASE_URL = cfg.selfUpdate.baseUrl;
+        CLAWDLETS_UPDATER_BASE_URLS = lib.concatStringsSep " " cfg.selfUpdate.baseUrls;
         CLAWDLETS_UPDATER_STATE_DIR = "/var/lib/clawdlets/updates";
         CLAWDLETS_UPDATER_KEYS_FILE = "/etc/clawdlets/updater/manifest.keys";
         CLAWDLETS_UPDATER_HOST_NAME = config.networking.hostName;

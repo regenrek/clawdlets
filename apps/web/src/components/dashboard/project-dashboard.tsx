@@ -8,7 +8,7 @@ import { useConvexAuth } from "convex/react"
 import { api } from "../../../convex/_generated/api"
 import type { Id } from "../../../convex/_generated/dataModel"
 import { getDashboardOverview } from "~/sdk/dashboard"
-import { migrateClawdletsConfigFileToV11 } from "~/sdk/config-migrate"
+import { migrateClawdletsConfigFileToV12 } from "~/sdk/config-migrate"
 import { Badge } from "~/components/ui/badge"
 import {
   Card,
@@ -87,11 +87,11 @@ export function ProjectDashboard(props: {
   const migrate = useMutation({
     mutationFn: async () => {
       if (!project) throw new Error("project not loaded")
-      return await migrateClawdletsConfigFileToV11({ data: { projectId: project.projectId } })
+      return await migrateClawdletsConfigFileToV12({ data: { projectId: project.projectId } })
     },
     onSuccess: (res) => {
       if (res.ok) {
-        toast.success(res.changed ? "Migrated config" : "Config already schemaVersion 11")
+        toast.success(res.changed ? "Migrated config" : "Config already schemaVersion 12")
         void queryClient.invalidateQueries({ queryKey: ["dashboardOverview"] })
         void queryClient.invalidateQueries({
           queryKey: ["dashboardRecentRuns", project?.projectId ?? null],
@@ -225,10 +225,10 @@ export function ProjectDashboard(props: {
                       disabled={!canWrite || migrate.isPending}
                       onClick={() => migrate.mutate()}
                     >
-                      Migrate to schemaVersion 11
+                      Migrate to schemaVersion 12
                     </Button>
                     <div className="text-muted-foreground text-xs">
-                      CLI: <code>clawdlets config migrate --to v11</code>
+                      CLI: <code>clawdlets config migrate --to v12</code>
                     </div>
                   </div>
                 ) : null}

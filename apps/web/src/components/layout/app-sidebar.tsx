@@ -203,7 +203,7 @@ function AppSidebar() {
           to: `${projectBase}/security`,
           label: "Security",
           icon: KeyIcon,
-          tooltip: "Project-wide API keys and SSH keys.",
+          tooltip: "Project-wide API keys, SSH keys, and Nix cache policy.",
         },
       ]
     : []

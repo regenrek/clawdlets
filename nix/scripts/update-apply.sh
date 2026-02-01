@@ -8,7 +8,7 @@ usage: update-apply
 Applies the signed desired-state release manifest from the updater state directory.
 
 Required env:
-- CLAWDLETS_UPDATER_BASE_URL
+- CLAWDLETS_UPDATER_BASE_URLS                   space-separated mirror list
 - CLAWDLETS_UPDATER_STATE_DIR
 - CLAWDLETS_UPDATER_KEYS_FILE
 - CLAWDLETS_UPDATER_HOST_NAME
@@ -24,7 +24,7 @@ Optional env:
 USAGE
 }
 
-base_url="${CLAWDLETS_UPDATER_BASE_URL:-}"
+base_urls_raw="${CLAWDLETS_UPDATER_BASE_URLS:-}"
 state_dir="${CLAWDLETS_UPDATER_STATE_DIR:-/var/lib/clawdlets/updates}"
 keys_file="${CLAWDLETS_UPDATER_KEYS_FILE:-}"
 host_name="${CLAWDLETS_UPDATER_HOST_NAME:-}"
@@ -36,7 +36,9 @@ health_unit="${CLAWDLETS_UPDATER_HEALTHCHECK_UNIT:-}"
 allowed_substituters="${CLAWDLETS_UPDATER_ALLOWED_SUBSTITUTERS:-}"
 allowed_trusted_keys="${CLAWDLETS_UPDATER_ALLOWED_TRUSTED_PUBLIC_KEYS:-}"
 
-if [[ -z "${base_url}" || -z "${keys_file}" || -z "${host_name}" || -z "${channel}" || -z "${secrets_dir}" ]]; then
+read -r -a base_urls <<<"${base_urls_raw}"
+
+if [[ "${#base_urls[@]}" -eq 0 || -z "${keys_file}" || -z "${host_name}" || -z "${channel}" || -z "${secrets_dir}" ]]; then
   usage
   exit 2
 fi
@@ -312,12 +314,6 @@ if [[ -z "${installed_digest}" || "${installed_digest}" != "${manifest_secrets_d
     exit 2
   fi
 
-  base_url="${base_url%/}"
-  if [[ -z "${base_url}" ]]; then
-    write_status "failed" "missing updater base URL" "${manifest_release_id}" "${manifest_toplevel}" "${manifest_rev}" "${verified_key_sha256}" "CLAWDLETS_UPDATER_BASE_URL is required"
-    exit 2
-  fi
-
   secrets_url="$(echo "${manifest_secrets_url}" | tr -d '\r' | xargs)"
   if [[ -z "${secrets_url}" || "${secrets_url}" =~ [[:space:]] ]]; then
     write_status "failed" "invalid secrets url" "${manifest_release_id}" "${manifest_toplevel}" "${manifest_rev}" "${verified_key_sha256}" "secrets.url must not include whitespace"
@@ -325,18 +321,24 @@ if [[ -z "${installed_digest}" || "${installed_digest}" != "${manifest_secrets_d
   fi
 
   secrets_fetch_url=""
+  candidate_urls=()
   if [[ "${secrets_url}" == *"://"* ]]; then
     if [[ "${secrets_url}" != https://* ]]; then
       write_status "failed" "invalid secrets url scheme" "${manifest_release_id}" "${manifest_toplevel}" "${manifest_rev}" "${verified_key_sha256}" "secrets.url must be https://... when absolute"
       exit 2
     fi
-    secrets_fetch_url="${secrets_url}"
+    candidate_urls+=("${secrets_url}")
   else
     if [[ "${secrets_url}" == /* || "${secrets_url}" == *".."* ]]; then
       write_status "failed" "invalid secrets url path" "${manifest_release_id}" "${manifest_toplevel}" "${manifest_rev}" "${verified_key_sha256}" "secrets.url must be a safe relative path"
       exit 2
     fi
-    secrets_fetch_url="${base_url}/${secrets_url}"
+    for base_url in "${base_urls[@]}"; do
+      base_url="$(echo "${base_url}" | tr -d '\r' | xargs)"
+      [[ -z "${base_url}" ]] && continue
+      base_url="${base_url%/}"
+      candidate_urls+=("${base_url}/${secrets_url}")
+    done
   fi
 
   if [[ ! -x "/etc/clawdlets/bin/install-secrets" ]]; then
@@ -346,7 +348,23 @@ if [[ -z "${installed_digest}" || "${installed_digest}" != "${manifest_secrets_d
 
   secrets_tmp="$(mktemp -p "${state_dir}" secrets.bundle.tmp.XXXXXX)"
   chmod 0600 "${secrets_tmp}"
-  if ! curl --fail --location --silent --output "${secrets_tmp}" "${secrets_fetch_url}"; then
+
+  curl_fetch() {
+    local url="$1"
+    local out="$2"
+    curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 10 -o "${out}" "${url}"
+  }
+
+  fetched=false
+  for u in "${candidate_urls[@]}"; do
+    if curl_fetch "${u}" "${secrets_tmp}"; then
+      secrets_fetch_url="${u}"
+      fetched=true
+      break
+    fi
+  done
+
+  if [[ "${fetched}" != "true" ]]; then
     rm -f "${secrets_tmp}" 2>/dev/null || true
     write_status "failed" "failed to download secrets bundle" "${manifest_release_id}" "${manifest_toplevel}" "${manifest_rev}" "${verified_key_sha256}" "download failed"
     exit 2
